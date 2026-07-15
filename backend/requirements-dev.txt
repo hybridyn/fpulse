@@ -17,7 +17,7 @@
 # Test runner + async support
 pytest>=8.0
 pytest-asyncio>=0.23
-pytest-cov>=4.1
+pytest-cov>=7.1.0
 pytest-mock>=3.12
 # Parallel test execution (2026-06-08, reviewer rec #1): the default
 # suite (~3000 tests) runs ~12 min serially — past a typical 10-min CI
