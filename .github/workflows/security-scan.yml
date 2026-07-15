@@ -29,7 +29,7 @@ jobs:
         run: |
           bandit -r fpulse -ll -f json -o bandit-report.json || true
           bandit -r fpulse -ll --exit-zero --format screen
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bandit-report
           path: backend/bandit-report.json
@@ -63,7 +63,7 @@ jobs:
           npm audit --audit-level=high --json > npm-audit.json || true
           npm audit --audit-level=high || echo "HIGH vulnerabilities present"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dependency-audits
           path: |
