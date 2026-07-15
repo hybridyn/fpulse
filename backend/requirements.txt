@@ -92,7 +92,7 @@ prometheus-client>=0.19
 # built-in WebView2 runtime via pythonnet (pulled automatically). If
 # unavailable, `fpulse app` falls back to a Chromium --app window, so this
 # is effectively required only for the best desktop experience.
-pywebview>=5.0
+pywebview>=6.2.1
 
 # ── Optional, Plus tier ────────────────────────────────────────
 # Distributed event bus over NATS + JetStream. Required ONLY when
