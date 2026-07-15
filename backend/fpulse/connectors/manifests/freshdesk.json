@@ -1,0 +1,54 @@
+{
+  "id": "freshdesk",
+  "name": "Freshdesk",
+  "description": "Freshdesk support ticket data via REST API",
+  "category": "saas",
+  "base_url": "https://{domain}.freshdesk.com/api/v2",
+  "auth": {
+    "type": "basic",
+    "username_param": "api_key",
+    "password": "X"
+  },
+  "params": [
+    {"name": "domain", "label": "Freshdesk Domain (e.g. mycompany)", "required": true},
+    {"name": "api_key", "label": "API Key", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "tickets",
+      "label": "Tickets",
+      "path": "/tickets",
+      "method": "GET",
+      "query": {"per_page": "100", "include": "stats"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    },
+    {
+      "name": "contacts",
+      "label": "Contacts",
+      "path": "/contacts",
+      "method": "GET",
+      "query": {"per_page": "100"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    },
+    {
+      "name": "agents",
+      "label": "Agents",
+      "path": "/agents",
+      "method": "GET",
+      "query": {"per_page": "100"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 10}
+    },
+    {
+      "name": "companies",
+      "label": "Companies",
+      "path": "/companies",
+      "method": "GET",
+      "query": {"per_page": "100"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    }
+  ]
+}

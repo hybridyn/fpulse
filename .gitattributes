@@ -1,0 +1,25 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# POSIX-mandatory LF — these break on macOS/Linux if Git rewrites with CRLF.
+*.sh           text eol=lf
+*.bash         text eol=lf
+*.command      text eol=lf
+Makefile       text eol=lf
+
+# macOS pkgbuild scripts (no extension)
+installer/macos/scripts/preinstall   text eol=lf
+installer/macos/scripts/postinstall  text eol=lf
+
+# Debian package scripts (no extension)
+installer/linux/debian/control       text eol=lf
+installer/linux/debian/postinst      text eol=lf
+installer/linux/debian/prerm         text eol=lf
+
+# Inno Setup wants CRLF on Windows
+*.iss          text eol=crlf
+
+# Windows-native — keep CRLF
+*.ps1          text eol=crlf
+*.bat          text eol=crlf
+*.cmd          text eol=crlf

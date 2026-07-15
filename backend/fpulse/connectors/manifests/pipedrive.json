@@ -1,0 +1,46 @@
+{
+  "tier": "hidden",
+  "id": "pipedrive",
+  "name": "Pipedrive",
+  "description": "Pipedrive CRM REST API v1",
+  "category": "saas",
+  "base_url": "https://{company}.pipedrive.com/api/v1",
+  "auth": {
+    "type": "api_key",
+    "query_param": "api_token",
+    "key_param": "api_token"
+  },
+  "params": [
+    {"name": "company", "label": "Company subdomain", "required": true},
+    {"name": "api_token", "label": "API Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "deals",
+      "label": "Deals",
+      "path": "/deals",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "offset_limit", "offset_param": "start", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "persons",
+      "label": "Persons",
+      "path": "/persons",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "offset_limit", "offset_param": "start", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "organizations",
+      "label": "Organizations",
+      "path": "/organizations",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "offset_limit", "offset_param": "start", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "salesforce",
+    "display_name": "Salesforce",
+    "category": "saas",
+    "vendor": "Salesforce.com Inc.",
+    "homepage": "https://salesforce.com",
+    "docs_url": "https://hybridyn.com/connectors/salesforce",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-03",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Bulk API 2.0 path not implemented; OSS stream uses REST + cursor pagination",
+      "Schema is partial — Account has 38 fields, this manifest declares the 12 most-common"
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "oauth2",
+        "flow": "authorization_code",
+        "scopes": ["api", "refresh_token", "offline_access"],
+        "docs": "https://help.salesforce.com/s/articleView?id=remoteaccess_authenticate.htm"
+      },
+      {
+        "type": "jwt_bearer",
+        "docs": "https://help.salesforce.com/s/articleView?id=remoteaccess_oauth_jwt_flow.htm"
+      }
+    ],
+    "rotation": {
+      "refresh_token_ttl_days": 90,
+      "rotate_on_failure": true
+    }
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 1000,
+      "daily_quota": 100000
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "account",
+      "primary_key": ["Id"],
+      "incremental_field": "SystemModstamp",
+      "incremental_format": "iso8601",
+      "soft_delete_field": "IsDeleted",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "nextRecordsUrl",
+        "page_size": 2000
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["Id", "Name", "CreatedDate", "SystemModstamp"],
+        "properties": {
+          "Id": {"type": "string", "maxLength": 18, "description": "Salesforce 18-char record ID"},
+          "Name": {"type": "string", "maxLength": 255},
+          "AccountNumber": {"type": ["string", "null"], "maxLength": 40},
+          "Type": {"type": ["string", "null"]},
+          "Industry": {"type": ["string", "null"]},
+          "AnnualRevenue": {"type": ["number", "null"]},
+          "NumberOfEmployees": {"type": ["integer", "null"]},
+          "OwnerId": {"type": "string", "maxLength": 18},
+          "CreatedDate": {"type": "string", "format": "date-time"},
+          "LastModifiedDate": {"type": "string", "format": "date-time"},
+          "SystemModstamp": {"type": "string", "format": "date-time"},
+          "IsDeleted": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "contact",
+      "primary_key": ["Id"],
+      "incremental_field": "SystemModstamp",
+      "incremental_format": "iso8601",
+      "soft_delete_field": "IsDeleted",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "nextRecordsUrl",
+        "page_size": 2000
+      },
+      "depends_on": ["account"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["Id", "AccountId", "CreatedDate", "SystemModstamp"],
+        "properties": {
+          "Id": {"type": "string", "maxLength": 18},
+          "AccountId": {"type": ["string", "null"], "maxLength": 18},
+          "FirstName": {"type": ["string", "null"], "maxLength": 40},
+          "LastName": {"type": "string", "maxLength": 80},
+          "Email": {"type": ["string", "null"], "format": "email", "maxLength": 80},
+          "Phone": {"type": ["string", "null"], "maxLength": 40},
+          "Title": {"type": ["string", "null"], "maxLength": 128},
+          "OwnerId": {"type": "string", "maxLength": 18},
+          "CreatedDate": {"type": "string", "format": "date-time"},
+          "LastModifiedDate": {"type": "string", "format": "date-time"},
+          "SystemModstamp": {"type": "string", "format": "date-time"},
+          "IsDeleted": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "opportunity",
+      "primary_key": ["Id"],
+      "incremental_field": "SystemModstamp",
+      "incremental_format": "iso8601",
+      "soft_delete_field": "IsDeleted",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "nextRecordsUrl",
+        "page_size": 2000
+      },
+      "depends_on": ["account"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["Id", "Name", "StageName", "AccountId", "CreatedDate", "SystemModstamp"],
+        "properties": {
+          "Id": {"type": "string", "maxLength": 18},
+          "Name": {"type": "string", "maxLength": 120},
+          "AccountId": {"type": "string", "maxLength": 18},
+          "StageName": {"type": "string", "maxLength": 40},
+          "Amount": {"type": ["number", "null"]},
+          "CloseDate": {"type": "string", "format": "date"},
+          "OwnerId": {"type": "string", "maxLength": 18},
+          "CreatedDate": {"type": "string", "format": "date-time"},
+          "LastModifiedDate": {"type": "string", "format": "date-time"},
+          "SystemModstamp": {"type": "string", "format": "date-time"},
+          "IsDeleted": {"type": "boolean"}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

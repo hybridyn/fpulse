@@ -1,0 +1,37 @@
+# Sprint B integration-test rig — a real PostgreSQL with logical
+# replication enabled so the CDC integration test
+# (backend/tests/integration/test_cdc_postgres.py) can prove the
+# decoder + LSN persistence + schema-drift handoff actually work
+# against the live wire format, not just synthetic bytes.
+#
+# Usage:
+#   docker compose -f docker-compose.test.yml up -d
+#   pytest backend/tests/integration/test_cdc_postgres.py -v
+#   docker compose -f docker-compose.test.yml down -v
+#
+# The container exits cleanly with -v so leftover slots don't survive
+# between runs. wal_level=logical + max_replication_slots=4 are the
+# only knobs that matter.
+
+services:
+  postgres-cdc:
+    image: postgres:16.4-alpine
+    container_name: fpulse-cdc-postgres
+    environment:
+      POSTGRES_USER: fpulse_test
+      POSTGRES_PASSWORD: fpulse_test
+      POSTGRES_DB: fpulse_test
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=4
+      -c max_replication_slots=4
+      -c shared_preload_libraries=
+      -c log_min_messages=warning
+    ports:
+      - "5433:5432"   # 5433 to avoid clobbering a local Postgres on 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fpulse_test -d fpulse_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

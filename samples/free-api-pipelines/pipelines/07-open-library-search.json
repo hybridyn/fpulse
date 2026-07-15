@@ -1,0 +1,80 @@
+{
+  "name": "07 — Public Google Sheet → SQL Server (generic source + connector_type=gsheet)",
+  "description": "Pulls a publicly-shared Google Sheet via its CSV export endpoint. Uses the generic Source node with connector_type='gsheet' — no API key, no OAuth, just a 'Anyone with the link' share setting. REPLACE the sheet_url with your own publicly-shared sheet before running. FILE NAME NOTE: this slot used to be the Open Library demo; rename the file to 07-gsheet-public.json when convenient.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "Public Google Sheets (anonymous)",
+      "type": "gsheet",
+      "config": {
+        "auth_type": "none"
+      },
+      "description": "Anonymous Google Sheets access — works for sheets shared as 'Anyone with the link'. For private sheets, edit this connection and switch auth_type to 'oauth' with a service-account JSON."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "Public Google Sheet",
+      "params": {
+        "connector_type": "gsheet",
+        "connection_id": "Public Google Sheets (anonymous)",
+        "sheet_url": "https://docs.google.com/spreadsheets/d/1JOMG7AaG9k_jl2t6_GA3ZsYjJBb-vWkM6Ekq6r_TpkE/edit?gid=0",
+        "gid": "0"
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "typecast",
+      "label": "Cast detected numerics",
+      "params": {
+        "casts": {},
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "derived_column",
+      "label": "Add ingested_at",
+      "params": {
+        "columns": [
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"},
+          {"name": "source_sheet_id", "expression": "'1JOMG7AaG9k_jl2t6_GA3ZsYjJBb-vWkM6Ekq6r_TpkE'"}
+        ],
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.gsheet_import",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "gsheet_import",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "gsheet"}
+}

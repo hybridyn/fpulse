@@ -1,0 +1,62 @@
+{
+  "id": "servicenow",
+  "name": "ServiceNow",
+  "description": "ServiceNow Table API for ITSM/CMDB records",
+  "category": "saas",
+  "base_url": "https://{instance}.service-now.com",
+  "auth": {
+    "type": "basic",
+    "username_param": "username",
+    "password_param": "password",
+    "header_name": "Authorization"
+  },
+  "params": [
+    {"name": "instance", "label": "Instance (subdomain only, e.g. dev12345)", "required": true},
+    {"name": "username", "label": "Username", "required": true},
+    {"name": "password", "label": "Password", "required": true, "secret": true}
+  ],
+  "default_query": {"sysparm_limit": "200", "sysparm_display_value": "true"},
+  "default_headers": {"Accept": "application/json"},
+  "streams": [
+    {
+      "name": "incidents",
+      "label": "Incidents",
+      "path": "/api/now/table/incident",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "offset_limit", "offset_param": "sysparm_offset", "limit_param": "sysparm_limit", "page_size": 200, "max_pages": 100}
+    },
+    {
+      "name": "change_requests",
+      "label": "Change Requests",
+      "path": "/api/now/table/change_request",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "offset_limit", "offset_param": "sysparm_offset", "limit_param": "sysparm_limit", "page_size": 200, "max_pages": 100}
+    },
+    {
+      "name": "problems",
+      "label": "Problems",
+      "path": "/api/now/table/problem",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "offset_limit", "offset_param": "sysparm_offset", "limit_param": "sysparm_limit", "page_size": 200, "max_pages": 100}
+    },
+    {
+      "name": "cmdb_ci",
+      "label": "Configuration Items (CMDB)",
+      "path": "/api/now/table/cmdb_ci",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "offset_limit", "offset_param": "sysparm_offset", "limit_param": "sysparm_limit", "page_size": 200, "max_pages": 100}
+    },
+    {
+      "name": "users",
+      "label": "Users (sys_user)",
+      "path": "/api/now/table/sys_user",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "offset_limit", "offset_param": "sysparm_offset", "limit_param": "sysparm_limit", "page_size": 200, "max_pages": 100}
+    }
+  ]
+}

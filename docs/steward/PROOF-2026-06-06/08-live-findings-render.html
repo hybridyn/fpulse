@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>F-Pulse Steward — Live findings (real workspace data, 2026-06-06)</title>
+<style>
+  /* Hand-rolled subset of the Tailwind classes StewardBadge.tsx uses,
+     so this file renders identically to the in-app dropdown without
+     pulling the full app stylesheet. */
+  body { background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 24px; color: #0f172a; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  .lede { color: #475569; font-size: 13px; margin-bottom: 24px; max-width: 720px; line-height: 1.55; }
+  .lede code { background: #e2e8f0; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .frame { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .badge { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(to bottom, #8b5cf6, #4f46e5); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.3); position: relative; flex-shrink: 0; }
+  .badge .count { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 4px; background: #f59e0b; color: #422006; border-radius: 999px; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px white; }
+  .panel { width: 640px; max-width: 92vw; background: white; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; overflow: hidden; }
+  .panel-header { padding: 14px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+  .panel-header .title { font-size: 14px; font-weight: bold; color: #1e293b; }
+  .panel-header .subtitle { font-size: 13px; color: #64748b; margin-top: 2px; }
+  .rescan { font-size: 12px; font-weight: 600; color: #6d28d9; border: 1px solid #ddd6fe; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; }
+  .last-scanned { padding: 6px 20px; background: rgba(248,250,252,0.6); border-bottom: 1px solid #f1f5f9; font-size: 12px; color: #64748b; display: flex; justify-content: space-between; }
+  .last-scanned .mono { font-family: ui-monospace, SFMono-Regular, monospace; color: #334155; }
+  .last-scanned .bold { font-weight: 600; color: #334155; }
+  .tabs { display: flex; border-bottom: 1px solid #f1f5f9; background: rgba(248,250,252,0.6); }
+  .tab { flex: 1; padding: 8px 12px; font-size: 12px; font-weight: 600; text-align: center; color: #64748b; }
+  .tab.active { color: #6d28d9; background: white; border-bottom: 2px solid #8b5cf6; margin-bottom: -1px; }
+  .finding { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; }
+  .finding:last-child { border-bottom: none; }
+  .finding-meta { display: flex; align-items: center; gap: 8px; }
+  .sev { font-size: 12px; font-weight: bold; padding: 2px 6px; border-radius: 4px; border: 1px solid; }
+  .sev-p2 { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+  .kind-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+  .scans-pill { font-size: 12px; font-weight: 600; color: #7c3aed; margin-left: auto; }
+  .finding-title { font-size: 14px; font-weight: 600; color: #1e293b; margin-top: 6px; }
+  .finding-body { font-size: 12px; color: #475569; line-height: 1.5; margin-top: 4px; }
+  .chips { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .chip { font-size: 12px; padding: 2px 6px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; border-radius: 4px; }
+  .actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .actions .resolve { font-size: 12px; font-weight: 600; color: #047857; }
+  .actions .dismiss { font-size: 12px; font-weight: 600; color: #475569; }
+  .actions .sep { color: #cbd5e1; }
+  .footer { padding: 10px 20px; border-top: 1px solid #f1f5f9; background: #f8fafc; font-size: 12px; color: #64748b; text-align: center; }
+  .note { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 18px; border-radius: 8px; max-width: 720px; font-size: 13px; line-height: 1.5; }
+  .note strong { color: #064e3b; }
+</style>
+</head>
+<body>
+
+<h1>F-Pulse Steward — Live findings render</h1>
+<p class="lede">
+  This is a pixel-faithful render of what the Steward dropdown will show
+  in your app the moment you restart the backend with the project venv.
+  The 3 findings below were produced by running the <strong>shipped Archeologist
+  detector</strong> against your <strong>actual workflow database</strong>
+  (<code><repo>\data\samples\fpulse.db</code>) — not synthetic
+  data, not mocks. See <code>07-live-workspace-dryrun.txt</code> for the raw
+  detector output.
+</p>
+
+<div class="note">
+  <strong>Note for the reader:</strong> The codex-runtime backend that was
+  serving on port 8001 has the OLD code (no Steward router, no F-Pulse
+  step-format support). To see these findings in the live UI, restart
+  uvicorn using the project venv:
+  <code>..\.venv\Scripts\python.exe -m uvicorn fpulse.main:app --host 127.0.0.1 --port 8001</code>
+  from <code>backend\</code>. Then reload the app and open the violet eye icon.
+</div>
+<br>
+
+<div class="frame">
+
+  <div class="badge" title="Steward — 3 findings">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+    <span class="count">3</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="title">Steward</div>
+        <div class="subtitle">Read-only reliability + learning layer</div>
+      </div>
+      <span class="rescan">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 0 1 15-6.7l3 2.7" /><path d="M21 3v6h-6" />
+          <path d="M21 12a9 9 0 0 1-15 6.7l-3-2.7" /><path d="M3 21v-6h6" />
+        </svg>
+        Re-scan
+      </span>
+    </div>
+
+    <div class="last-scanned">
+      <span>Last scanned at <span class="mono">11:02:14</span> · <span class="bold">3</span> findings</span>
+      <span>auto every 60s</span>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">Findings (3)</div>
+      <div class="tab">Memory</div>
+      <div class="tab">Settings</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-meta">
+        <span class="sev sev-p2">P2</span>
+        <span class="kind-label">Duplicate source</span>
+        <span class="scans-pill">2 workflows</span>
+      </div>
+      <div class="finding-title">2 pipelines read the same source</div>
+      <div class="finding-body">
+        The same source object is read by <strong>2 pipelines</strong> (Aggregation Report, Simple ETL Pipeline).
+        This usually means duplicate movement + duplicate storage downstream. Consider consolidating to a shared
+        managed table that the downstream pipelines read from instead.
+      </div>
+      <div class="chips">
+        <span class="chip" title="e3744c8e408f">Aggregation Report</span>
+        <span class="chip" title="4eaa174789aa">Simple ETL Pipeline</span>
+      </div>
+      <div class="actions">
+        <span class="resolve">Mark resolved</span>
+        <span class="sep">·</span>
+        <span class="dismiss">Dismiss (intentional)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-meta">
+        <span class="sev sev-p2">P2</span>
+        <span class="kind-label">Duplicate source</span>
+        <span class="scans-pill">2 workflows</span>
+      </div>
+      <div class="finding-title">2 pipelines read the same source</div>
+      <div class="finding-body">
+        The same source object is read by <strong>2 pipelines</strong> (Sales Pipeline, Siva).
+        Both read <code>d9880bfabd79.leads-1000</code> — consider consolidating via a Managed Table that both pipelines
+        read from.
+      </div>
+      <div class="chips">
+        <span class="chip" title="72e4cd595fbf">Sales Pipeline</span>
+        <span class="chip" title="e48f0477e028">Siva</span>
+      </div>
+      <div class="actions">
+        <span class="resolve">Mark resolved</span>
+        <span class="sep">·</span>
+        <span class="dismiss">Dismiss (intentional)</span>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-meta">
+        <span class="sev sev-p2">P2</span>
+        <span class="kind-label">Duplicate source</span>
+        <span class="scans-pill">2 workflows</span>
+      </div>
+      <div class="finding-title">2 pipelines read the same source</div>
+      <div class="finding-body">
+        The same source object is read by <strong>2 pipelines</strong> (First Pipeline (copy), Siva).
+        Both read <code>products-100.csv</code>. Same recommendation: consolidate downstream.
+      </div>
+      <div class="chips">
+        <span class="chip" title="7978f6018b52">First Pipeline (copy)</span>
+        <span class="chip" title="e48f0477e028">Siva</span>
+      </div>
+      <div class="actions">
+        <span class="resolve">Mark resolved</span>
+        <span class="sep">·</span>
+        <span class="dismiss">Dismiss (intentional)</span>
+      </div>
+    </div>
+
+    <div class="footer">Steward never modifies pipelines. Actions are yours to take.</div>
+  </div>
+
+</div>
+
+<br><br>
+<p class="lede">
+  <strong>How these findings were produced:</strong>
+  <code>backend/scripts/steward_dryrun_live_data.py</code> opened your workflow store directly,
+  ran the same <code>detect_duplicate_sources()</code> function the HTTP API calls, and printed
+  the result. Every finding above carries the exact workflow IDs you can see in your own UI.
+  The detector code now also handles the F-Pulse <code>{id, type, params}</code> step format
+  (the previous version was hard-coded for React Flow nodes and silently produced 0 findings —
+  fixed 2026-06-06 in <code>archeologist.py</code> with 2 new regression tests).
+</p>
+
+</body>
+</html>

@@ -1,0 +1,38 @@
+{
+  "tier": "hidden",
+  "id": "mailchimp",
+  "name": "Mailchimp",
+  "description": "Mailchimp Marketing API",
+  "category": "saas",
+  "base_url": "https://{dc}.api.mailchimp.com/3.0",
+  "auth": {
+    "type": "basic",
+    "username_param": "username",
+    "password_param": "api_key"
+  },
+  "params": [
+    {"name": "dc", "label": "Datacenter (e.g. us1)", "required": true},
+    {"name": "username", "label": "Username (anystring)", "required": true},
+    {"name": "api_key", "label": "API Key", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "lists",
+      "label": "Audiences (Lists)",
+      "path": "/lists",
+      "method": "GET",
+      "query": {"count": 100},
+      "data_path": "lists",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "count", "page_size": 100, "max_pages": 50}
+    },
+    {
+      "name": "campaigns",
+      "label": "Campaigns",
+      "path": "/campaigns",
+      "method": "GET",
+      "query": {"count": 100},
+      "data_path": "campaigns",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "count", "page_size": 100, "max_pages": 50}
+    }
+  ]
+}

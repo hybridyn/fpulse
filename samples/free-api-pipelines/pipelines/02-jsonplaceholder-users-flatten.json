@@ -1,0 +1,108 @@
+{
+  "name": "02 — JSONPlaceholder Users → SQL Server (flatten nested)",
+  "description": "Pulls 10 users with nested address + company structs and flattens both into top-level columns before landing in dbo.dim_users.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "JSONPlaceholder (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://jsonplaceholder.typicode.com",
+        "auth_type": "none"
+      },
+      "description": "Public mock REST API used by F-Pulse samples. No auth, no rate limits."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "JSONPlaceholder /users",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "JSONPlaceholder (public)",
+        "path": "/users",
+        "pagination": "none",
+        "timeout": 30
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "flatten_explode",
+      "label": "Flatten address struct",
+      "params": {
+        "mode": "flatten",
+        "column": "address",
+        "prefix": "addr",
+        "keep_original": false,
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "flatten_explode",
+      "label": "Flatten company struct",
+      "params": {
+        "mode": "flatten",
+        "column": "company",
+        "prefix": "co",
+        "keep_original": false,
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 600, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "rename",
+      "label": "Pick + rename",
+      "params": {
+        "mappings": {
+          "id": "user_id",
+          "name": "full_name",
+          "username": "username",
+          "email": "email",
+          "phone": "phone",
+          "website": "website",
+          "addr_city": "city",
+          "addr_zipcode": "zip",
+          "co_name": "company_name",
+          "co_catchPhrase": "company_tagline"
+        },
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 850, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.dim_users",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "dim_users",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1100, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "nested-flatten"}
+}

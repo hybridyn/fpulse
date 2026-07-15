@@ -1,0 +1,61 @@
+# Keep the Docker build context lean. The frontend stage already copies
+# only frontend/package.json + frontend/ → its own image; the backend
+# stage copies backend/. Everything below is dev-host clutter that has
+# no business in the build context — it both slows builds and risks
+# leaking local state into the image.
+
+# Git history
+.git/
+.gitignore
+
+# Local Python state
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/*.egg-info/
+**/.venv/
+**/venv/
+
+# Local Node state
+**/node_modules/
+**/dist/
+**/.vite/
+**/build/
+
+# Local persistent data — NEVER ship developer data dirs into an image
+data/
+**/data/samples/
+**/data/duckdb_spill/
+**/data/uploads/
+**/*.duckdb
+**/*.duckdb.wal
+**/*.sqlite
+**/*.sqlite-journal
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# CI / dev scripts that don't run inside the image
+.github/
+.claude/
+
+# Test output
+**/pytest_*_results.txt
+**/eval_results/
+**/htmlcov/
+**/.coverage
+**/coverage.xml

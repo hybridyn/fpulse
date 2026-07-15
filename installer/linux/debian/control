@@ -1,0 +1,21 @@
+Package: fpulse
+Version: @@VERSION@@
+Section: utils
+Priority: optional
+Architecture: @@ARCH@@
+Installed-Size: @@INSTALLED_SIZE_KB@@
+Depends: libc6 (>= 2.27), libstdc++6
+Recommends: xdg-utils
+Suggests: docker.io
+Maintainer: Hybridyn Data Labs <support@hybridyn.com>
+Homepage: https://hybridyn.com/f-pulse
+Description: F-Pulse OSS — local-first data pipeline studio
+ F-Pulse OSS is a self-hosted, local-first data pipeline tool by
+ Hybridyn. Build, schedule, and observe ETL/ELT pipelines from a
+ browser UI on your own machine — no cloud account required.
+ .
+ Includes a frozen Python runtime so no system Python install is
+ required. The service is registered as a systemd user unit on
+ first launch, so it auto-starts when you log in.
+ .
+ Open http://localhost:8001 after install.

@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "min_severity": "p3",
+  "scan_on_save": true,
+  "auto_stale_days": 30,
+  "escalate_after_n_occurrences": 3,
+  "escalate_min_hours_since_first": 0,
+  "notify_on_finding": true,
+  "notify_min_severity": "p2"
+}

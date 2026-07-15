@@ -1,0 +1,194 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "hubspot",
+    "display_name": "HubSpot",
+    "category": "crm",
+    "vendor": "HubSpot Inc.",
+    "homepage": "https://www.hubspot.com",
+    "docs_url": "https://hybridyn.com/connectors/hubspot",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Schema is partial — common 8-12 fields per object; HubSpot APIs expose hundreds of properties.",
+      "Custom properties not yet declared — pulled as VARCHAR via the dynamic property bag at runtime.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/hubspot/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "api_key",
+        "header": "Authorization",
+        "token_template": "Bearer {token}",
+        "docs": "https://developers.hubspot.com/docs/api/private-apps"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 100,
+      "daily_quota": 250000
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "contacts",
+      "primary_key": ["id"],
+      "incremental_field": "updatedAt",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "paging.next.after",
+        "cursor_param": "after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string"},
+          "properties": {
+            "type": "object",
+            "properties": {
+              "email": {"type": ["string", "null"], "format": "email"},
+              "firstname": {"type": ["string", "null"]},
+              "lastname": {"type": ["string", "null"]},
+              "company": {"type": ["string", "null"]},
+              "phone": {"type": ["string", "null"]},
+              "lifecyclestage": {"type": ["string", "null"]}
+            }
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "archived": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "companies",
+      "primary_key": ["id"],
+      "incremental_field": "updatedAt",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "paging.next.after",
+        "cursor_param": "after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string"},
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {"type": ["string", "null"]},
+              "domain": {"type": ["string", "null"]},
+              "industry": {"type": ["string", "null"]},
+              "annualrevenue": {"type": ["string", "null"]},
+              "numberofemployees": {"type": ["string", "null"]}
+            }
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "archived": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "deals",
+      "primary_key": ["id"],
+      "incremental_field": "updatedAt",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "paging.next.after",
+        "cursor_param": "after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": ["companies", "contacts"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string"},
+          "properties": {
+            "type": "object",
+            "properties": {
+              "dealname": {"type": ["string", "null"]},
+              "amount": {"type": ["string", "null"]},
+              "dealstage": {"type": ["string", "null"]},
+              "closedate": {"type": ["string", "null"], "format": "date-time"},
+              "pipeline": {"type": ["string", "null"]}
+            }
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "archived": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "tickets",
+      "primary_key": ["id"],
+      "incremental_field": "updatedAt",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "paging.next.after",
+        "cursor_param": "after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "string"},
+          "properties": {
+            "type": "object",
+            "properties": {
+              "subject": {"type": ["string", "null"]},
+              "content": {"type": ["string", "null"]},
+              "hs_pipeline_stage": {"type": ["string", "null"]},
+              "hs_ticket_priority": {"type": ["string", "null"]}
+            }
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "archived": {"type": "boolean"}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

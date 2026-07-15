@@ -1,0 +1,49 @@
+{
+  "id": "rabbitmq",
+  "name": "RabbitMQ",
+  "description": "RabbitMQ message broker via Management HTTP API",
+  "category": "saas",
+  "base_url": "{host}/api",
+  "auth": {
+    "type": "basic",
+    "username_param": "username",
+    "password_param": "password"
+  },
+  "params": [
+    {"name": "host", "label": "Management URL (e.g. http://rabbitmq:15672)", "required": true},
+    {"name": "username", "label": "Username", "required": true, "secret": true},
+    {"name": "password", "label": "Password", "required": true, "secret": true},
+    {"name": "vhost", "label": "Virtual Host (default: /)", "required": false, "default": "/"}
+  ],
+  "streams": [
+    {
+      "name": "queues",
+      "label": "Queues",
+      "path": "/queues/{vhost}",
+      "method": "GET",
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "page_size", "max_pages": 20}
+    },
+    {
+      "name": "exchanges",
+      "label": "Exchanges",
+      "path": "/exchanges/{vhost}",
+      "method": "GET",
+      "data_path": ""
+    },
+    {
+      "name": "connections",
+      "label": "Connections",
+      "path": "/connections",
+      "method": "GET",
+      "data_path": ""
+    },
+    {
+      "name": "overview",
+      "label": "Cluster Overview",
+      "path": "/overview",
+      "method": "GET",
+      "data_path": ""
+    }
+  ]
+}

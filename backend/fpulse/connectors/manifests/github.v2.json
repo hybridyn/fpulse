@@ -1,0 +1,150 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "github",
+    "display_name": "GitHub",
+    "category": "dev_tools",
+    "vendor": "GitHub Inc.",
+    "homepage": "https://github.com",
+    "docs_url": "https://hybridyn.com/connectors/github",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "REST API only; GraphQL support deferred to a follow-up.",
+      "Org-scoped streams (org members, org repos) require separate manifest variant.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/github/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "api_key",
+        "header": "Authorization",
+        "token_template": "Bearer {token}",
+        "docs": "https://docs.github.com/en/rest/authentication"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 83,
+      "daily_quota": 5000
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "repositories",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 100,
+        "page_size_param": "per_page"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "name", "full_name", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "full_name": {"type": "string"},
+          "private": {"type": "boolean"},
+          "fork": {"type": "boolean"},
+          "language": {"type": ["string", "null"]},
+          "stargazers_count": {"type": "integer"},
+          "open_issues_count": {"type": "integer"},
+          "default_branch": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "issues",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 100,
+        "page_size_param": "per_page"
+      },
+      "depends_on": ["repositories"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "number", "title", "state", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "number": {"type": "integer"},
+          "title": {"type": "string"},
+          "state": {"type": "string"},
+          "user": {"type": "object"},
+          "labels": {"type": "array"},
+          "assignee": {"type": ["object", "null"]},
+          "comments": {"type": "integer"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"},
+          "closed_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "pull_requests",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 100,
+        "page_size_param": "per_page"
+      },
+      "depends_on": ["repositories"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "number", "title", "state", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "number": {"type": "integer"},
+          "title": {"type": "string"},
+          "state": {"type": "string"},
+          "merged": {"type": ["boolean", "null"]},
+          "user": {"type": "object"},
+          "head": {"type": "object"},
+          "base": {"type": "object"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"},
+          "closed_at": {"type": ["string", "null"], "format": "date-time"},
+          "merged_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

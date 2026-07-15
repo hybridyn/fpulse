@@ -1,0 +1,70 @@
+{
+  "id": "dynamics365",
+  "name": "Microsoft Dynamics 365",
+  "description": "Dynamics 365 CRM/ERP via Dataverse Web API",
+  "category": "saas",
+  "base_url": "https://{instance}.api.crm.dynamics.com/api/data/v9.2",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token",
+    "access_token_param": "access_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}",
+    "scope": "https://{instance}.api.crm.dynamics.com/.default"
+  },
+  "params": [
+    {"name": "instance", "label": "Instance (e.g. myorg)", "required": true},
+    {"name": "tenant_id", "label": "Azure AD Tenant ID", "required": true},
+    {"name": "client_id", "label": "Client (App) ID", "required": true, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "accounts",
+      "label": "Accounts",
+      "path": "/accounts",
+      "method": "GET",
+      "query": {"$select": "accountid,name,revenue,industrycode,createdon", "$top": "1000"},
+      "data_path": "value",
+      "pagination": {"type": "url", "next_url_path": "@odata.nextLink", "max_pages": 100}
+    },
+    {
+      "name": "contacts",
+      "label": "Contacts",
+      "path": "/contacts",
+      "method": "GET",
+      "query": {"$select": "contactid,firstname,lastname,emailaddress1,createdon", "$top": "1000"},
+      "data_path": "value",
+      "pagination": {"type": "url", "next_url_path": "@odata.nextLink", "max_pages": 100}
+    },
+    {
+      "name": "opportunities",
+      "label": "Opportunities",
+      "path": "/opportunities",
+      "method": "GET",
+      "query": {"$select": "opportunityid,name,estimatedvalue,closeprobability,createdon", "$top": "1000"},
+      "data_path": "value",
+      "pagination": {"type": "url", "next_url_path": "@odata.nextLink", "max_pages": 100}
+    },
+    {
+      "name": "leads",
+      "label": "Leads",
+      "path": "/leads",
+      "method": "GET",
+      "query": {"$select": "leadid,firstname,lastname,emailaddress1,companyname,createdon", "$top": "1000"},
+      "data_path": "value",
+      "pagination": {"type": "url", "next_url_path": "@odata.nextLink", "max_pages": 100}
+    },
+    {
+      "name": "invoices",
+      "label": "Invoices",
+      "path": "/invoices",
+      "method": "GET",
+      "query": {"$select": "invoiceid,name,totalamount,statecode,createdon", "$top": "1000"},
+      "data_path": "value",
+      "pagination": {"type": "url", "next_url_path": "@odata.nextLink", "max_pages": 100}
+    }
+  ]
+}

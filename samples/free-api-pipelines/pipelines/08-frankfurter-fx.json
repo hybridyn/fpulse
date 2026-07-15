@@ -1,0 +1,99 @@
+{
+  "name": "08 — Frankfurter FX → SQL Server + CSV backup (dual sink)",
+  "description": "Pulls latest USD-base FX rates from Frankfurter. Uses a raw-SQL Transform to pivot the rates map into one-row-per-currency, then fans out to two sinks in parallel: dbo.fx_rates_daily (append) AND data/fx_backup.csv.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "Frankfurter FX (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.frankfurter.app",
+        "auth_type": "none"
+      },
+      "description": "Public FX rates API maintained by the European Central Bank. No auth."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "Frankfurter /latest?from=USD",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "Frankfurter FX (public)",
+        "path": "/latest?from=USD",
+        "pagination": "none",
+        "timeout": 30
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "transform",
+      "label": "Pivot rates map → rows",
+      "params": {
+        "expression": "SELECT amount AS base_amount, base AS base_currency, CAST(date AS DATE) AS rate_date, UNNEST(map_keys(rates)) AS quote_currency, UNNEST(map_values(rates)) AS rate FROM source_table",
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "medium"
+    },
+    {
+      "id": "tx2",
+      "type": "derived_column",
+      "label": "Add inverse rate + load_ts",
+      "params": {
+        "columns": [
+          {"name": "inverse_rate", "expression": "ROUND(1.0 / NULLIF(rate, 0), 6)"},
+          {"name": "pair", "expression": "base_currency || '/' || quote_currency"},
+          {"name": "loaded_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.fx_rates_daily",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "fx_rates_daily",
+        "schema": "dbo",
+        "mode": "append",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "snk2",
+      "type": "destination",
+      "label": "→ fx_backup.csv",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "data/fx_backup.csv",
+        "delimiter": ",",
+        "header": true,
+        "quote_all": false,
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 220},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "snk1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "snk2", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "dual-sink"}
+}

@@ -1,0 +1,50 @@
+# CODEOWNERS — auto-request reviewers for PRs that touch sensitive areas.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Added 2026-06-03 during the pre-launch repo-standardisation pass.
+# Until a broader maintainer set forms post-launch, the founder is the
+# canonical owner of every path — GitHub will auto-tag them on every
+# PR. Once contributors land, narrow the rules so per-area experts get
+# routed (e.g. backend/auth → security maintainer, frontend/canvas →
+# frontend maintainer).
+#
+# Pattern syntax = .gitignore (closest match wins, last-match wins on
+# ties). LEAVE the catch-all at the bottom.
+
+# ── Backend ───────────────────────────────────────────────────────
+backend/                          @hybridyn
+backend/fpulse/auth/              @hybridyn
+backend/fpulse/security/          @hybridyn
+backend/fpulse/api/               @hybridyn
+
+# ── Frontend ──────────────────────────────────────────────────────
+frontend/                         @hybridyn
+frontend/src/components/nodes/    @hybridyn
+frontend/src/components/Canvas*   @hybridyn
+
+# ── Connectors (manifest contributions) ───────────────────────────
+backend/fpulse/connectors/        @hybridyn
+
+# ── Security-sensitive surfaces — explicitly listed so a future
+#    expanded maintainer set still routes these to the security owner.
+SECURITY.md                       @hybridyn
+security.md                       @hybridyn
+docs/threat-model.md              @hybridyn
+docs/security/                    @hybridyn
+.github/workflows/security-scan.yml  @hybridyn
+.github/workflows/codeql.yml      @hybridyn
+
+# ── Release + CI infra ────────────────────────────────────────────
+.github/                          @hybridyn
+pyproject.toml                    @hybridyn
+backend/requirements.txt          @hybridyn
+frontend/package.json             @hybridyn
+installer/                        @hybridyn
+
+# ── Docs (catch-all for unscoped doc PRs — community contributions
+#    welcome, owner still gets the auto-request). ──────────────────
+docs/                             @hybridyn
+*.md                              @hybridyn
+
+# ── Catch-all — everything not matched above ──────────────────────
+*                                 @hybridyn

@@ -1,0 +1,225 @@
+{
+  "name": "16 — Conditional Routing + Validation (multi-region fan-out)",
+  "description": "Customer signups CSV → validate email shape and required fields → label each row by region via conditional_split → fan-out into four region-specific branches plus a quarantine CSV for invalid rows and a random 10% QA sample. Each region branch downstream filters on the _split_output column the conditional_split adds. Lands per-region tables in SQL Server. Offline-capable.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "steps": [
+    {
+      "id": "src_signups",
+      "type": "source",
+      "label": "Local CSV: signups",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "samples/free-api-pipelines/data/signups.csv",
+        "format": "csv",
+        "delimiter": ",",
+        "header": true,
+        "encoding": "utf-8"
+      },
+      "position": {"x": 100, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_validate",
+      "type": "validate",
+      "label": "Email + required fields",
+      "params": {
+        "rules": [
+          {"name": "email_required", "condition": "email IS NOT NULL AND LENGTH(email) > 0"},
+          {"name": "email_shape", "condition": "regexp_matches(email, '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')"},
+          {"name": "country_required", "condition": "country_code IS NOT NULL AND LENGTH(country_code) = 2"}
+        ],
+        "_input_step_ids": ["src_signups"]
+      },
+      "position": {"x": 400, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_split",
+      "type": "conditional_split",
+      "label": "Route by region",
+      "params": {
+        "mode": "first_match",
+        "default_output": "Other",
+        "conditions": [
+          {"name": "EU", "condition": "is_valid = true AND country_code IN ('DE','FR','GB','IT','ES','NL','BE','AT','SE','DK','NO','FI','PL','PT','IE','GR','CZ','CH','UA','BG')"},
+          {"name": "US", "condition": "is_valid = true AND country_code IN ('US','CA','MX')"},
+          {"name": "Asia", "condition": "is_valid = true AND country_code IN ('JP','CN','KR','IN','SG','PK','AE','TR')"}
+        ],
+        "_input_step_ids": ["tx_validate"]
+      },
+      "position": {"x": 720, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_eu_filter",
+      "type": "filter",
+      "label": "Keep EU rows",
+      "params": {
+        "mode": "expression",
+        "condition": "_split_output = 'EU'",
+        "_input_step_ids": ["tx_split"]
+      },
+      "position": {"x": 1040, "y": 40},
+      "risk": "low"
+    },
+    {
+      "id": "tx_eu_gdpr",
+      "type": "derived_column",
+      "label": "GDPR flag",
+      "params": {
+        "columns": [
+          {"name": "gdpr_flag", "expression": "TRUE"},
+          {"name": "data_region", "expression": "'EU'"}
+        ],
+        "_input_step_ids": ["tx_eu_filter"]
+      },
+      "position": {"x": 1340, "y": 40},
+      "risk": "low"
+    },
+    {
+      "id": "snk_eu",
+      "type": "destination",
+      "label": "→ dbo.signups_eu",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "signups_eu",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx_eu_gdpr"]
+      },
+      "position": {"x": 1640, "y": 40},
+      "risk": "low"
+    },
+    {
+      "id": "tx_us_filter",
+      "type": "filter",
+      "label": "Keep US rows",
+      "params": {
+        "mode": "expression",
+        "condition": "_split_output = 'US'",
+        "_input_step_ids": ["tx_split"]
+      },
+      "position": {"x": 1040, "y": 160},
+      "risk": "low"
+    },
+    {
+      "id": "snk_us",
+      "type": "destination",
+      "label": "→ dbo.signups_us",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "signups_us",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx_us_filter"]
+      },
+      "position": {"x": 1340, "y": 160},
+      "risk": "low"
+    },
+    {
+      "id": "tx_asia_filter",
+      "type": "filter",
+      "label": "Keep Asia rows",
+      "params": {
+        "mode": "expression",
+        "condition": "_split_output = 'Asia'",
+        "_input_step_ids": ["tx_split"]
+      },
+      "position": {"x": 1040, "y": 280},
+      "risk": "low"
+    },
+    {
+      "id": "snk_asia",
+      "type": "destination",
+      "label": "→ dbo.signups_asia",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "signups_asia",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx_asia_filter"]
+      },
+      "position": {"x": 1340, "y": 280},
+      "risk": "low"
+    },
+    {
+      "id": "tx_other_filter",
+      "type": "filter",
+      "label": "Keep Other / invalid",
+      "params": {
+        "mode": "expression",
+        "condition": "_split_output = 'Other'",
+        "_input_step_ids": ["tx_split"]
+      },
+      "position": {"x": 1040, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "snk_review",
+      "type": "destination",
+      "label": "→ signups_review.csv",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "data/signups_review.csv",
+        "delimiter": ",",
+        "header": true,
+        "quote_all": false,
+        "_input_step_ids": ["tx_other_filter"]
+      },
+      "position": {"x": 1340, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "tx_qa_sample",
+      "type": "sample",
+      "label": "Random ~10% QA sample",
+      "params": {
+        "count": 5,
+        "method": "random",
+        "_input_step_ids": ["tx_validate"]
+      },
+      "position": {"x": 720, "y": 480},
+      "risk": "low"
+    },
+    {
+      "id": "snk_qa",
+      "type": "destination",
+      "label": "→ qa_sample.csv",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "data/qa_sample.csv",
+        "delimiter": ",",
+        "header": true,
+        "quote_all": false,
+        "_input_step_ids": ["tx_qa_sample"]
+      },
+      "position": {"x": 1040, "y": 480},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src_signups", "to_step": "tx_validate", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_validate", "to_step": "tx_split", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_split", "to_step": "tx_eu_filter", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_eu_filter", "to_step": "tx_eu_gdpr", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_eu_gdpr", "to_step": "snk_eu", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_split", "to_step": "tx_us_filter", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_us_filter", "to_step": "snk_us", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_split", "to_step": "tx_asia_filter", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_asia_filter", "to_step": "snk_asia", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_split", "to_step": "tx_other_filter", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_other_filter", "to_step": "snk_review", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_validate", "to_step": "tx_qa_sample", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_qa_sample", "to_step": "snk_qa", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "conditional-routing"}
+}

@@ -1,0 +1,145 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop, "week*-*"]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 4 * * *"   # 04:00 UTC nightly
+  workflow_dispatch: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sast-python:
+    name: Bandit (Python SAST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit[toml]
+      - name: Run Bandit
+        working-directory: backend
+        run: |
+          bandit -r fpulse -ll -f json -o bandit-report.json || true
+          bandit -r fpulse -ll --exit-zero --format screen
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: backend/bandit-report.json
+
+  deps-audit:
+    name: pip-audit + npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: pip-audit (Python deps)
+        # Audit requirements.txt directly — avoids installing the project,
+        # which has heavy native deps that can flake in CI. Report-only:
+        # a real CVE shows up in the human log AND the uploaded JSON.
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --format json -o pip-audit.json || true
+          pip-audit -r backend/requirements.txt --desc || echo "::warning::pip-audit found vulnerabilities — see pip-audit.json artifact"
+
+      - name: npm audit (Node deps)
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm audit --audit-level=high --json > npm-audit.json || true
+          npm audit --audit-level=high || echo "HIGH vulnerabilities present"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audits
+          path: |
+            pip-audit.json
+            frontend/npm-audit.json
+
+  secrets-scan:
+    name: gitleaks (secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # gitleaks-action@v2 posts a PR summary comment on pull_request runs,
+    # which needs write access to PRs/issues. Without it the action 403s
+    # ("Resource not accessible by integration") and the job goes red even
+    # though NO secret was found - the scan never completed. Grant the
+    # minimal write scopes. Dependabot PRs always get a read-only token
+    # regardless of this block, so skip them here; the push-to-main run
+    # still scans every commit.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  rbac-regression:
+    name: RBAC + Anonymous-access regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: pip install "pydantic>=2.10"
+
+      - name: Run security-focused smoke
+        working-directory: backend
+        run: python run_all_tests.py --security
+        env:
+          FPULSE_ENV: ci
+
+  security-headers:
+    name: Security headers (response middleware)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        # 2026-05-31: this job used to install only `pydantic+fastapi+
+        # httpx+pytest`. The pytest import path `from fpulse.api.
+        # security_headers import SecurityHeadersMiddleware` triggers
+        # `fpulse/api/__init__.py`, which eagerly imports ALL 30+ router
+        # modules — those need cryptography, bcrypt, python-jose, pyyaml,
+        # croniter, etc. Without the full requirements.txt set, the
+        # import dies during pytest collection (~11s, exit 1) and the
+        # job goes red on every commit. Install the full deps so the
+        # collection succeeds.
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Pin scanner-visible response headers
+        env:
+          PYTHONPATH: backend
+        run: pytest backend/tests/test_security_headers.py --noconftest -v

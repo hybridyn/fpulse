@@ -1,0 +1,24 @@
+#!/bin/bash
+# installer/macos/scripts/preinstall
+#
+# Runs before payload is laid down. Stops the running F-Pulse service
+# (if any) so the new binaries can replace the old ones cleanly.
+#
+# Invoked by macOS Installer as root.
+
+set -u
+
+TARGET_USER="${USER:-${SUDO_USER:-$(/usr/bin/stat -f%Su /dev/console)}}"
+TARGET_UID="$(/usr/bin/id -u "$TARGET_USER" 2>/dev/null || echo 0)"
+PLIST="/Users/$TARGET_USER/Library/LaunchAgents/com.hybridyn.fpulse.plist"
+
+if [ -f "$PLIST" ]; then
+  # Best effort — never fail the install because a unit was already gone.
+  /bin/launchctl bootout "gui/$TARGET_UID" "$PLIST" 2>/dev/null || true
+  /bin/launchctl unload "$PLIST" 2>/dev/null || true
+fi
+
+# Best effort port reclaim in case the user started a manual server.
+/usr/bin/lsof -ti :8001 2>/dev/null | /usr/bin/xargs -r /bin/kill -TERM 2>/dev/null || true
+
+exit 0

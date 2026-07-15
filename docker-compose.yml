@@ -1,0 +1,123 @@
+# ─────────────────────────────────────────────────────────────────────────
+# F-Pulse OSS — quick-start compose
+# ─────────────────────────────────────────────────────────────────────────
+# Spins up F-Pulse (single-binary) and optionally Ollama for local AI.
+#
+#   docker compose up -d                  # F-Pulse only
+#   docker compose --profile ai up -d     # F-Pulse + Ollama
+#   docker compose pull && docker compose up -d   # standard upgrade
+#
+# Open http://localhost:8001 to use the pipeline builder.
+#
+# IMAGE VERSIONS — pinned, not floating
+# ─────────────────────────────────────
+# Every image tag below is pinned to a specific version that this
+# release was tested against (see changelog.md "Tested with"). To
+# upgrade an external service independently of F-Pulse, edit the tag
+# below and run `docker compose pull <service>`. We don't use :latest
+# anywhere because a breaking upstream release would silently break
+# F-Pulse on the next `docker compose pull`.
+#
+# Override via .env file:
+#   FPULSE_IMAGE_TAG=1.0.1
+#   OLLAMA_IMAGE_TAG=0.5.7
+#
+# For F-Pulse+ (multi-worker, PostgreSQL, audit/RBAC) see the Plus
+# deployment guide. See docs/deployment.md for the full operator runbook.
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+
+  fpulse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hybridyn/fpulse:${FPULSE_IMAGE_TAG:-1.0.0}
+    container_name: fpulse
+    restart: unless-stopped
+    ports:
+      # 2026-06-01: standardized to 8001:8001 across all install paths
+      # (Docker compose, docker run, source install, packaged installer)
+      # so README "open http://localhost:8001" works everywhere.
+      - "8001:8001"
+    environment:
+      FPULSE_DATA_DIR: /data
+      FPULSE_PORT: "8001"
+      FPULSE_MODE: prod
+      # Ollama wiring (only needed when `--profile ai` is active).
+      #
+      # Setting OLLAMA_URL forces the AI provider to Ollama and SKIPS the
+      # localhost autoprobe — so we can't default it to the service URL,
+      # because the `ollama` hostname doesn't resolve unless the profile
+      # is active and would cause every AI request to fail.
+      #
+      # When you DO want AI, copy `.env.example` to `.env` and set:
+      #
+      #   OLLAMA_URL=http://ollama:11434
+      #
+      # then `docker compose --profile ai up -d`. With OLLAMA_URL unset,
+      # AI features fall back to the rule-based planner.
+      OLLAMA_URL: "${OLLAMA_URL:-}"
+    volumes:
+      - fpulse_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/api/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # Resource caps (PR 6 — May 17 2026).
+    #
+    # F-Pulse runs DuckDB embedded in the FastAPI process. A runaway
+    # GROUP BY can allocate gigabytes and OOM-kill the container,
+    # taking the API + scheduler + worker pool down with it. Hard caps
+    # at the container level give DuckDB's own ``memory_limit`` a real
+    # ceiling to spill against; without them the container can grow
+    # past host RAM and Docker reaps the whole thing.
+    #
+    # Override per host via .env:
+    #   FPULSE_CPU_LIMIT=4.0
+    #   FPULSE_MEMORY_LIMIT=8g
+    #   FPULSE_MEMORY_RESERVATION=1g
+    #
+    # Defaults assume a small VPS (Hetzner GEX44 reference) with
+    # 4 vCPU / 8 GB; reserve 1 GB so the process always has working
+    # memory even under cohabitating noisy neighbours.
+    deploy:
+      resources:
+        limits:
+          cpus: "${FPULSE_CPU_LIMIT:-2.0}"
+          memory: ${FPULSE_MEMORY_LIMIT:-4g}
+        reservations:
+          memory: ${FPULSE_MEMORY_RESERVATION:-1g}
+
+  # Optional local LLM. Enable with --profile ai.
+  # Pulls qwen2.5:7b on first agent use (the 2026-05-19 tool-use floor —
+  # ~6 GB RAM at Q4_K_M, 30–60 s per agent turn on CPU). Sub-7B models
+  # advertise tool schemas but fail to drive the agent loop; the
+  # OllamaRecommendationBanner warns users who land on one anyway.
+  # Bump OLLAMA_IMAGE_TAG in .env to upgrade Ollama without bumping
+  # F-Pulse; see changelog.md for the tested version per release.
+  ollama:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.5.7}
+    container_name: fpulse-ollama
+    profiles: ["ai"]
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU acceleration if available; harmless if not.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: all
+
+volumes:
+  fpulse_data:
+    driver: local
+  ollama_data:
+    driver: local

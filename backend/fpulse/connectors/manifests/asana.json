@@ -1,0 +1,37 @@
+{
+  "id": "asana",
+  "name": "Asana",
+  "description": "Asana REST API",
+  "category": "saas",
+  "base_url": "https://app.asana.com/api/1.0",
+  "auth": {
+    "type": "bearer",
+    "token_param": "personal_access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "personal_access_token", "label": "Personal Access Token", "required": true, "secret": true},
+    {"name": "workspace_gid", "label": "Workspace GID", "required": true}
+  ],
+  "streams": [
+    {
+      "name": "projects",
+      "label": "Projects",
+      "path": "/projects",
+      "method": "GET",
+      "query": {"workspace": "{workspace_gid}", "limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "next_page.offset", "cursor_param": "offset", "max_pages": 100}
+    },
+    {
+      "name": "tasks",
+      "label": "Tasks (by workspace)",
+      "path": "/tasks",
+      "method": "GET",
+      "query": {"workspace": "{workspace_gid}", "limit": 100, "assignee": "me"},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "next_page.offset", "cursor_param": "offset", "max_pages": 100}
+    }
+  ]
+}

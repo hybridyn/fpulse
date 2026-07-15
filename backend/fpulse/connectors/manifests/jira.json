@@ -1,0 +1,37 @@
+{
+  "id": "jira",
+  "name": "Jira",
+  "description": "Atlassian Jira Cloud REST API v3",
+  "category": "saas",
+  "base_url": "https://{domain}.atlassian.net/rest/api/3",
+  "auth": {
+    "type": "basic",
+    "username_param": "email",
+    "password_param": "api_token"
+  },
+  "params": [
+    {"name": "domain", "label": "Atlassian domain", "required": true},
+    {"name": "email", "label": "Email", "required": true},
+    {"name": "api_token", "label": "API Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "issues",
+      "label": "Issues (JQL)",
+      "path": "/search",
+      "method": "GET",
+      "query": {"jql": "ORDER BY created DESC", "maxResults": 100},
+      "data_path": "issues",
+      "pagination": {"type": "offset_limit", "offset_param": "startAt", "limit_param": "maxResults", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "projects",
+      "label": "Projects",
+      "path": "/project/search",
+      "method": "GET",
+      "query": {"maxResults": 50},
+      "data_path": "values",
+      "pagination": {"type": "offset_limit", "offset_param": "startAt", "limit_param": "maxResults", "page_size": 50, "max_pages": 100}
+    }
+  ]
+}

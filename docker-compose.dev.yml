@@ -1,0 +1,280 @@
+###############################################################################
+#  Connector Verification Sandbox
+#  --------------------------------
+#  Spin up vendor-published containers / emulators so the catalog providers
+#  can be promoted from `sdk_validated` → `sandbox_verified` against real
+#  protocols, without trial accounts.
+#
+#  Usage:
+#      docker compose -f docker-compose.dev.yml up <service>
+#  Or run the whole verification matrix:
+#      docker compose -f docker-compose.dev.yml --profile all up -d
+#
+#  Then run the harness from the backend:
+#      cd backend
+#      python -m fpulse.connections.cli verify-all --configs ./fpulse/connections/verify_configs.json
+#
+#  Service profiles let you run only the subset you need:
+#      --profile relational   postgres, mysql, mssql, oracle, db2, mariadb
+#      --profile nosql        mongo, cassandra, neo4j, arangodb, couchbase
+#      --profile streaming    kafka, rabbitmq, pulsar, nats
+#      --profile storage      minio, azurite, cosmos
+#      --profile vector       qdrant, weaviate, chroma, milvus
+#      --profile observability prometheus, grafana
+#      --profile search       elasticsearch, opensearch, solr, redis
+###############################################################################
+
+services:
+  # ── Relational ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    profiles: [relational, all]
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fpulse_test
+    ports: ["5432:5432"]
+
+  mysql:
+    image: mysql:8.4
+    profiles: [relational, all]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: fpulse_test
+    ports: ["3306:3306"]
+
+  mariadb:
+    image: mariadb:11
+    profiles: [relational, all]
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: fpulse_test
+    ports: ["3307:3306"]
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: [relational, all]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Fpulse_Test_1!"
+    ports: ["1433:1433"]
+
+  oracle:
+    image: gvenzl/oracle-xe:21
+    profiles: [relational, all]
+    environment:
+      ORACLE_PASSWORD: oracle
+    ports: ["1521:1521"]
+
+  db2:
+    image: icr.io/db2_community/db2:11.5.9.0
+    profiles: [relational, all]
+    privileged: true
+    environment:
+      LICENSE: accept
+      DB2INST1_PASSWORD: db2inst1
+      DBNAME: TESTDB
+    ports: ["50000:50000"]
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    profiles: [warehouse, all]
+    ports: ["8123:8123", "9000:9000"]
+
+  trino:
+    image: trinodb/trino:444
+    profiles: [warehouse, all]
+    ports: ["8080:8080"]
+
+  # ── NoSQL ─────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    profiles: [nosql, all]
+    ports: ["27017:27017"]
+
+  cassandra:
+    image: cassandra:5
+    profiles: [nosql, all]
+    ports: ["9042:9042"]
+
+  neo4j:
+    image: neo4j:5
+    profiles: [nosql, all]
+    environment:
+      NEO4J_AUTH: neo4j/neo4j_test
+    ports: ["7474:7474", "7687:7687"]
+
+  arangodb:
+    image: arangodb:3.12
+    profiles: [nosql, all]
+    environment:
+      ARANGO_ROOT_PASSWORD: arangodb
+    ports: ["8529:8529"]
+
+  couchbase:
+    image: couchbase:community
+    profiles: [nosql, all]
+    ports: ["8091-8096:8091-8096", "11210-11211:11210-11211"]
+
+  # ── Search / Cache ────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    profiles: [search, all]
+    ports: ["6379:6379"]
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    profiles: [search, all]
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9200:9200"]
+
+  opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    profiles: [search, all]
+    environment:
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports: ["9201:9200"]
+
+  solr:
+    image: solr:9
+    profiles: [search, all]
+    ports: ["8983:8983"]
+
+  # ── Streaming ─────────────────────────────────────────────────────────
+  kafka:
+    image: bitnami/kafka:3.7
+    profiles: [streaming, all]
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@localhost:9093
+    ports: ["9092:9092"]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    profiles: [streaming, all]
+    ports: ["5672:5672", "15672:15672"]
+
+  pulsar:
+    image: apachepulsar/pulsar:3.2.2
+    profiles: [streaming, all]
+    command: bin/pulsar standalone
+    ports: ["6650:6650", "8085:8080"]
+
+  nats:
+    image: nats:2.10-alpine
+    profiles: [streaming, all]
+    command: -js -m 8222
+    ports: ["4222:4222", "8222:8222"]
+
+  # ── Object Storage ────────────────────────────────────────────────────
+  minio:
+    image: minio/minio
+    profiles: [storage, all]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000", "9001:9001"]
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    profiles: [storage, all]
+    command: azurite -l /data --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0
+    ports: ["10000:10000", "10001:10001", "10002:10002"]
+
+  cosmos:
+    # Resource-heavy (~3GB RAM). Bring up only when verifying cosmosdb.
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    profiles: [cosmos, all]
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 3
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "false"
+    ports: ["8081:8081", "10251-10254:10251-10254"]
+
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    profiles: [storage, all]
+    command: -jar DynamoDBLocal.jar -sharedDb -inMemory
+    ports: ["8000:8000"]
+
+  # ── Vector ────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    profiles: [vector, all]
+    ports: ["6333:6333"]
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.24.10
+    profiles: [vector, all]
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      DEFAULT_VECTORIZER_MODULE: none
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+    ports: ["8090:8080"]
+
+  chroma:
+    image: chromadb/chroma:0.5.0
+    profiles: [vector, all]
+    ports: ["8001:8000"]
+
+  milvus:
+    image: milvusdb/milvus:v2.4.1
+    profiles: [vector, all]
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      COMMON_STORAGETYPE: local
+    ports: ["19530:19530", "9091:9091"]
+
+  # ── Observability ────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    profiles: [observability, all]
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    profiles: [observability, all]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: grafana
+    ports: ["3000:3000"]
+
+  # ── GCP emulators (run via the cloud-sdk image) ──────────────────────
+  gcp-pubsub:
+    image: google/cloud-sdk:slim
+    profiles: [gcp, all]
+    command: >
+      gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=fpulse-test
+    ports: ["8085:8085"]
+
+  gcp-firestore:
+    image: google/cloud-sdk:slim
+    profiles: [gcp, all]
+    command: >
+      gcloud beta emulators firestore start --host-port=0.0.0.0:8087
+    ports: ["8087:8087"]
+
+  # ── File transfer ────────────────────────────────────────────────────
+  sftp:
+    image: atmoz/sftp:alpine
+    profiles: [file_system, all]
+    command: fpulse:fpulse:::upload
+    ports: ["2222:22"]
+
+  ftp:
+    image: stilliard/pure-ftpd:hardened
+    profiles: [file_system, all]
+    environment:
+      PUBLICHOST: localhost
+      FTP_USER_NAME: fpulse
+      FTP_USER_PASS: fpulse
+      FTP_USER_HOME: /home/fpulse
+    ports: ["21:21", "30000-30009:30000-30009"]

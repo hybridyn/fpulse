@@ -1,0 +1,99 @@
+{
+  "name": "06 — REST Countries → SQL Server (deep nesting → STRUCT projection)",
+  "description": "Pulls 250 countries with deeply nested name/currencies/languages. Flattens the name struct, then uses a raw-SQL Transform to pull specific fields out of nested maps (currencies → first currency code/name, languages → comma-joined). Lands as dbo.dim_countries.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "REST Countries (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://restcountries.com",
+        "auth_type": "none"
+      },
+      "description": "Public country metadata API. No auth."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "restcountries.com /all",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "REST Countries (public)",
+        "path": "/v3.1/all?fields=name,cca2,cca3,capital,region,subregion,population,area,languages,currencies,timezones,latlng,flag",
+        "pagination": "none",
+        "timeout": 60
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "flatten_explode",
+      "label": "Flatten name struct",
+      "params": {
+        "mode": "flatten",
+        "column": "name",
+        "prefix": "name",
+        "keep_original": false,
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "transform",
+      "label": "Project flat country row",
+      "params": {
+        "expression": "SELECT cca2 AS iso2, cca3 AS iso3, name_common AS common_name, name_official AS official_name, region, subregion, COALESCE(capital[1], NULL) AS capital, population, area, latlng[1] AS latitude, latlng[2] AS longitude, ARRAY_TO_STRING(timezones, ', ') AS timezones, ARRAY_TO_STRING([v FOR v IN map_values(languages)], ', ') AS languages, COALESCE(map_keys(currencies)[1], NULL) AS currency_code, flag AS flag_emoji, CURRENT_TIMESTAMP AS ingested_at FROM source_table",
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "medium"
+    },
+    {
+      "id": "tx3",
+      "type": "typecast",
+      "label": "Cast numerics",
+      "params": {
+        "casts": {
+          "population": "BIGINT",
+          "area": "DOUBLE",
+          "latitude": "DOUBLE",
+          "longitude": "DOUBLE"
+        },
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.dim_countries",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "dim_countries",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1300, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "deep-nesting"}
+}

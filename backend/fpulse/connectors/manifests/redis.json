@@ -1,0 +1,34 @@
+{
+  "id": "redis",
+  "name": "Redis",
+  "description": "Redis data store via REST (RedisInsight / Redis Cloud API)",
+  "category": "saas",
+  "base_url": "{host}",
+  "auth": {
+    "type": "bearer",
+    "header_name": "Authorization",
+    "header_template": "Bearer {api_key}"
+  },
+  "params": [
+    {"name": "host", "label": "Redis REST API URL (e.g. https://redis-12345.c1.us-east-1.ec2.cloud.redislabs.com:PORT)", "required": true},
+    {"name": "api_key", "label": "API Key / Token", "required": true, "secret": true},
+    {"name": "database", "label": "Database Index (default: 0)", "required": false, "default": "0"}
+  ],
+  "streams": [
+    {
+      "name": "keys",
+      "label": "All Keys (SCAN)",
+      "path": "/scan/0",
+      "method": "GET",
+      "query": {"count": "1000"},
+      "data_path": "result"
+    },
+    {
+      "name": "info",
+      "label": "Server Info",
+      "path": "/info",
+      "method": "GET",
+      "data_path": "result"
+    }
+  ]
+}

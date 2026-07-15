@@ -1,0 +1,143 @@
+{
+  "name": "04 — CoinGecko Markets → SQL Server (sort + window analytics)",
+  "description": "Top 100 crypto by market cap. Filters out zero-price rows, casts numerics, derives a normalized 24h return + market-cap tier, then adds analytical window functions (rank within tier, running cumulative market cap, lag for prev row's price). Sorted by market cap before sinking. Truncate-loads dbo.crypto_markets so the table always holds the latest snapshot.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "CoinGecko (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.coingecko.com",
+        "auth_type": "none"
+      },
+      "description": "Public crypto market-data REST API. No API key for the free tier; rate-limited."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "CoinGecko /coins/markets",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "CoinGecko (public)",
+        "path": "/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false",
+        "pagination": "none",
+        "timeout": 45,
+        "max_retries": 5,
+        "retry_delay": 2
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "filter",
+      "label": "Drop zero-price rows",
+      "params": {
+        "mode": "expression",
+        "condition": "current_price IS NOT NULL AND current_price > 0",
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "typecast",
+      "label": "Cast numerics",
+      "params": {
+        "casts": {
+          "current_price": "DOUBLE",
+          "market_cap": "BIGINT",
+          "total_volume": "BIGINT",
+          "market_cap_rank": "INTEGER",
+          "price_change_24h": "DOUBLE",
+          "price_change_percentage_24h": "DOUBLE",
+          "circulating_supply": "DOUBLE",
+          "total_supply": "DOUBLE",
+          "ath": "DOUBLE",
+          "atl": "DOUBLE"
+        },
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 600, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "derived_column",
+      "label": "Add return + tier",
+      "params": {
+        "columns": [
+          {"name": "return_24h_pct", "expression": "ROUND(price_change_percentage_24h, 2)"},
+          {"name": "distance_from_ath_pct", "expression": "ROUND(((ath - current_price) / NULLIF(ath, 0)) * 100, 2)"},
+          {"name": "market_cap_tier", "expression": "CASE WHEN market_cap >= 100000000000 THEN 'mega' WHEN market_cap >= 10000000000 THEN 'large' WHEN market_cap >= 1000000000 THEN 'mid' ELSE 'small' END"},
+          {"name": "snapshot_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 850, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx4",
+      "type": "sort",
+      "label": "Sort by market_cap DESC",
+      "params": {
+        "sort_by": ["market_cap"],
+        "direction": "DESC",
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx5",
+      "type": "window",
+      "label": "Rank within tier + cumulative cap + lag",
+      "params": {
+        "partition_by": ["market_cap_tier"],
+        "order_by": ["market_cap"],
+        "order_direction": "DESC",
+        "window_functions": [
+          {"function": "DENSE_RANK", "alias": "rank_within_tier"},
+          {"function": "SUM", "column": "market_cap", "alias": "cumulative_cap_within_tier"},
+          {"function": "LAG", "column": "current_price", "offset": 1, "alias": "prev_row_price"},
+          {"function": "PERCENT_RANK", "alias": "tier_percentile"}
+        ],
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.crypto_markets",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "crypto_markets",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx5"]
+      },
+      "position": {"x": 1600, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "tx5", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx5", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "financial-window"}
+}

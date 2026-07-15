@@ -1,0 +1,171 @@
+{
+  "name": "14 — Customer 360 Enrichment (lookup + lookup + SCD2)",
+  "description": "Three-source enrichment: orders CSV joins to customer master (SQL Server), then to REST Countries reference for region/continent, then a tier is derived from order value. The resulting dimension feeds an SCD Type-2 node that closes out stale tier versions and emits new current versions keyed on customer_id. Lands the full SCD2 state in dbo.customer_360. Replace the SQL Server source query with your own customer table if dbo.customers doesn't exist on your install.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "REST Countries (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://restcountries.com",
+        "auth_type": "none"
+      },
+      "description": "Public country-reference API. No auth, no API key."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src_orders",
+      "type": "source",
+      "label": "Local CSV: orders",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "samples/free-api-pipelines/data/orders.csv",
+        "format": "csv",
+        "delimiter": ",",
+        "header": true,
+        "encoding": "utf-8"
+      },
+      "position": {"x": 100, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "tx_orders_agg",
+      "type": "transform",
+      "label": "Per-customer order rollup",
+      "params": {
+        "expression": "SELECT CAST(order_id AS BIGINT) AS customer_id, country AS order_country, MAX(order_date) AS last_order_date, COUNT(*) AS lifetime_orders, SUM(CAST(quantity AS INTEGER) * CAST(unit_price AS DOUBLE)) AS lifetime_value FROM source_table GROUP BY order_id, country",
+        "_input_step_ids": ["src_orders"]
+      },
+      "position": {"x": 380, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "src_customers",
+      "type": "source",
+      "label": "SQL Server: dbo.customers",
+      "params": {
+        "connector_type": "db",
+        "connection_id": "conn_mssql_prod",
+        "source_mode": "query",
+        "query": "SELECT customer_id, name, email, country_code, signup_date, tier AS source_tier FROM dbo.customers",
+        "sample_rows": 1000
+      },
+      "position": {"x": 100, "y": 220},
+      "risk": "medium"
+    },
+    {
+      "id": "tx_lookup_customer",
+      "type": "lookup",
+      "label": "Enrich orders with customer master",
+      "params": {
+        "lookup_key": "customer_id",
+        "_input_step_ids": ["tx_orders_agg", "src_customers"]
+      },
+      "position": {"x": 680, "y": 140},
+      "risk": "low"
+    },
+    {
+      "id": "src_countries",
+      "type": "source",
+      "label": "REST Countries: cca2 + region",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "REST Countries (public)",
+        "path": "/v3.1/all?fields=cca2,name,region,subregion",
+        "pagination": "none",
+        "timeout": 45,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "tx_countries_proj",
+      "type": "transform",
+      "label": "Slim countries → key",
+      "params": {
+        "expression": "SELECT cca2 AS country_code, CAST(name.common AS VARCHAR) AS country_name, region AS region, subregion AS subregion FROM source_table WHERE cca2 IS NOT NULL",
+        "_input_step_ids": ["src_countries"]
+      },
+      "position": {"x": 380, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "tx_lookup_country",
+      "type": "lookup",
+      "label": "Enrich with country region",
+      "params": {
+        "lookup_key": "country_code",
+        "_input_step_ids": ["tx_lookup_customer", "tx_countries_proj"]
+      },
+      "position": {"x": 980, "y": 220},
+      "risk": "low"
+    },
+    {
+      "id": "tx_tier",
+      "type": "derived_column",
+      "label": "Compute tier from lifetime_value",
+      "params": {
+        "columns": [
+          {"name": "tier", "expression": "CASE WHEN lifetime_value >= 5000 THEN 'platinum' WHEN lifetime_value >= 2000 THEN 'gold' WHEN lifetime_value >= 500 THEN 'silver' ELSE 'bronze' END"},
+          {"name": "as_of_date", "expression": "CURRENT_DATE"}
+        ],
+        "_input_step_ids": ["tx_lookup_country"]
+      },
+      "position": {"x": 1280, "y": 220},
+      "risk": "low"
+    },
+    {
+      "id": "tx_scd2",
+      "type": "scd2",
+      "label": "SCD2: track tier changes",
+      "params": {
+        "business_key": ["customer_id"],
+        "tracked_columns": ["tier", "region"],
+        "passthrough_columns": ["name", "email", "country_code", "country_name", "subregion", "lifetime_value", "lifetime_orders", "last_order_date"],
+        "effective_from_column": "valid_from",
+        "effective_to_column": "valid_to",
+        "current_flag_column": "is_current",
+        "surrogate_key_column": "scd_id",
+        "null_high_water": "9999-12-31",
+        "delete_detection": "ignore",
+        "_input_step_ids": ["tx_tier"]
+      },
+      "position": {"x": 1580, "y": 220},
+      "risk": "medium"
+    },
+    {
+      "id": "snk_warehouse",
+      "type": "destination",
+      "label": "→ dbo.customer_360",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "customer_360",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "batch_size": 500,
+        "_input_step_ids": ["tx_scd2"]
+      },
+      "position": {"x": 1880, "y": 220},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src_orders", "to_step": "tx_orders_agg", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_orders_agg", "to_step": "tx_lookup_customer", "from_port": "output", "to_port": "input"},
+    {"from_step": "src_customers", "to_step": "tx_lookup_customer", "from_port": "output", "to_port": "input"},
+    {"from_step": "src_countries", "to_step": "tx_countries_proj", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_lookup_customer", "to_step": "tx_lookup_country", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_countries_proj", "to_step": "tx_lookup_country", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_lookup_country", "to_step": "tx_tier", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_tier", "to_step": "tx_scd2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_scd2", "to_step": "snk_warehouse", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "customer-360-scd2"}
+}
