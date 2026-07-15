@@ -23,7 +23,7 @@ pytest-mock>=3.12
 # suite (~3000 tests) runs ~12 min serially — past a typical 10-min CI
 # window. conftest.py already gives every test a unique data dir, so the
 # suite is xdist-safe; run it parallel with `pytest -n auto`.
-pytest-xdist>=3.5
+pytest-xdist>=3.8.0
 
 # Auto-retry transient failures in the parallel fast gate (2026-06-19): xdist
 # worker crashes (C-extension memory pressure) and import-order registration
