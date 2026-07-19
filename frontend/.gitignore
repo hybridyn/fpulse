@@ -1,0 +1,9 @@
+# Playwright E2E artifacts (generated; never commit)
+test-results/
+playwright-report/
+/playwright/.cache/
+blob-report/
+# cached login session (secret) — never commit
+# (.gitignore has no inline comments — the comment MUST be on its own line,
+#  else the trailing text becomes part of the pattern and it never matches)
+e2e/.auth/

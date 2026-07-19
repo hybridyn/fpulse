@@ -1,0 +1,17 @@
+# Disable the blank-issue option so every new issue picks one of the
+# templates. Forces the requester to give us the structured info we
+# need to act (API docs URL, auth scheme, sample response, etc.).
+# Without this, the most common "filed without details" bug-report
+# shape lands and someone on the maintainer side has to ask the same
+# follow-up questions on every ticket.
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security vulnerability (do NOT file as an issue)
+    url: https://github.com/hybridyn/fpulse/security/advisories/new
+    about: "Use GitHub Private Vulnerability Reporting for any security issue — please do not open a public issue. See security.md for full details and email fallback."
+  - name: 🔌 Build a connector yourself in 90 seconds
+    url: https://github.com/hybridyn/fpulse/blob/main/docs/extend/build-a-connector.md
+    about: "Most connector needs can be solved in the product without filing an issue. If the vendor publishes an OpenAPI spec, you can have a working connector in 90 seconds via Insights → Author Connector."
+  - name: 💬 Questions / discussion
+    url: https://github.com/hybridyn/fpulse/discussions
+    about: "For how-to questions, troubleshooting, or general discussion (rather than a bug or feature request)."

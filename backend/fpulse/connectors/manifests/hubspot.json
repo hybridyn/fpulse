@@ -1,0 +1,54 @@
+{
+  "id": "hubspot",
+  "name": "HubSpot",
+  "description": "HubSpot CRM via REST API v3",
+  "category": "saas",
+  "base_url": "https://api.hubapi.com",
+  "auth": {
+    "type": "bearer",
+    "token_param": "access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "access_token", "label": "Private App Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "contacts",
+      "label": "Contacts",
+      "path": "/crm/v3/objects/contacts",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "results",
+      "pagination": {"type": "cursor", "cursor_field": "paging.next.after", "cursor_param": "after", "max_pages": 100}
+    },
+    {
+      "name": "companies",
+      "label": "Companies",
+      "path": "/crm/v3/objects/companies",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "results",
+      "pagination": {"type": "cursor", "cursor_field": "paging.next.after", "cursor_param": "after", "max_pages": 100}
+    },
+    {
+      "name": "deals",
+      "label": "Deals",
+      "path": "/crm/v3/objects/deals",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "results",
+      "pagination": {"type": "cursor", "cursor_field": "paging.next.after", "cursor_param": "after", "max_pages": 100}
+    },
+    {
+      "name": "tickets",
+      "label": "Tickets",
+      "path": "/crm/v3/objects/tickets",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "results",
+      "pagination": {"type": "cursor", "cursor_field": "paging.next.after", "cursor_param": "after", "max_pages": 100}
+    }
+  ]
+}

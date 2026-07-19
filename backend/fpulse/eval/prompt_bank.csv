@@ -1,0 +1,301 @@
+id,prompt,category,persona,expected_route,expected_tool,risk_level,approval_required,works_today,notes
+p001,"Create a pipeline to fetch Oracle BIP employee data every 6 hours and load into SQL Server.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,clarify_draft asks questions + oracle_bip_to_sql_server template (Phase 2C May 17 2026) provides hardened 5-step scaffold with MERGE
+p002,"Build a pipeline that reads sales.csv, filters status='active', writes to Parquet.",pipeline_creation,developer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,Verified live today after sendChat reorder fix
+p003,"Create an hourly pipeline to call an Oracle BIP report API, parse the response, clean the data, and load it into SQL Server.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Oracle BIP template (Phase 2C) covers two-step REST + XML flatten + Data Quality DLQ + staging + MERGE
+p004,"Sync Oracle Fusion timesheets daily into Delta Lake.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Need Oracle Fusion connector template; Delta sink works
+p005,"Build a daily pipeline that fetches data from a REST API and merges it into an existing dimension table.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Needs UPSERT template auto-wired
+p006,"Build end-to-end HR analytics pipeline.",pipeline_creation,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,Too vague without clarifying-questions flow; will guess and produce useless draft
+p007,"Create a pipeline to combine three source tables into one reporting table with business keys.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Rule planner handles single source/sink but multi-source joins need template
+p008,"Build a pipeline to ingest SAP-exported CSV data and map columns to our warehouse schema.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,CSV + DB sink covered; column mapping needs Schema Mapper guidance
+p009,"Create a pipeline that loads supplier master data and validates unique supplier codes before insert.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Validate node + Data Quality node cover this
+p010,"Create a pipeline to move CRM contacts from MySQL to SQL Server once per day.",pipeline_creation,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,DB source + DB sink + schedule; rule planner handles
+p011,"Build a file-based pipeline that watches a folder for new sales files and processes only new files.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,File System node + Validation (file-arrival) cover this; needs explicit recipe
+p012,"Build a pipeline that reads XML API responses and converts them into normalized SQL tables.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,XML source + Flatten/Explode + DB sink; needs template wiring
+p013,"Create a scheduled pipeline to download a ZIP file from an API, extract the CSV, clean it, and load it.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,REST API + File System + CSV all exist; needs recipe
+p014,"Create a pipeline to fetch exchange rates daily and store both raw and curated versions.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Two sinks (raw + curated); rule planner needs bronze/silver pattern
+p015,"Build a pipeline to pull open orders from ERP and load them into a dashboard-ready SQL table.",pipeline_creation,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Generic enough to scaffold; specific ERP needs connector
+p016,"Create an incremental load using LastUpdateDate from Oracle.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,Incremental-strategy concept not in rule planner today; need template
+p017,"Load Oracle HCM workers into a Slowly Changing Dimension table.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,scd2_dimension template (Phase 2C) auto-wires SCD2 node with effective_from/to/is_current columns
+p018,"Create monthly snapshot tables from Oracle payroll reports.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Materialize node + schedule cover this; needs recipe
+p019,"Store Oracle API raw payload into bronze layer.",pipeline_creation,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,REST source + Parquet/JSON sink; works
+p020,"Generate pipeline to merge Oracle data into warehouse.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,sql_server_upsert / oracle_bip_to_sql_server templates (Phase 2C) provide MERGE pattern
+p021,"Create a complete medallion architecture for sales data.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,Multi-pipeline scaffold not in OSS planner today; aspirational template
+p022,"Design scalable ingestion strategy for 10 million rows daily.",pipeline_creation,data_engineer,agent_loop,recall_history,explain,N,Partial,Should recall scaling docs + recommend the paid extension for >500GB
+p023,"Create reusable enterprise ingestion framework.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Aspirational,Templates infrastructure exists but no framework generator
+p024,"Build a pipeline for monthly reconciliation between source and warehouse.",pipeline_creation,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Compare-count step needs to be added as a recipe
+p025,"I want a recurring load from our vendor API into a SQL table.",pipeline_creation,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Generic enough; needs clarifying-questions for auth/schedule/mode
+p026,"Run this pipeline every 15 minutes.",scheduling,data_engineer,fast_lane,(none),safe_write,N,Y,Schedule node + cron; UI path exists; Copilot can answer
+p027,"Schedule this pipeline to run every weekday at 6:00 AM local time, but skip execution on weekends.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Cron pattern Mon-Fri; atlas covers
+p028,"Trigger pipeline after another pipeline completes.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Dependencies feature exists; needs how-to
+p029,"Pause pipeline during weekends.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Cron-pattern answer
+p030,"Run only on working days.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Cron Mon-Fri
+p031,"Retry failed pipelines automatically.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Retry Handler node + alert rules
+p032,"Send email if pipeline fails.",scheduling,data_engineer,fast_lane,draft_alert_rule,safe_write,Y,Y,draft_alert_rule tool exists
+p033,"Prevent overlapping runs.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Overlap Detection in Save dialog
+p034,"Run pipeline only if source file exists.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validation node (file-arrival check)
+p035,"Schedule monthly archival process.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Cron last-day-of-month
+p036,"Limit concurrent executions.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Pool config + Save dialog concurrency
+p037,"Create event-driven workflow.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Webhook + Kafka triggers exist; event-arrival is partial
+p038,"Automatically disable failing pipeline after 5 retries.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,N,Auto-disable-on-failure not implemented; aspirational
+p039,"Resume pipeline from failed step.",scheduling,oncall,fast_lane,help.resume_failed_run,read,N,Y,Dedicated fast-lane intent help.resume_failed_run added May 17 2026
+p040,"Set timeout to 20 minutes and fail if exceeded.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Maximum Running Time setting
+p041,"Add manual approval before the PROD schedule is activated.",scheduling,admin,fast_lane,lookup_help_topic,read,N,Partial,Plus-only feature; OSS answer = "this is F-Pulse+ only"
+p042,"Backfill the last 90 days using the same pipeline definition.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Backfill UX not built; can be done via parameter overrides
+p043,"Configure a pipeline to run on cron */15 8-17 * * 1-5.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Schedule node accepts raw cron
+p044,"Add dependency so invoice processing starts only after exchange rate load completes.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Pipeline dependencies exist; how-to needed
+p045,"Create separate schedules for regional loads based on time zone.",scheduling,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Schedule supports tz; needs how-to
+p046,"Connect to a REST API using OAuth2.",api_ingestion,developer,fast_lane,inspect_connections,read,N,Y,REST API source node supports OAuth2; atlas topic
+p047,"Refresh access token automatically before expiry.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Y,OAuth refresh built into connector
+p048,"Create API ingestion pipeline with pagination.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,REST node supports pagination; needs explicit recipe
+p049,"Handle rate limits in API calls.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Y,Retry Handler with backoff
+p050,"Retry failed API requests with exponential backoff.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Y,Retry Handler node
+p051,"Store API response as parquet files.",api_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,REST source + Parquet sink
+p052,"Flatten nested JSON arrays.",api_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Flatten/Explode node exists
+p053,"Call API for each customer ID from database.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,ForEach Loop + HTTP Request node; needs recipe
+p054,"Generate dynamic headers for API request.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Y,REST node header templating
+p055,"Download files returned from API.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,HTTP Request + File System cover this
+p056,"Trigger API only when source data changes.",api_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,CDC source exists; event-driven path partial
+p057,"Create webhook listener pipeline.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Y,Webhook trigger exists
+p058,"Load API response into Delta table.",api_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,REST + Delta Sink
+p059,"Filter API response before storing.",api_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,REST + Filter + sink
+p060,"Validate API schema changes automatically.",api_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,N,Schema-drift detection not implemented; aspirational
+p061,"Connect to GraphQL endpoint and fetch products.",api_ingestion,developer,fast_lane,inspect_connections,read,N,N,GraphQL not a first-class connector; user does via HTTP Request
+p062,"Set up a webhook listener for Shopify order/created with HMAC verification.",api_ingestion,developer,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,HMAC verification not a built-in step; would need Code/Script node
+p063,"Process a streaming Kafka topic and batch into groups of 500.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Kafka source exists; micro-batching partial
+p064,"Authenticate against legacy system using basic auth, URL-encode special chars in password.",api_ingestion,developer,fast_lane,inspect_connections,read,N,Y,REST node supports basic auth + URL encoding via expression
+p065,"Route API request through a proxy server.",api_ingestion,developer,fast_lane,lookup_help_topic,read,N,Partial,Proxy config via HTTP_PROXY env; not in UI
+p066,"Pull Oracle BIP XML report and flatten nested tags automatically.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,XML source + Flatten/Explode; Oracle BIP wrapping not auto-handled
+p067,"Create Oracle API pagination handling automatically.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,REST pagination yes; Oracle-specific BIP pagination not auto
+p068,"Retry Oracle API call 3 times if response fails.",api_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Retry Handler
+p069,"Fetch only terminated employees from Oracle HCM.",api_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,REST + Filter; depends on Oracle HCM connector specifics
+p070,"Generate API contract summary from this sample response.",api_ingestion,developer,fast_lane,infer_schema,read,N,Y,infer_schema (Phase 3.3 May 18 2026) emits SQL DDL across 3 dialects from sample JSON; deterministic + no LLM
+p071,"Load CSV files into SQL Server automatically.",file_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,CSV + DB sink
+p072,"Watch folder for new CSV files.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validation node + File System
+p073,"Process Excel files uploaded by users.",file_ingestion,business_user,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,Excel source supports multi-sheet
+p074,"Merge multiple CSV files into one dataset.",file_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,File source (auto) + Union
+p075,"Convert Excel sheets into SQL tables.",file_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,Excel source + DB sink
+p076,"Validate file schema before ingestion.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate node + Schema Mapper
+p077,"Reject corrupted files automatically.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate + Fail node patterns
+p078,"Archive processed files.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,File System (move)
+p079,"Extract ZIP files before processing.",file_ingestion,developer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,File System covers; needs unzip recipe
+p080,"Convert XML files into JSON.",file_ingestion,developer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,XML source + JSON sink
+p081,"Split large CSV into chunks.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Sample/batch handling in CSV source
+p082,"Detect delimiter automatically.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,File source (auto-detect)
+p083,"Standardize column names.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Rename / Schema Mapper
+p084,"Remove empty rows and columns.",file_ingestion,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Filter + Data Quality
+p085,"Read all sheets from a workbook into separate tables.",file_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,Excel source multi-sheet
+p086,"Skip files already processed in earlier runs.",file_ingestion,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Checkpoint feature exists; needs how-to
+p087,"Convert multiple JSON files into one normalized SQL target.",file_ingestion,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,JSON source + Union + DB sink
+p088,"Ingest a .tar.gz archive containing daily logs and extract IP addresses.",file_ingestion,developer,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,No tar.gz extractor node; needs Code/Script
+p089,"Read JSONL stream from a server and convert to dataframe.",file_ingestion,developer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,JSON source supports JSONL
+p090,"Process PDF attachments and extract text.",file_ingestion,business_user,fast_lane,lookup_help_topic,read,N,N,PDF extraction not a built-in node
+p091,"Remove duplicate employee IDs.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Deduplicate node
+p092,"Trim spaces from all string columns.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Wrangler or Derived Column
+p093,"Convert all dates into UTC.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Typecast + Derived Column
+p094,"Replace null values with defaults.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column + Filter
+p095,"Normalize country names to ISO codes.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Lookup node + reference table
+p096,"Mask sensitive columns.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,LLM Guardrail or Derived Column with hash
+p097,"Standardize email formats.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate + Derived Column
+p098,"Create surrogate keys automatically.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with row_number
+p099,"Detect invalid records.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate / Data Quality
+p100,"Split full name into first and last name.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with SPLIT_PART
+p101,"Convert currencies into USD.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Lookup with FX table + Derived Column
+p102,"Generate hash column for change tracking.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with HASH()
+p103,"Remove special characters from columns.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with REGEXP_REPLACE
+p104,"Apply business validation rules.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Quality node
+p105,"Create reusable transformation template.",transformation_cleaning,data_engineer,fast_lane,list_templates,read,N,Y,Templates feature exists
+p106,"Deduplicate based on email keeping most recent updated_at.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Deduplicate with order_by
+p107,"Merge two data streams joined on email_hash with left join.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Join node
+p108,"Perform fuzzy match on company_name.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,N,Fuzzy matching not a built-in node; needs Code/Script
+p109,"Cast user_id to integer, price to float, is_active to boolean.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Typecast node
+p110,"Clean phone_number column: remove dashes/spaces/parens, prepend +1 if 10 digits.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column + REGEXP
+p111,"Parse messy currency strings like $1,200.50 into float and currency code.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Possible via Derived Column; recipe not in atlas
+p112,"Convert mixed timestamp formats (ISO and epoch ms) into unified datetime.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Typecast supports multiple formats
+p113,"Fill missing email with unknown@domain.com if status=active else drop.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column + Filter
+p114,"Drop rows where >50% of columns are null.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Quality with row-level null rule
+p115,"Drop constant-valued columns to save space.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Data Profile detects; auto-drop not a node
+p116,"Flag outliers in transaction_amount using IQR.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Data Profile shows distribution; IQR flagging needs Derived Column
+p117,"Replace string nulls (N/A, NaN, none, NULL) with actual null.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with CASE
+p118,"Hash user_id and ip_address using SHA-256.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column with HASH()
+p119,"Encrypt salary column using local key from env var.",transformation_cleaning,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Encryption not a built-in node; via Code/Script
+p120,"Pivot monthly expenses (Jan/Feb/Mar) into columns.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Pivot node
+p121,"Unpivot wide dataframe with months as columns into long format.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Unpivot node
+p122,"Group by region+category; total revenue + avg order value + unique customers.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Aggregate node
+p123,"Calculate percentage contribution per product to total category sales.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Window + Aggregate
+p124,"Create rolling 7-day average of active users.",transformation_cleaning,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Window function
+p125,"Bulk insert dataframe into SQL Server stg_bip_reports using fast_executemany.",sql_server_loading,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Database Sink with bulk-load mode
+p126,"Upsert into SQL Server: if order_id exists update status+delivery_date else insert.",sql_server_loading,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,sql_server_upsert template (Phase 2C) generates MERGE statement with this exact pattern
+p127,"Connect to SQL Server using Windows Authentication and run sp_refresh_metrics.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Execute SQL Task node
+p128,"Truncate daily_scratchpad table before loading new data.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Execute SQL Task or DB Sink truncate mode
+p129,"Read lookup table from SQL Server to map IDs in transform step.",sql_server_loading,data_engineer,rule_planner,draft_pipeline_from_intent,safe_write,Y,Y,DB Source + Lookup
+p130,"Postgres upsert with ON CONFLICT (user_id) DO UPDATE.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Upsert node supports Postgres dialect
+p131,"Copy dataset to Postgres using COPY command for performance.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Database Sink uses bulk load when available
+p132,"Generate CREATE TABLE DDL for inventory_logs if it doesn't exist.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,DB Sink auto-create mode
+p133,"Alter SQL Server table to add processed_at column with default current timestamp.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Execute SQL Task with DDL
+p134,"Wrap multi-table insert in transaction with rollback on failure.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Per-step transaction yes; cross-step rollback needs design
+p135,"Add audit columns created_at, batch_id, source_system.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column + DB Sink
+p136,"Build a slowly changing dimension load for customer master.",sql_server_loading,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,scd2_dimension template (Phase 2C) covers — source → SCD2 node → dim schema
+p137,"Generate index recommendations for this table.",sql_server_loading,data_engineer,agent_loop,(none),explain,N,N,SQL Server introspection not a tool; aspirational
+p138,"Partition this table by load_date.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,DB Sink partition option
+p139,"Generate DDL for destination table from sample data.",sql_server_loading,data_engineer,fast_lane,infer_schema,read,N,Y,infer_schema (Phase 3.3) is the fast path — emits mssql/postgres/duckdb DDL from JSON samples; Data Profile + Schema Mapper for richer canvas flow
+p140,"Write failed rows into an error table with reason.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Quality DLQ split
+p141,"Move old records to archive table monthly.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Execute SQL Task + schedule
+p142,"Optimize SQL bulk insert performance.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,DB Sink batch_size tuning
+p143,"Compare two SQL tables and find mismatches.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,N,Diff tool not implemented; aspirational
+p144,"Create partitioned table for transaction data.",sql_server_loading,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Execute SQL Task with CREATE TABLE
+p145,"Check duplicate rows before inserting into SQL.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate + Deduplicate
+p146,"Validate required columns are present in source.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate node
+p147,"Compare source row count vs target row count for this run.",validation_dq,oncall,fast_lane,query_metrics,read,N,Partial,Metrics available via query_metrics; needs explicit recipe
+p148,"Alert if null percentage in customer_email exceeds 5%.",validation_dq,data_engineer,fast_lane,draft_alert_rule,safe_write,Y,Partial,Data Quality threshold + Alert
+p149,"Reject rows where amount < 0 and status = completed.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Quality rule
+p150,"Ensure primary key uniqueness for product_id.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate + Deduplicate
+p151,"Create freshness check for data received in last 24h.",validation_dq,oncall,fast_lane,lookup_help_topic,read,N,Y,Validation node + alert
+p152,"Flag sudden row-count drop >30% vs yesterday.",validation_dq,oncall,fast_lane,query_metrics,read,N,Partial,Anomaly detect endpoint exists; needs alert wiring
+p153,"Validate date columns are not in the future.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate with date rule
+p154,"Check referential integrity between orders and customers.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Lookup with reject mode
+p155,"Validate that all entries in email column match regex.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Validate with regex rule
+p156,"Fail run if more than 2% of rows are rejected.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Data Quality threshold + Fail node
+p157,"Log top 10 validation failures by reason.",validation_dq,oncall,fast_lane,lookup_help_topic,read,N,Y,Data Quality DLQ output
+p158,"Detect new columns appearing in source files.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Schema drift detection exists in File source
+p159,"Validate currency codes match approved lookup values.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Lookup + Validate
+p160,"Check whether the same file was loaded twice.",validation_dq,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Checkpoint tracks; needs explicit how-to
+p161,"Build reconciliation step between source totals and target totals.",validation_dq,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Possible via Execute SQL Task + Compare; not a single node
+p162,"Generate quality score summary per pipeline run.",validation_dq,oncall,fast_lane,query_metrics,read,N,Partial,Per-run metrics yes; quality-score rollup not standard
+p163,"Generate operational data quality report after ingestion.",validation_dq,oncall,fast_lane,compose_report,safe_write,Y,Y,compose_report tool
+p164,"Why did this pipeline fail?",debugging,oncall,fast_lane,summarize_failure,read,N,Y,Dedicated summarize_failure intent (Phase 2E May 18 2026) — fetches latest failed run + pattern-matched suggestion (e.g. 'credential expired') from 10-pattern table
+p165,"Show me the exact failing node and error message.",debugging,oncall,fast_lane,list_executions,read,N,Y,list_executions with detail mode
+p166,"Summarize the last 5 failures for this pipeline.",debugging,oncall,hybrid,list_executions,read,N,Y,list_executions filter + LLM rollup
+p167,"Suggest a fix for this SQL conversion error.",debugging,developer,agent_loop,recall_history,explain,N,Partial,RAG over similar past failures; weak without good history
+p168,"Explain why row count dropped after the transform step.",debugging,oncall,hybrid,explain_step,read,N,Partial,explain_step tool exists; needs row-count-aware logic
+p169,"Which step is taking the longest time in this run?",debugging,oncall,fast_lane,list_executions,read,N,Y,Execution detail has per-step latency
+p170,"Compare this failed run with the last successful run.",debugging,oncall,fast_lane,compare_runs,read,N,Y,Dedicated compare_runs intent (Phase 2D May 18 2026) — diffs duration/rows/memory/status, surfaces error from latest if failed
+p171,"Why am I getting Login timeout expired error on SQL Server load?",debugging,developer,agent_loop,recall_history,explain,N,Partial,Atlas + recall_history; specific ODBC tips not in knowledge base
+p172,"Fix encoding issue: pipeline crashes on emojis in source CSV.",debugging,developer,agent_loop,recall_history,explain,N,N,Encoding troubleshooting not in atlas
+p173,"The pipeline is stuck in infinite loop during paginated API calls.",debugging,developer,agent_loop,recall_history,explain,N,Partial,Pagination max-page setting exists; needs troubleshooting recipe
+p174,"Pipeline ran successfully but target contains duplicate rows.",debugging,oncall,agent_loop,validate_pipeline,explain,N,Partial,validate_pipeline can spot missing Deduplicate; needs better explanation
+p175,"Why is this pipeline slower than last week?",debugging,oncall,agent_loop,query_metrics,read,N,Partial,query_metrics has duration; needs trend comparison
+p176,"Show me schema difference between yesterday and today.",debugging,oncall,fast_lane,help.schema_drift,read,N,Y,help.schema_drift intent added May 17 2026 — points users to Execution logs + query_metrics
+p177,"Suggest retry settings for this unstable API source.",debugging,data_engineer,agent_loop,recall_history,explain,N,Partial,Retry Handler exists; recommendation needs failure-pattern analysis
+p178,"Which node produced null values unexpectedly?",debugging,oncall,agent_loop,explain_step,read,N,Partial,Data Profile per-step would surface this; not wired
+p179,"Propose the smallest fix to get this pipeline running again.",debugging,oncall,agent_loop,recall_history,explain,N,N,High-level fix-suggestion not reliable on small LLM
+p180,"Diagnose KeyError: 'customer_id' in transformation step.",debugging,developer,agent_loop,recall_history,explain,N,Partial,explain_step can show node config; root cause needs LLM
+p181,"Pipeline fails intermittently with SSL handshake error on Oracle.",debugging,developer,agent_loop,recall_history,explain,N,Partial,Atlas has SSL section; specific Oracle SSL not covered
+p182,"Data loaded into SQL Server has misaligned columns.",debugging,developer,agent_loop,validate_pipeline,read,N,Partial,validate_pipeline catches schema mismatch
+p183,"Float column imported as text due to trailing strings.",debugging,developer,agent_loop,explain_step,read,N,Partial,Typecast strict_mode would catch; needs how-to
+p184,"Show failed pipelines from last 24 hours.",monitoring_ops,oncall,fast_lane,list_executions,read,N,Y,list_executions with status filter
+p185,"List pipelines with longest runtime.",monitoring_ops,oncall,fast_lane,slowest_runs,read,N,Y,Dedicated slowest_runs intent (Phase 2D May 18 2026) — aggregates list_executions sorted by duration_ms, renders top-5 table
+p186,"Find pipelines that never succeeded.",monitoring_ops,oncall,fast_lane,list_pipelines,read,N,Y,list_pipelines with success_count=0 filter
+p187,"Show row counts for yesterday's loads.",monitoring_ops,oncall,fast_lane,list_executions,read,N,Y,Execution metadata has rows_processed
+p188,"Detect unusual drop in records.",monitoring_ops,oncall,fast_lane,query_metrics,read,N,Partial,Anomaly detect endpoint exists; needs alert wiring
+p189,"Generate operational dashboard.",monitoring_ops,oncall,fast_lane,get_workspace_overview,read,N,Y,Dashboard page; get_workspace_overview tool
+p190,"Track SLA violations.",monitoring_ops,oncall,fast_lane,lookup_help_topic,read,N,Partial,Long-running alert exists; SLA-specific not packaged
+p191,"Alert if API latency increases.",monitoring_ops,oncall,fast_lane,draft_alert_rule,safe_write,Y,Partial,Alert rule on metric threshold; latency-specific needs setup
+p192,"Show lineage of this dataset.",monitoring_ops,oncall,fast_lane,lookup_help_topic,read,N,Partial,Lineage is Plus-only; OSS answer = "F-Pulse+ only"
+p193,"Compare source and destination counts.",monitoring_ops,oncall,fast_lane,query_metrics,read,N,Partial,Per-pipeline metrics; not packaged as a query
+p194,"Find inactive pipelines.",monitoring_ops,oncall,fast_lane,list_pipelines,read,N,Y,list_pipelines with last_run_age filter
+p195,"Monitor disk usage from pipelines.",monitoring_ops,oncall,fast_lane,help.compute_usage,read,N,Y,Routes to help.compute_usage which includes disk in triggers and points to Pool page + Dashboard + /api/pool/status — corrected tag from earlier false positive
+p196,"Track execution history.",monitoring_ops,oncall,fast_lane,list_executions,read,N,Y,Direct tool fit
+p197,"Show most expensive workflows.",monitoring_ops,admin,fast_lane,query_metrics,read,N,Partial,AI cost metrics exist; pipeline-cost not first-class
+p198,"Generate daily health report.",monitoring_ops,admin,fast_lane,compose_report,safe_write,Y,Y,compose_report tool
+p199,"Which pipelines failed today?",monitoring_ops,oncall,fast_lane,list_executions,read,N,Y,Fast-lane trigger phrase
+p200,"Which scheduled jobs have not run in last 24h?",monitoring_ops,oncall,fast_lane,get_next_scheduled,read,N,Y,get_next_scheduled tool
+p201,"Find pipelines with repeated failures in the last 7 days.",monitoring_ops,oncall,fast_lane,list_executions,read,N,Partial,list_executions aggregates; needs friendlier route
+p202,"Optimize this SQL query used in the transform node.",optimization,data_engineer,agent_loop,explain_step,explain,N,Partial,LLM-based SQL optimization; weak on small local models
+p203,"Suggest indexes for faster merge performance.",optimization,data_engineer,agent_loop,(none),explain,N,N,No SQL Server introspection; aspirational
+p204,"Reduce the runtime of this pipeline without changing output.",optimization,data_engineer,agent_loop,explain_step,explain,N,Partial,explain_step + tuning recommendations from atlas
+p205,"Should this load be incremental or full refresh?",optimization,data_engineer,agent_loop,recall_history,explain,N,Partial,Recommendation depends on data; LLM with atlas grounding
+p206,"Split this long-running pipeline into smaller stages.",optimization,data_engineer,clarify_first,modify_pipeline_step,safe_write,Y,Partial,modify_pipeline_step can split; recommendation logic weak
+p207,"Suggest caching or staging strategy for this API dataset.",optimization,data_engineer,agent_loop,recall_history,explain,N,Partial,Materialize node + bronze pattern in atlas
+p208,"How can I process 10M rows more efficiently?",optimization,data_engineer,agent_loop,lookup_help_topic,explain,N,Y,Scaling docs in atlas
+p209,"Identify bottlenecks from execution logs.",optimization,oncall,fast_lane,list_executions,read,N,Partial,Per-step latency in execution detail
+p210,"Recommend parallelization opportunities in workflow.",optimization,data_engineer,agent_loop,validate_pipeline,explain,N,Partial,ForEach + Concurrent settings exist; recommendation logic weak
+p211,"Optimize this join for large input tables.",optimization,data_engineer,agent_loop,explain_step,explain,N,Partial,LLM-based; weak on small local models
+p212,"Recommend partitioning strategy for this dataset.",optimization,data_engineer,agent_loop,recall_history,explain,N,Partial,Partition discussion in atlas
+p213,"Recommend batch size for this API ingestion job.",optimization,data_engineer,agent_loop,lookup_help_topic,explain,N,Partial,Defaults known; per-pipeline recommendation weak
+p214,"Identify redundant nodes in this pipeline design.",optimization,data_engineer,agent_loop,validate_pipeline,explain,N,Partial,validate_pipeline catches some; LLM needed for semantic redundancy
+p215,"Predict pipeline failure before execution.",optimization,oncall,agent_loop,(none),explain,N,Aspirational,Anomaly detect runs after; pre-execution prediction not built
+p216,"Turn this natural-language requirement into a visual pipeline draft.",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Today: one-shot draft; needs clarifying-questions
+p217,"Ask me the missing questions before creating the pipeline.",assistant_builder,data_engineer,clarify_first,(none),read,N,N,Clarifying-questions flow doesn't exist as a tool; biggest UX gap
+p218,"Generate the pipeline but do not save until I approve.",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Drafts ARE save-gated by ConfirmationCard
+p219,"Show me a diff of what will be created.",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,DiffPreview component shipped today
+p220,"Suggest three possible pipeline designs for this requirement.",assistant_builder,data_engineer,agent_loop,(none),explain,N,N,Multiple-draft generation not in tool; aspirational
+p221,"Build the safest version first, not the fastest.",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Today rule planner picks one strategy; no safety/speed knob
+p222,"Convert business request into source, transform, load, validation nodes.",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Standard rule planner output
+p223,"Generate a staging-first design (bronze/silver/gold).",assistant_builder,data_engineer,clarify_first,draft_pipeline_from_intent,safe_write,Y,N,Medallion-pattern template not in planner
+p224,"Create the DEV version now and leave PROD for approval.",assistant_builder,admin,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,DEV/PROD split is Plus; OSS = single env
+p225,"Explain this generated pipeline step by step.",assistant_builder,data_engineer,hybrid,summarize_pipeline,read,N,Y,summarize_pipeline tool
+p226,"Simplify this complex flow into a maintainable version.",assistant_builder,data_engineer,agent_loop,modify_pipeline_step,safe_write,Y,Partial,Possible but heuristic-weak on small LLM
+p227,"Replace custom SQL with reusable transform nodes where possible.",assistant_builder,data_engineer,agent_loop,modify_pipeline_step,safe_write,Y,Partial,Heuristic; LLM-driven
+p228,"Create a reusable template from this pipeline.",assistant_builder,data_engineer,fast_lane,list_templates,read,N,Y,Save-as-template UI
+p229,"Create this pipeline in DEV only.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,Partial,DEV/PROD is Plus; OSS = single env
+p230,"Require manual approval before PROD deployment.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,Partial,Approval flow is Plus
+p231,"Show me what secrets this pipeline needs before saving.",governance_approvals,data_engineer,fast_lane,inspect_connections,read,N,Y,inspect_connections tool
+p232,"Mask all credentials in the configuration preview.",governance_approvals,data_engineer,fast_lane,lookup_help_topic,read,N,Y,DiffPreview already shows keys-only not values
+p233,"Which environment variables are required for this connector?",governance_approvals,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Atlas connector entries
+p234,"Give me a promotion checklist from DEV to PROD.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,Partial,Plus-only feature; checklist exists in Plus
+p235,"What changed between DEV and PROD versions of this pipeline?",governance_approvals,admin,fast_lane,summarize_pipeline,read,N,Partial,Pipeline version diff exists; cross-env diff is Plus
+p236,"Prevent pipeline from writing to PROD without validation.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,Partial,Plus governance
+p237,"Add approval gate after schema-change detection.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,N,Schema-drift-gated approval not built
+p238,"Show audit trail for who changed the schedule.",governance_approvals,admin,fast_lane,help.audit_who_changed,read,N,Y,Dedicated help.audit_who_changed intent added May 17 2026
+p239,"Generate a review summary for the approver.",governance_approvals,admin,fast_lane,compose_report,safe_write,Y,Partial,compose_report exists; approver-specific template not done
+p240,"Keep execution local and do not send data outside this machine.",governance_approvals,admin,fast_lane,lookup_help_topic,read,N,Y,Trust posture + tool-only mode
+p241,"Show lineage for this target table.",lineage_impact,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Lineage is Plus
+p242,"Which source fields feed this dashboard dataset?",lineage_impact,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Plus
+p243,"If I change this column name what pipelines will break?",lineage_impact,data_engineer,fast_lane,help.dependencies,read,N,Y,help.dependencies intent (added May 17 2026) provides OSS workarounds + points to Plus lineage
+p244,"Which reports depend on this SQL Server table?",lineage_impact,data_engineer,fast_lane,help.dependencies,read,N,Y,help.dependencies intent added May 17 2026
+p245,"Trace this KPI back to the source system.",lineage_impact,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Plus
+p246,"Show upstream dependencies for this curated dataset.",lineage_impact,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Plus
+p247,"Highlight orphan datasets with no active pipeline.",lineage_impact,admin,fast_lane,lookup_help_topic,read,N,N,Orphan detection not implemented
+p248,"Which pipelines write to this table?",lineage_impact,data_engineer,fast_lane,help.dependencies,read,N,Y,help.dependencies intent (added May 17 2026) covers this with chat + grep workarounds
+p249,"Store API secrets securely.",security_pii,admin,fast_lane,lookup_help_topic,read,N,Y,Credentials page; Vault in Plus
+p250,"Rotate credentials automatically.",security_pii,admin,fast_lane,lookup_help_topic,read,N,Partial,Vault rotation is Plus
+p251,"Encrypt sensitive columns.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Derived Column with HASH or external KMS
+p252,"Mask PII data.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Y,LLM Guardrail + sanitize.py
+p253,"Mask SSN to show only last 4 digits.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column REGEXP_REPLACE
+p254,"Anonymize user_id and ip_address using SHA-256.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column HASH
+p255,"Find columns matching PII keywords and drop them.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Manual config; auto-detection not built
+p256,"Truncate text logs to 255 chars.",security_pii,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Derived Column SUBSTR
+p257,"Generate compliance audit logs.",security_pii,admin,fast_lane,recall_history,read,N,Y,Activity log
+p258,"Restrict access to finance pipelines.",security_pii,admin,fast_lane,lookup_help_topic,read,N,Partial,RBAC is Plus
+p259,"Deploy pipeline to production.",devops_deployment,data_engineer,fast_lane,lookup_help_topic,read,N,Partial,Plus deploy flow; OSS = single env
+p260,"Export workflow as JSON.",devops_deployment,developer,fast_lane,lookup_help_topic,read,N,Y,Export feature exists
+p261,"Version control this pipeline.",devops_deployment,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Versioning built-in; Git export pending
+p262,"Rollback to previous workflow version.",devops_deployment,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Restore version button
+p263,"Compare two workflow versions.",devops_deployment,data_engineer,fast_lane,lookup_help_topic,read,N,Y,Version compare UI
+p264,"Import workflows from another environment.",devops_deployment,admin,fast_lane,lookup_help_topic,read,N,Partial,Plus feature
+p265,"Generate Docker deployment.",devops_deployment,devops,fast_lane,lookup_help_topic,read,N,Y,Docker compose docs in deployment.md
+p266,"Validate pipeline before publishing.",devops_deployment,data_engineer,fast_lane,validate_pipeline,read,N,Y,validate_pipeline tool
+p267,"Promote workflow from dev to prod.",devops_deployment,admin,fast_lane,lookup_help_topic,read,N,Partial,Plus feature
+p268,"Backup pipeline metadata.",devops_deployment,admin,fast_lane,lookup_help_topic,read,N,Y,Backup config in Settings
+p269,"Build a pipeline from this API documentation.",ai_assisted_generation,developer,agent_loop,(none),explain,N,N,Doc-parsing tool not built; aspirational
+p270,"Generate SQL schema from sample JSON.",ai_assisted_generation,data_engineer,fast_lane,infer_schema,read,N,Y,infer_schema (Phase 3.3 May 18 2026) — deterministic JSON→DDL with lattice promotion, VARCHAR sizing, nested flatten, 3 dialects
+p271,"Recommend best incremental strategy.",ai_assisted_generation,data_engineer,agent_loop,recall_history,explain,N,Partial,LLM with atlas; weak on small models
+p272,"Convert this SQL logic into visual nodes.",ai_assisted_generation,data_engineer,agent_loop,(none),safe_write,Y,N,SQL-to-DAG decomposition not built
+p273,"Generate documentation for this workflow.",ai_assisted_generation,data_engineer,fast_lane,compose_report,safe_write,Y,Y,compose_report tool
+p274,"Generate pipeline from natural language.",ai_assisted_generation,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Today: one-shot; needs clarifying-questions
+p275,"Convert Python ETL into F-Pulse workflow.",ai_assisted_generation,developer,agent_loop,(none),safe_write,Y,N,Code-to-DAG conversion not built
+p276,"Suggest data quality validations for this dataset.",ai_assisted_generation,data_engineer,agent_loop,recall_history,explain,N,Partial,LLM-based recommendation
+p277,"Generate test cases for this pipeline.",ai_assisted_generation,data_engineer,agent_loop,(none),safe_write,Y,N,Test-case generation not built
+p278,"Auto-fix schema mismatch issue.",ai_assisted_generation,data_engineer,agent_loop,modify_pipeline_step,safe_write,Y,N,Auto-fix not built; aspirational
+p279,"Generate lineage diagram automatically.",ai_assisted_generation,data_engineer,fast_lane,(none),read,N,Partial,Plus-only feature
+p280,"Suggest cost optimization opportunities.",ai_assisted_generation,admin,agent_loop,query_metrics,explain,N,Partial,AI cost metrics exist; pipeline cost weaker
+p281,"Detect anomaly in incoming data.",ai_assisted_generation,oncall,fast_lane,query_metrics,read,N,Partial,Anomaly detect endpoint
+p282,"Pull yesterday's finance report from Oracle and load into SQL Server.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Generic enough; needs Oracle template + clarifying
+p283,"I get a daily sales file from email; process it automatically.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Email source not built; needs IMAP node
+p284,"Every morning I need the latest employee data cleaned for reporting.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Generic ingest + transform + sink + schedule
+p285,"Build a flow that combines customer master and transactions for dashboard.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Multi-source + join; needs template
+p286,"Clean these bad Excel files and create one trusted output table.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Excel + Data Wrangler + DB sink
+p287,"Make sure duplicate records never enter the final table.",business_user_natural,business_user,fast_lane,lookup_help_topic,read,N,Y,Deduplicate + Validate
+p288,"Alert me when the source file format changes.",business_user_natural,business_user,fast_lane,draft_alert_rule,safe_write,Y,Partial,Schema-drift alert needs wiring
+p289,"Create monthly reconciliation between source and warehouse.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Partial,Recipe needed
+p290,"Set up a simple pipeline I can review before it goes live.",business_user_natural,business_user,clarify_first,draft_pipeline_from_intent,safe_write,Y,Y,Drafts always go to ConfirmationCard
+p291,"Can I migrate SSIS jobs into F-Pulse?",business_user_natural,admin,fast_lane,help.migrate_legacy,read,N,Y,help.migrate_legacy intent gives manual + LLM-assisted migration paths with component mapping table for legacy ETL packages
+p292,"Can I replace cron jobs with workflows?",business_user_natural,admin,fast_lane,lookup_help_topic,read,N,Y,Yes - schedule node replaces cron; atlas covers
+p293,"Can this run fully on-premise without cloud?",business_user_natural,admin,fast_lane,lookup_help_topic,read,N,Y,Yes - local-first; trust page covers
+p294,"Write SQL to deduplicate this table by latest updated_at.",explanation_sql,developer,fast_lane,sql_template,read,N,Y,sql_template dedupe_by_key (Phase 3.4 May 18 2026) — ROW_NUMBER() partition pattern, dialect-quoted, no LLM
+p295,"Explain this SQL query in plain English.",explanation_sql,developer,agent_loop,(none),explain,N,Partial,LLM only; reliable on cloud
+p296,"Convert this business rule into SQL logic.",explanation_sql,developer,agent_loop,(none),explain,N,Partial,LLM only
+p297,"Generate SQL Server DDL from this sample dataset.",explanation_sql,data_engineer,fast_lane,infer_schema,read,N,Y,infer_schema (Phase 3.3) emits NVARCHAR(n)/INT/BIGINT/DATETIME2 DDL with [bracket] quoting from sample rows
+p298,"Write a merge query for this target schema.",explanation_sql,data_engineer,fast_lane,sql_template,read,N,Y,sql_template merge_upsert (Phase 3.4) — MSSQL MERGE / Postgres ON CONFLICT / DuckDB INSERT...ON CONFLICT with safe identifier quoting
+p299,"Help me debug this join that is duplicating rows.",explanation_sql,developer,agent_loop,explain_step,explain,N,Partial,explain_step + LLM analysis; sql_template find_duplicates (Phase 3.4) gives the diagnostic query in one shot
+p300,"Generate sample test data for this pipeline.",explanation_sql,data_engineer,agent_loop,(none),safe_write,Y,N,Test-data generator not built

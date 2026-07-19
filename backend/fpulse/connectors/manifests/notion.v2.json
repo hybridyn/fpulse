@@ -1,0 +1,140 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "notion",
+    "display_name": "Notion",
+    "category": "project_mgmt",
+    "vendor": "Notion Labs Inc.",
+    "homepage": "https://www.notion.so",
+    "docs_url": "https://hybridyn.com/connectors/notion",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Block-level content (rich text trees inside pages) requires per-block traversal — not yet declared.",
+      "Database-property schemas vary per database; the 'properties' field is exposed as a raw object.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/notion/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "api_key",
+        "header": "Authorization",
+        "token_template": "Bearer {integration_token}",
+        "docs": "https://developers.notion.com/docs/authorization"
+      }
+    ],
+    "extra_headers": {
+      "Notion-Version": "2022-06-28"
+    }
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 180,
+      "daily_quota": null
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "databases",
+      "primary_key": ["id"],
+      "incremental_field": "last_edited_time",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "next_cursor",
+        "cursor_param": "start_cursor",
+        "page_size": 100,
+        "page_size_param": "page_size"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "created_time", "last_edited_time"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["database"]},
+          "title": {"type": "array"},
+          "properties": {"type": "object"},
+          "parent": {"type": "object"},
+          "archived": {"type": "boolean"},
+          "created_time": {"type": "string", "format": "date-time"},
+          "last_edited_time": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "pages",
+      "primary_key": ["id"],
+      "incremental_field": "last_edited_time",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "next_cursor",
+        "cursor_param": "start_cursor",
+        "page_size": 100,
+        "page_size_param": "page_size"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "created_time", "last_edited_time"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["page"]},
+          "parent": {"type": "object"},
+          "archived": {"type": "boolean"},
+          "properties": {"type": "object"},
+          "url": {"type": ["string", "null"]},
+          "created_time": {"type": "string", "format": "date-time"},
+          "last_edited_time": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "users",
+      "primary_key": ["id"],
+      "incremental_field": null,
+      "cursor_strategy": "full_refresh",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "next_cursor",
+        "cursor_param": "start_cursor",
+        "page_size": 100,
+        "page_size_param": "page_size"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["user"]},
+          "type": {"type": ["string", "null"]},
+          "name": {"type": ["string", "null"]},
+          "person": {"type": ["object", "null"]},
+          "bot": {"type": ["object", "null"]}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

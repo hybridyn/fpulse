@@ -1,0 +1,46 @@
+{
+  "id": "confluence",
+  "name": "Confluence",
+  "description": "Atlassian Confluence wiki/knowledge base via REST API",
+  "category": "saas",
+  "base_url": "https://{domain}.atlassian.net/wiki/rest/api",
+  "auth": {
+    "type": "basic",
+    "username_param": "email",
+    "password_param": "api_token"
+  },
+  "params": [
+    {"name": "domain", "label": "Atlassian Domain (e.g. mycompany)", "required": true},
+    {"name": "email", "label": "Email", "required": true},
+    {"name": "api_token", "label": "API Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "spaces",
+      "label": "Spaces",
+      "path": "/space",
+      "method": "GET",
+      "query": {"limit": "100", "expand": "description.plain"},
+      "data_path": "results",
+      "pagination": {"type": "offset", "offset_param": "start", "limit_param": "limit", "max_pages": 20}
+    },
+    {
+      "name": "pages",
+      "label": "Pages",
+      "path": "/content",
+      "method": "GET",
+      "query": {"type": "page", "limit": "100", "expand": "version,space"},
+      "data_path": "results",
+      "pagination": {"type": "offset", "offset_param": "start", "limit_param": "limit", "max_pages": 100}
+    },
+    {
+      "name": "blog_posts",
+      "label": "Blog Posts",
+      "path": "/content",
+      "method": "GET",
+      "query": {"type": "blogpost", "limit": "100", "expand": "version,space"},
+      "data_path": "results",
+      "pagination": {"type": "offset", "offset_param": "start", "limit_param": "limit", "max_pages": 50}
+    }
+  ]
+}

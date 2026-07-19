@@ -1,0 +1,142 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "slack",
+    "display_name": "Slack",
+    "category": "communication",
+    "vendor": "Slack Technologies LLC",
+    "homepage": "https://slack.com",
+    "docs_url": "https://hybridyn.com/connectors/slack",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Conversations.history requires per-channel iteration; large workspaces hit rate limits.",
+      "User profile fields beyond core identity not declared in schema.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/slack/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "api_key",
+        "header": "Authorization",
+        "token_template": "Bearer {bot_token}",
+        "docs": "https://api.slack.com/authentication/token-types"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "tier": "Tier 2 (20+ requests/min per method)",
+      "requests_per_minute": 20,
+      "daily_quota": null
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "channels",
+      "primary_key": ["id"],
+      "incremental_field": null,
+      "cursor_strategy": "full_refresh",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "response_metadata.next_cursor",
+        "cursor_param": "cursor",
+        "page_size": 200,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "is_channel": {"type": "boolean"},
+          "is_private": {"type": "boolean"},
+          "is_archived": {"type": "boolean"},
+          "created": {"type": "integer"},
+          "num_members": {"type": ["integer", "null"]},
+          "topic": {"type": "object"},
+          "purpose": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "users",
+      "primary_key": ["id"],
+      "incremental_field": "updated",
+      "incremental_format": "unix_seconds",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "response_metadata.next_cursor",
+        "cursor_param": "cursor",
+        "page_size": 200,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "real_name": {"type": ["string", "null"]},
+          "deleted": {"type": "boolean"},
+          "is_bot": {"type": "boolean"},
+          "is_admin": {"type": "boolean"},
+          "tz": {"type": ["string", "null"]},
+          "updated": {"type": "integer"},
+          "profile": {"type": "object"}
+        }
+      }
+    },
+    {
+      "name": "messages",
+      "primary_key": ["channel", "ts"],
+      "incremental_field": "ts",
+      "incremental_format": "string",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "response_metadata.next_cursor",
+        "cursor_param": "cursor",
+        "page_size": 200,
+        "page_size_param": "limit"
+      },
+      "depends_on": ["channels"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["ts", "type"],
+        "properties": {
+          "ts": {"type": "string"},
+          "channel": {"type": "string"},
+          "type": {"type": "string"},
+          "user": {"type": ["string", "null"]},
+          "text": {"type": ["string", "null"]},
+          "thread_ts": {"type": ["string", "null"]},
+          "reply_count": {"type": ["integer", "null"]},
+          "reactions": {"type": ["array", "null"]}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

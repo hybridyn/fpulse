@@ -1,0 +1,126 @@
+{
+  "name": "05 — GitHub Issues → SQL Server (pagination + rules-mode filter)",
+  "description": "Pulls all issues + PRs from the duckdb/duckdb repo using offset pagination. Uses the visual rules-mode filter for state='open' OR has 'bug' label, derives age in days, and lands as dbo.gh_duckdb_issues.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "GitHub API (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.github.com",
+        "auth_type": "none"
+      },
+      "description": "GitHub REST API. Anonymous: 60 req/hr. For 5000/hr, edit the connection and switch auth_type to 'bearer' with a Personal Access Token."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "GitHub /repos/duckdb/duckdb/issues",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "GitHub API (public)",
+        "path": "/repos/duckdb/duckdb/issues?state=all&per_page=100",
+        "pagination": "offset",
+        "page_size": 100,
+        "offset_param": "page",
+        "max_pages": 5,
+        "headers": {
+          "Accept": "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        "timeout": 30,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "filter",
+      "label": "Open OR labelled bug",
+      "params": {
+        "mode": "rules",
+        "combinator": "OR",
+        "rules": [
+          {"column": "state", "op": "=", "value": "open"},
+          {"column": "labels", "op": "contains", "value": "bug"}
+        ],
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "typecast",
+      "label": "Cast timestamps",
+      "params": {
+        "casts": {
+          "created_at": "TIMESTAMP",
+          "updated_at": "TIMESTAMP",
+          "closed_at": "TIMESTAMP",
+          "number": "INTEGER",
+          "comments": "INTEGER"
+        },
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "derived_column",
+      "label": "Age + is_pr",
+      "params": {
+        "columns": [
+          {"name": "age_days", "expression": "DATE_DIFF('day', created_at, COALESCE(closed_at, CURRENT_TIMESTAMP))"},
+          {"name": "is_pull_request", "expression": "CASE WHEN pull_request IS NOT NULL THEN 1 ELSE 0 END"},
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx4",
+      "type": "transform",
+      "label": "Project columns",
+      "params": {
+        "expression": "SELECT number AS issue_number, title, state, CAST(user AS VARCHAR) AS opened_by, CAST(labels AS VARCHAR) AS labels_json, comments, created_at, updated_at, closed_at, age_days, is_pull_request, html_url, ingested_at FROM source_table",
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1300, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.gh_duckdb_issues",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "gh_duckdb_issues",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1600, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "paginated-api", "rate_limit_note": "60 req/hr unauthenticated. Add a PAT via headers.Authorization='Bearer <pat>' for 5000/hr."}
+}

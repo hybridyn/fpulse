@@ -1,0 +1,173 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "stripe",
+    "display_name": "Stripe",
+    "category": "finance",
+    "vendor": "Stripe Inc.",
+    "homepage": "https://stripe.com",
+    "docs_url": "https://hybridyn.com/connectors/stripe",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Webhook ingestion path not implemented; OSS uses pull-based pagination only.",
+      "Expanded objects (e.g. expand[]=customer) supported via param but not declared in schema.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/stripe/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "basic",
+        "username_template": "{api_key}",
+        "password_template": "",
+        "docs": "https://stripe.com/docs/api/authentication"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 100,
+      "daily_quota": null
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "customers",
+      "primary_key": ["id"],
+      "incremental_field": "created",
+      "incremental_format": "unix_seconds",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "data[-1].id",
+        "cursor_param": "starting_after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "created"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["customer"]},
+          "email": {"type": ["string", "null"], "format": "email"},
+          "name": {"type": ["string", "null"]},
+          "phone": {"type": ["string", "null"]},
+          "created": {"type": "integer"},
+          "currency": {"type": ["string", "null"]},
+          "delinquent": {"type": "boolean"},
+          "livemode": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "name": "charges",
+      "primary_key": ["id"],
+      "incremental_field": "created",
+      "incremental_format": "unix_seconds",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "data[-1].id",
+        "cursor_param": "starting_after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": ["customers"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "amount", "currency", "created", "status"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["charge"]},
+          "amount": {"type": "integer"},
+          "currency": {"type": "string"},
+          "customer": {"type": ["string", "null"]},
+          "status": {"type": "string"},
+          "paid": {"type": "boolean"},
+          "refunded": {"type": "boolean"},
+          "created": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "name": "invoices",
+      "primary_key": ["id"],
+      "incremental_field": "created",
+      "incremental_format": "unix_seconds",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "data[-1].id",
+        "cursor_param": "starting_after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": ["customers"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "created", "status"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["invoice"]},
+          "customer": {"type": ["string", "null"]},
+          "amount_due": {"type": "integer"},
+          "amount_paid": {"type": "integer"},
+          "currency": {"type": "string"},
+          "status": {"type": "string"},
+          "paid": {"type": "boolean"},
+          "created": {"type": "integer"}
+        }
+      }
+    },
+    {
+      "name": "subscriptions",
+      "primary_key": ["id"],
+      "incremental_field": "created",
+      "incremental_format": "unix_seconds",
+      "cursor_strategy": "page_token",
+      "pagination": {
+        "strategy": "cursor",
+        "cursor_field": "data[-1].id",
+        "cursor_param": "starting_after",
+        "page_size": 100,
+        "page_size_param": "limit"
+      },
+      "depends_on": ["customers"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "object", "customer", "status", "created"],
+        "properties": {
+          "id": {"type": "string"},
+          "object": {"type": "string", "enum": ["subscription"]},
+          "customer": {"type": "string"},
+          "status": {"type": "string"},
+          "current_period_start": {"type": "integer"},
+          "current_period_end": {"type": "integer"},
+          "cancel_at_period_end": {"type": "boolean"},
+          "created": {"type": "integer"}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

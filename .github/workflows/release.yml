@@ -1,0 +1,349 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Manual path for publishing a SUFFIXED version to PyPI without cutting a
+  # release — e.g. `1.0.0.dev0` to reserve the project name while leaving the
+  # real `1.0.0` unspent. PyPI refuses re-uploads, so a version is a one-shot
+  # resource: once `1.0.0` is up (broken or not) it can only be yanked, never
+  # replaced. Reserving with a .devN keeps the launch version free.
+  #
+  # Deliberately reuses this workflow rather than a parallel one, so the
+  # reservation goes through the SAME build → stage → verify → publish path a
+  # real release does. A separate workflow would drift from it.
+  #
+  # Only the `pypi` job runs on dispatch: no git tag exists, so there is no
+  # GitHub release to cut and no image tag to derive.
+  workflow_dispatch:
+    inputs:
+      version_suffix:
+        description: "Suffix to publish instead of a release, e.g. dev0 -> 1.0.0.dev0. Required — a blank value would publish the real version."
+        required: true
+        default: "dev0"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  docker:
+    name: Publish Docker image
+    runs-on: ubuntu-latest
+    # 2026-07-15: gated off. Repository SECRETS do not travel with code, so
+    # DOCKERHUB_USERNAME/DOCKERHUB_TOKEN did not come across when this moved to
+    # the hybridyn org — every tag push then died on "Username and password
+    # required" at the login step. Nothing was lost: the v1.0.0 image was never
+    # published, and the README already tells users the image builds locally on
+    # first `docker compose up`. A job that always fails is worse than one that
+    # honestly reports "not configured".
+    #
+    # To enable (no code change): add the DOCKERHUB_USERNAME + DOCKERHUB_TOKEN
+    # secrets, then set repository variable PUBLISH_DOCKER=true under
+    # Settings → Secrets and variables → Actions → Variables. Drop the
+    # README "builds locally on first run" heads-up in the same change.
+    # Tag pushes only: the image tag is derived from GITHUB_REF_NAME, which on
+    # a manual dispatch is the branch, not a version.
+    if: ${{ vars.PUBLISH_DOCKER == 'true' && github.event_name == 'push' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            hybridyn/fpulse:latest
+            hybridyn/fpulse:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  linux-installers:
+    name: Build Linux installers (.deb / .rpm / .AppImage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Tag pushes only — these are release artifacts.
+    if: ${{ github.event_name == 'push' }}
+    # UNSIGNED, deliberately. installer/readme.md's rule is "we don't ship
+    # unsigned binaries to end users", and that rule is why Windows (.exe) and
+    # macOS (.pkg) are NOT built here: without an EV cert Windows SmartScreen
+    # shows a red block-dialog, and without Developer ID + notarization macOS
+    # Gatekeeper refuses to open the package at all — the non-technical user
+    # these installers exist for is exactly who gets stopped. An unsigned Linux
+    # package is different in kind: apt/dnf warn, the user decides, and
+    # installing from a trusted source is the normal path. Add signing (and
+    # then Windows/macOS) when the certs exist; see installer/readme.md.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install build tooling
+        run: |
+          sudo apt-get update -qq
+          # dpkg-dev + fakeroot -> .deb ; rpm -> .rpm ; file + desktop-file-utils
+          # are what appimagetool shells out to; libfuse2 is what the AppImage
+          # runtime itself needs to execute on the runner.
+          sudo apt-get install -y -qq dpkg-dev fakeroot rpm file desktop-file-utils libfuse2
+
+      - name: Install appimagetool
+        # build-appimage.sh expects `appimagetool` on PATH — it's not an apt
+        # package, it ships as an AppImage from AppImageKit. Extracted rather
+        # than run directly: FUSE is unreliable on CI runners, and
+        # --appimage-extract-and-run avoids needing it at all.
+        run: |
+          cd /tmp
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+          appimagetool --version || APPIMAGE_EXTRACT_AND_RUN=1 appimagetool --version
+
+      - name: Create the .venv the build scripts expect
+        # The scripts hardcode <repo>/.venv/bin/python and need PyInstaller,
+        # which is NOT a project dependency (it's build-time only, so it stays
+        # out of pyproject deliberately — end users never freeze anything).
+        run: |
+          python -m venv .venv
+          ./.venv/bin/pip install --quiet --upgrade pip
+          ./.venv/bin/pip install --quiet pyinstaller
+          ./.venv/bin/pip install --quiet -e .
+
+      - name: Build .deb
+        run: ./installer/linux/build-deb.sh
+
+      - name: Build .rpm
+        run: ./installer/linux/build-rpm.sh
+
+      - name: Build .AppImage
+        # APPIMAGE_EXTRACT_AND_RUN: appimagetool is itself an AppImage and
+        # needs FUSE to self-mount, which GitHub runners don't reliably
+        # provide. This tells it to extract and run instead.
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: ./installer/linux/build-appimage.sh
+
+      - name: Prove the .deb installs and serves the UI
+        # The build scripts already refuse to package a bundle with no UI. This
+        # goes further: install the actual artifact and load the page. Every
+        # packaging path in this project has shipped a blank UI at least once
+        # because nobody opened the artifact — so we open it.
+        run: |
+          sudo apt-get install -y ./installer/linux/output/fpulse_*_amd64.deb
+          command -v fpulse || { echo "::error::fpulse not on PATH after .deb install"; exit 1; }
+
+          FPULSE_DATA_DIR=/tmp/fpulse-deb FPULSE_MODE=dev \
+            fpulse serve --no-open --port 8201 > /tmp/deb.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -sf http://127.0.0.1:8201/api/health > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8201/api/health > /dev/null \
+            || { echo "::error::the installed .deb never came up"; cat /tmp/deb.log; exit 1; }
+
+          code=$(curl -s -o /tmp/i.html -w '%{http_code}' http://127.0.0.1:8201/)
+          [ "$code" = "200" ] || { echo "::error::GET / returned $code — the .deb serves no UI"; cat /tmp/deb.log; exit 1; }
+          grep -q 'id="root"' /tmp/i.html || { echo "::error::/ is not the SPA"; exit 1; }
+          for a in $(grep -oE '/assets/[^"]+' /tmp/i.html | sort -u); do
+            ac=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8201$a")
+            [ "$ac" = "200" ] || { echo "::error::asset $a -> $ac"; exit 1; }
+            echo "  ok $a"
+          done
+          echo "the installed .deb serves the real UI"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-installers
+          path: installer/linux/output/*
+          retention-days: 14
+
+  github-release:
+    name: GitHub release
+    runs-on: ubuntu-latest
+    # Tag pushes only: there is no release to cut for a .devN reservation, and
+    # the version is read from GITHUB_REF_NAME which would be a branch here.
+    if: ${{ github.event_name == 'push' }}
+    needs: [linux-installers]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the built installers
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-installers
+          path: dist-installers
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract section from CHANGELOG
+        id: changelog
+        run: |
+          awk -v v="${{ steps.version.outputs.version }}" '
+            $0 ~ "^## \\[" v "\\]" { f=1; next }
+            f && $0 ~ "^## \\[" { exit }
+            f { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release ${GITHUB_REF_NAME}" > release_notes.md
+          fi
+
+      - name: Checksums
+        # Users can't verify an unsigned package's authenticity, but they can
+        # verify it downloaded intact. Cheap, and expected of a release.
+        run: |
+          cd dist-installers
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: F-Pulse ${{ github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          # Without `files:` the release carries source tarballs only — which
+          # is how v1.0.0 came to be tagged while the README offered five
+          # installer downloads that did not exist.
+          fail_on_unmatched_files: true
+          files: |
+            dist-installers/*.deb
+            dist-installers/*.rpm
+            dist-installers/*.AppImage
+            dist-installers/SHA256SUMS
+
+  pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    # 2026-07-16: wired up and ready — the job is correct, it just needs the
+    # PyPI side configured before it can run. This matters more than it looks:
+    # README's headline install is `pip install fpulse`, and the package is NOT
+    # on PyPI, so that command fails for every reader until this publishes. The
+    # name `fpulse` is unclaimed, so nobody else can take it out from under us.
+    #
+    # To enable (no code change):
+    #   1. On pypi.org create the `fpulse` project and add a Trusted Publisher:
+    #      owner=hybridyn, repo=fpulse, workflow=release.yml, environment=(none).
+    #      Trusted publishing uses the OIDC `id-token: write` below — there is
+    #      no API token to store or rotate. Do NOT add a token secret instead.
+    #   2. Set repository variable PUBLISH_PYPI=true
+    #      (Settings → Secrets and variables → Actions → Variables).
+    #   3. Push the version tag. PyPI refuses re-uploads of an existing
+    #      version, so a given tag publishes exactly once.
+    #
+    # Gated rather than `if: true` so an unconfigured PyPI leaves the release
+    # green (job skips) instead of failing every tag push — the trap the
+    # docker job fell into.
+    if: ${{ vars.PUBLISH_PYPI == 'true' }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply the version suffix (manual reservation runs only)
+        # Rewrites the version for THIS BUILD only; the repo is untouched.
+        # Guarded: a manual dispatch with a blank suffix would publish the real
+        # version and burn it, which is the exact outcome this path exists to
+        # avoid. Tag pushes skip this entirely and publish pyproject's version.
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          SUFFIX: ${{ inputs.version_suffix }}
+        run: |
+          if [ -z "$SUFFIX" ]; then
+            echo "::error::version_suffix is empty. A manual run publishes a suffixed version (e.g. dev0); to publish the real version, push a tag."
+            exit 1
+          fi
+          python - <<'PY'
+          import os, re, pathlib
+          suffix = os.environ["SUFFIX"]
+          p = pathlib.Path("pyproject.toml")
+          s = p.read_text(encoding="utf-8")
+          new, n = re.subn(
+              r'(?m)^version = "([^"]+)"',
+              lambda m: f'version = "{m.group(1)}.{suffix}"',
+              s, count=1,
+          )
+          if n != 1:
+              raise SystemExit("could not rewrite the version in pyproject.toml")
+          p.write_text(new, encoding="utf-8")
+          print(re.search(r'(?m)^version = ".*"', new).group(0))
+          PY
+
+      # The UI must be built and staged INTO the package before the wheel is
+      # built. fpulse is one pip package that serves its own React app; the
+      # app builds to frontend/dist, which is outside the Python package, so
+      # setuptools cannot see it. Skip these two steps and the wheel still
+      # builds — silently, with no UI — which is exactly what 1.0.0 shipped.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Stage the frontend into the package
+        # Fails hard if frontend/dist is missing, so a UI-less wheel can never
+        # reach PyPI. Do not soften this to a warning.
+        run: python scripts/stage_frontend.py
+
+      - name: Build sdist + wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Verify the wheel actually contains the app
+        # Last line of defence: assert the artifact's contents before it is
+        # published. PyPI refuses re-uploads, so a bad wheel cannot be fixed
+        # in place — only yanked and re-released under a new version.
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          checks = {
+              "frontend index.html": any(n.endswith("fpulse/frontend_dist/index.html") for n in names),
+              "frontend assets":     any("/frontend_dist/assets/" in n for n in names),
+              "connector manifests": len([n for n in names if "/connectors/manifests/" in n and n.endswith(".json")]) >= 40,
+              "swagger-ui assets":   any("/static/swagger-ui/" in n for n in names),
+          }
+          for label, ok in checks.items():
+              print(f"  {'OK  ' if ok else 'FAIL'}  {label}")
+          if not all(checks.values()):
+              sys.exit("wheel is missing required content — refusing to publish")
+          print(f"{wheel}: {len(names)} files, all checks passed")
+          PY
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

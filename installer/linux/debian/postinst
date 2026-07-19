@@ -1,0 +1,52 @@
+#!/bin/sh
+# installer/linux/debian/postinst
+#
+# Runs after files are unpacked. Registers the systemd --user unit
+# for the user that ran `sudo apt install`, so the service starts
+# at login and survives a reboot (with linger).
+
+set -e
+
+case "$1" in
+  configure)
+    # Refresh the desktop+icon caches so the launcher appears
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database -q /usr/share/applications || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+      gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true
+    fi
+
+    # Figure out the invoking human user (not root)
+    TARGET_USER="${SUDO_USER:-}"
+    if [ -z "$TARGET_USER" ] && [ -n "${PKEXEC_UID:-}" ]; then
+      TARGET_USER="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+    fi
+
+    if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != "root" ]; then
+      # Make sure the user's service stays running after they log out
+      if command -v loginctl >/dev/null 2>&1; then
+        loginctl enable-linger "$TARGET_USER" || true
+      fi
+
+      # Register + start the systemd --user unit. su -c keeps env clean.
+      su - "$TARGET_USER" -c "/usr/bin/fpulse install-service" || \
+        echo "Note: 'fpulse install-service' did not complete. Run it manually."
+
+      echo ""
+      echo "  F-Pulse installed. Open http://localhost:8001 in your browser."
+      echo "  Service status: systemctl --user status fpulse"
+      echo ""
+    else
+      # Headless / no $SUDO_USER (e.g. installed by automation). Tell
+      # the operator how to finish the install themselves.
+      echo ""
+      echo "  F-Pulse files installed. To start the service as your user:"
+      echo "    fpulse install-service"
+      echo "    sudo loginctl enable-linger \$USER   # survive logout"
+      echo ""
+    fi
+    ;;
+esac
+
+exit 0

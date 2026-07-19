@@ -1,0 +1,46 @@
+{
+  "hidden": true,
+  "id": "linkedin_ads",
+  "name": "LinkedIn Ads",
+  "description": "LinkedIn Campaign Manager advertising data",
+  "category": "saas",
+  "base_url": "https://api.linkedin.com/rest",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "client_id", "label": "Client ID", "required": true, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": true, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": true, "secret": true},
+    {"name": "account_id", "label": "Ad Account ID (sponsored account URN)", "required": true}
+  ],
+  "streams": [
+    {
+      "name": "campaigns",
+      "label": "Campaigns",
+      "path": "/adCampaigns",
+      "method": "GET",
+      "query": {"q": "search", "search.account.values[0]": "urn:li:sponsoredAccount:{account_id}", "count": "100"},
+      "data_path": "elements",
+      "headers": {"LinkedIn-Version": "202401", "X-Restli-Protocol-Version": "2.0.0"},
+      "pagination": {"type": "offset", "offset_param": "start", "limit_param": "count", "max_pages": 50}
+    },
+    {
+      "name": "campaign_groups",
+      "label": "Campaign Groups",
+      "path": "/adCampaignGroups",
+      "method": "GET",
+      "query": {"q": "search", "search.account.values[0]": "urn:li:sponsoredAccount:{account_id}", "count": "100"},
+      "data_path": "elements",
+      "headers": {"LinkedIn-Version": "202401", "X-Restli-Protocol-Version": "2.0.0"},
+      "pagination": {"type": "offset", "offset_param": "start", "limit_param": "count", "max_pages": 50}
+    }
+  ]
+}

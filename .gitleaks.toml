@@ -1,0 +1,69 @@
+# F-Pulse OSS gitleaks config.
+#
+# Inherits gitleaks' default rule set and allowlists paths that contain
+# documented placeholder credentials (`.env.example`, docs, sample data).
+# A real key NOT matching these patterns will still be flagged.
+
+title = "F-Pulse OSS"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholders and OSS sample data"
+paths = [
+    '''(^|/)\.env\.example$''',
+    '''(^|/).*\.md$''',
+    '''(^|/)docs/.*''',
+    '''(^|/)backend/tests/.*''',
+    '''(^|/)frontend/src/__tests__/.*''',
+    '''(^|/).*\.sample$''',
+    '''(^|/).*\.example$''',
+    # 2026-06-04 — fixture file holding well-known DEV/EMULATOR keys
+    # for connector verification (Azurite + CosmosDB emulator + Minio +
+    # local SFTP + LocalStack DynamoDB). Every value here is a publicly
+    # documented default for the local-dev emulator it points at;
+    # production deployments override via FPULSE_* env vars or per-
+    # connection secrets that live in the encrypted credential store.
+    '''(^|/)backend/fpulse/connections/verify_configs\.json$''',
+    # 2026-06-04 — `eval_results/` was added to .gitignore in this
+    # release cycle, but the pre-gitignore historical file
+    # `20260504T131945Z.json` is still in git and contains the same
+    # synthetic Stripe key the sanitization eval (cases.py) feeds in.
+    # Allowlist the path so the historical artefact doesn't flag.
+    '''(^|/)backend/eval_results/.*''',
+    # 2026-06-04 — eval/cases.py contains synthetic Stripe / API-key
+    # strings that are LITERALLY designed to be detected by the
+    # sanitization pipeline under test. The test is checking that
+    # F-Pulse's own redactor catches them before they reach the LLM.
+    # Real Stripe live keys start with `sk_live_` but real ones are
+    # 100+ chars from Stripe's actual key namespace, not the
+    # `sk_live_51AbC2dEf...` synthetic pattern below.
+    '''(^|/)backend/fpulse/eval/cases\.py$''',
+]
+regexes = [
+    # Placeholder API keys in env templates (sk-ant-... / sk-... / sk-or-...)
+    '''sk-(ant-|or-)?\.{3}''',
+    # <your-something-here> style placeholders
+    '''<your[-_][a-z0-9_-]+>''',
+    # 2026-06-04 — Microsoft's documented well-known default key for
+    # the Azurite local Azure Storage emulator. Published at
+    # https://learn.microsoft.com/azure/storage/common/storage-use-azurite
+    # — every Azure-on-laptop dev workflow uses this exact value.
+    # NOT a secret, by design.
+    '''Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==''',
+    # 2026-06-04 — Microsoft's documented well-known default master
+    # key for the Cosmos DB local emulator. Published at
+    # https://learn.microsoft.com/azure/cosmos-db/local-emulator
+    # — same status as the Azurite key above. NOT a secret.
+    '''C2y6yDjf5/R\+ob0N8A7Cgv30VRDJIWEHLM\+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==''',
+    # 2026-07-02 — in-app Help page curl examples use a literal
+    # "Authorization: Bearer YOUR_TOKEN" placeholder, not a real token.
+    '''YOUR_TOKEN''',
+    # 2026-07-02 — schema/versioning bookkeeping SQL against the internal
+    # `_meta` table (`... WHERE key = 'schema_version'` / `'signup_default_v3'`).
+    # gitleaks' generic-api-key rule fires on the `key = '...'` predicate;
+    # these are column-value literals, not credentials.
+    '''schema_version''',
+    '''signup_default_v3''',
+]

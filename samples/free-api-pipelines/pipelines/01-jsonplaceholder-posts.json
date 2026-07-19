@@ -1,0 +1,75 @@
+{
+  "name": "01 — JSONPlaceholder Posts → SQL Server",
+  "description": "Smoke-test pipeline. Pulls 100 fake blog posts from JSONPlaceholder, renames camelCase fields to snake_case, and lands them as dbo.raw_posts in SQL Server.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "JSONPlaceholder (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://jsonplaceholder.typicode.com",
+        "auth_type": "none"
+      },
+      "description": "Public mock REST API used by F-Pulse samples. No auth, no rate limits."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "JSONPlaceholder /posts",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "JSONPlaceholder (public)",
+        "path": "/posts",
+        "pagination": "none",
+        "headers": {},
+        "timeout": 30,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "rename",
+      "label": "camelCase → snake_case",
+      "params": {
+        "mappings": {
+          "userId": "user_id",
+          "id": "post_id",
+          "title": "title",
+          "body": "body"
+        },
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.raw_posts",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "raw_posts",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "batch_size": 1000,
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "smoke"}
+}

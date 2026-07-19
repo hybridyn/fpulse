@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────
+# F-Pulse on Railway
+# ─────────────────────────────────────────────────────────────────────────
+# Quick start:
+#   1. New Project → Deploy from GitHub repo → select this repo
+#   2. Railway picks up this file + the Dockerfile automatically
+#   3. In the service settings → Volumes, create a volume mounted at
+#      /data (Railway has no manifest format for volumes yet — they
+#      must be added via the UI or `railway volume`).
+#
+# Without the /data volume, every redeploy wipes the SQLite DB and
+# all credentials.
+#
+# For production sizing, custom domains, or Plus-tier topology see
+# docs/deployment.md.
+# ─────────────────────────────────────────────────────────────────────────
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python -m uvicorn fpulse.main:app --host 0.0.0.0 --port 8001"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

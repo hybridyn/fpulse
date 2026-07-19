@@ -1,0 +1,53 @@
+{
+  "id": "ms_teams",
+  "name": "Microsoft Teams",
+  "description": "Microsoft Teams via Microsoft Graph API",
+  "category": "saas",
+  "base_url": "https://graph.microsoft.com",
+  "auth": {
+    "type": "bearer",
+    "token_param": "access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "access_token", "label": "Microsoft Graph Access Token", "required": true, "secret": true},
+    {"name": "team_id", "label": "Team ID (for channel/message streams)", "required": false},
+    {"name": "channel_id", "label": "Channel ID (for messages stream)", "required": false}
+  ],
+  "default_headers": {"Accept": "application/json"},
+  "streams": [
+    {
+      "name": "joined_teams",
+      "label": "My Joined Teams",
+      "path": "/v1.0/me/joinedTeams",
+      "method": "GET",
+      "data_path": "value",
+      "pagination": {"type": "cursor", "next_url_path": "@odata.nextLink", "max_pages": 50}
+    },
+    {
+      "name": "team_channels",
+      "label": "Channels in Team",
+      "path": "/v1.0/teams/{team_id}/channels",
+      "method": "GET",
+      "data_path": "value",
+      "pagination": {"type": "cursor", "next_url_path": "@odata.nextLink", "max_pages": 50}
+    },
+    {
+      "name": "channel_messages",
+      "label": "Channel Messages",
+      "path": "/v1.0/teams/{team_id}/channels/{channel_id}/messages",
+      "method": "GET",
+      "data_path": "value",
+      "pagination": {"type": "cursor", "next_url_path": "@odata.nextLink", "max_pages": 50}
+    },
+    {
+      "name": "team_members",
+      "label": "Team Members",
+      "path": "/v1.0/teams/{team_id}/members",
+      "method": "GET",
+      "data_path": "value",
+      "pagination": {"type": "cursor", "next_url_path": "@odata.nextLink", "max_pages": 50}
+    }
+  ]
+}

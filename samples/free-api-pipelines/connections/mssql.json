@@ -1,0 +1,20 @@
+{
+  "id": "fpulse_test",
+  "name": "fpulse_test",
+  "type": "mssql",
+  "config": {
+    "host": "localhost",
+    "port": 1433,
+    "database": "fpulse_test",
+    "user": "REPLACE_ME",
+    "password": "REPLACE_ME",
+    "schema": "dbo"
+  },
+  "credential_id": null,
+  "project_id": null,
+  "workspace_id": "default",
+  "description": "Local SQL Server target for free-API sample pipelines.",
+  "tags": ["sample", "mssql", "sink"],
+  "environment": null,
+  "capabilities": ["read", "write"]
+}

@@ -1,0 +1,112 @@
+{
+  "name": "12 — REST Countries data_profile → SQL Server (column stats)",
+  "description": "Pulls 250 countries from REST Countries, flattens the name struct, then runs the data_profile node — which emits one row per column with null%, distinct count, min/max, and top value. Perfect for shape verification before downstream transforms. Lands as dbo.countries_profile.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "REST Countries (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://restcountries.com",
+        "auth_type": "none"
+      },
+      "description": "Public country metadata API. No auth."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "restcountries.com /all",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "REST Countries (public)",
+        "path": "/v3.1/all?fields=name,cca2,cca3,capital,region,subregion,population,area,timezones,flag",
+        "pagination": "none",
+        "timeout": 60
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "flatten_explode",
+      "label": "Flatten name struct",
+      "params": {
+        "mode": "flatten",
+        "column": "name",
+        "prefix": "name",
+        "keep_original": false,
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "transform",
+      "label": "Slim to scalar columns",
+      "params": {
+        "expression": "SELECT cca2 AS iso2, cca3 AS iso3, name_common AS common_name, name_official AS official_name, region, subregion, COALESCE(capital[1], NULL) AS capital, CAST(population AS BIGINT) AS population, CAST(area AS DOUBLE) AS area, flag AS flag_emoji FROM source_table",
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 600, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "data_profile",
+      "label": "Profile every column",
+      "params": {
+        "sample_rows": 0,
+        "include_top_value": true,
+        "include_columns": [],
+        "exclude_columns": [],
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 850, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx4",
+      "type": "derived_column",
+      "label": "Add profiled_at",
+      "params": {
+        "columns": [
+          {"name": "profiled_at", "expression": "CURRENT_TIMESTAMP"},
+          {"name": "source_dataset", "expression": "'restcountries.v3.1.all'"}
+        ],
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.countries_profile",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "countries_profile",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1350, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "data-profile"}
+}

@@ -1,0 +1,48 @@
+{
+  "id": "sendgrid",
+  "name": "SendGrid",
+  "description": "SendGrid / Twilio email delivery platform",
+  "category": "saas",
+  "base_url": "https://api.sendgrid.com/v3",
+  "auth": {
+    "type": "bearer",
+    "header_name": "Authorization",
+    "header_template": "Bearer {api_key}"
+  },
+  "params": [
+    {"name": "api_key", "label": "API Key", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "stats",
+      "label": "Global Stats",
+      "path": "/stats",
+      "method": "GET",
+      "query": {"start_date": "2024-01-01", "aggregated_by": "day"},
+      "data_path": ""
+    },
+    {
+      "name": "contacts",
+      "label": "Marketing Contacts",
+      "path": "/marketing/contacts",
+      "method": "GET",
+      "data_path": "result",
+      "pagination": {"type": "cursor", "next_url_path": "_metadata.next", "max_pages": 50}
+    },
+    {
+      "name": "templates",
+      "label": "Email Templates",
+      "path": "/templates",
+      "method": "GET",
+      "query": {"generations": "dynamic", "page_size": "100"},
+      "data_path": "result"
+    },
+    {
+      "name": "suppressions",
+      "label": "Suppression List (Bounces)",
+      "path": "/suppression/bounces",
+      "method": "GET",
+      "data_path": ""
+    }
+  ]
+}

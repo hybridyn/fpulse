@@ -1,0 +1,53 @@
+{
+  "id": "salesforce",
+  "name": "Salesforce",
+  "description": "Salesforce CRM via REST API + SOQL",
+  "category": "saas",
+  "base_url": "https://{instance}.salesforce.com",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://login.salesforce.com/services/oauth2/token",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "instance", "label": "Instance (e.g. mydomain.my)", "required": true},
+    {"name": "client_id", "label": "Client ID", "required": false, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": false, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": false, "secret": true},
+    {"name": "access_token", "label": "Access Token (optional override)", "required": false, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "accounts",
+      "label": "Accounts (SOQL)",
+      "path": "/services/data/v59.0/query",
+      "method": "GET",
+      "query": {"q": "SELECT Id, Name, Industry, AnnualRevenue, CreatedDate FROM Account LIMIT 200"},
+      "data_path": "records",
+      "pagination": {"type": "cursor", "next_url_path": "nextRecordsUrl", "max_pages": 100}
+    },
+    {
+      "name": "contacts",
+      "label": "Contacts (SOQL)",
+      "path": "/services/data/v59.0/query",
+      "method": "GET",
+      "query": {"q": "SELECT Id, FirstName, LastName, Email, AccountId FROM Contact LIMIT 200"},
+      "data_path": "records",
+      "pagination": {"type": "cursor", "next_url_path": "nextRecordsUrl", "max_pages": 100}
+    },
+    {
+      "name": "opportunities",
+      "label": "Opportunities (SOQL)",
+      "path": "/services/data/v59.0/query",
+      "method": "GET",
+      "query": {"q": "SELECT Id, Name, StageName, Amount, CloseDate, AccountId FROM Opportunity LIMIT 200"},
+      "data_path": "records",
+      "pagination": {"type": "cursor", "next_url_path": "nextRecordsUrl", "max_pages": 100}
+    }
+  ]
+}

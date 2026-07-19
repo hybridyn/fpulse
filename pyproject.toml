@@ -1,0 +1,312 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fpulse"
+version = "1.0.0"
+description = "F-Pulse — open-source data pipeline orchestrator"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Hybridyn Data Labs", email = "hello@hybridyn.com" },
+]
+maintainers = [
+    { name = "Hybridyn Data Labs", email = "hello@hybridyn.com" },
+]
+keywords = ["data", "pipeline", "etl", "orchestrator", "workflow", "open-source"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "duckdb>=1.2.0",
+    "pydantic>=2.10.0",
+    "python-multipart>=0.0.18",
+    "aiofiles>=24.1.0",
+    "httpx>=0.27.0",
+    "python-docx>=1.1.0",
+    "reportlab>=4.0.0",
+    "cryptography>=42.0",
+    "bcrypt>=4.0",
+    "psutil>=5.9.0",
+    # 2026-05-29: heavy-mode warmup at main.py:550 imports pandas +
+    # pyarrow (alongside duckdb) on every boot. CSV/Excel reader, the
+    # workflow-preview helper, and several cloud / flow_control nodes
+    # also import pandas at runtime. Fresh installs without these
+    # printed "Warmup failed: No module named 'pandas'" and bricked
+    # CSV preview + pivot/flow-control nodes at execution time. Kept
+    # in sync with backend/requirements.txt — that file is what
+    # start.bat installs from.
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    # 2026-05-30: openpyxl drives the Excel destination node. Without it
+    # any pipeline writing .xlsx fails at runtime ("Excel Sink: openpyxl
+    # is required"). Pure-Python wheel, no system deps.
+    "openpyxl>=3.1.0",
+    # 2026-05-30: pyodbc for the MSSQL / SQL Server / generic ODBC
+    # source + sink. Needs a matching ODBC driver installed at the OS
+    # level (Microsoft ODBC Driver for SQL Server / unixODBC). Optional
+    # at runtime — connectors that don't use ODBC are unaffected — but
+    # declared here so a venv refresh doesn't silently drop it the way
+    # it dropped openpyxl + pyodbc on 2026-05-30.
+    "pyodbc>=5.0",
+    # 2026-06-01: Avro file reader (File / Cloud Files nodes). ORC
+    # reads use pyarrow.orc (already shipped). Avro is row-oriented +
+    # schema-embedded and pyarrow has no native Avro reader, so we
+    # parse via fastavro then hand the records to pyarrow → DuckDB.
+    "fastavro>=1.9",
+    # tzdata: required by pyarrow.orc on Windows (no system zoneinfo).
+    # `_read_orc` auto-points TZDIR at this wheel's bundled zoneinfo.
+    "tzdata>=2024.1",
+    # 2026-05-30 (later, same audit): silent-gap sweep — see
+    # backend/requirements.txt for the rationale per package. Kept in
+    # sync with that file so `pip install -e .` and
+    # `pip install -r backend/requirements.txt` produce the same set.
+    "pyyaml>=6.0",
+    "numpy>=1.24",
+    "anyio>=4.0",
+    "starlette>=0.40",
+    "requests>=2.31",
+    "prometheus-client>=0.19",
+]
+
+[project.optional-dependencies]
+# Development toolchain — what `pip install -e .[dev]` brings in.
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+    "mypy>=1.5",
+]
+
+# ─── Database drivers (per-dialect extras) ─────────────────────────────────
+#
+# Every error message in the codebase that recommends `pip install fpulse[X]`
+# used to point at an extra that wasn't actually declared here — the
+# install command would fail. These extras now exist for real, so the
+# user-facing flow is:
+#
+#   ModuleNotFoundError: oracledb
+#   → "oracledb not installed (pip install fpulse[oracle])"
+#   → `pip install fpulse[oracle]` → works
+#
+# System-level requirements (separate from the Python wheel install) are
+# documented in `docs/install/database-drivers.md`. The big ones:
+#   * MSSQL / Azure SQL / Synapse / Fabric SQL endpoint  → Microsoft ODBC Driver
+#   * Oracle (thick mode)                                → Oracle Instant Client
+#   * DB2 / Informix                                     → IBM CLI Driver
+# Without the OS-level driver, the Python wheel install will pip-succeed
+# but the connection will fail at runtime — the docs page above explains
+# the exact extra command per OS.
+
+# Postgres (psycopg2 binary wheel — bundles libpq, no system install)
+postgres = ["psycopg2-binary>=2.9"]
+
+# MySQL / MariaDB (pure-Python, no system install)
+mysql = ["pymysql>=1.1"]
+
+# MS SQL Server / Azure SQL / Synapse / Fabric SQL endpoint
+#   pyodbc is already a core dep. This extra exists for parallelism
+#   with the others. Requires Microsoft ODBC Driver 17 or 18 at the OS
+#   level — see docs/install/database-drivers.md.
+mssql = ["pyodbc>=5.0"]
+
+# Oracle Database (thin mode works without Instant Client; thick mode
+# adds support for AQ, sharding, and full Oracle Net features and
+# requires Oracle Instant Client installed at the OS level).
+oracle = ["oracledb>=2.0"]
+
+# IBM Db2 / Informix
+db2 = ["ibm_db>=3.2"]
+
+# SAP HANA
+hana = ["hdbcli>=2.19"]
+
+# Teradata
+teradata = ["teradatasql>=20.0"]
+
+# Snowflake (REST + bulk-load via PUT/COPY INTO)
+snowflake = ["snowflake-connector-python>=3.7"]
+
+# Google BigQuery
+bigquery = ["google-cloud-bigquery>=3.18"]
+
+# Databricks SQL (warehouses + jobs)
+databricks = ["databricks-sql-connector>=3.0"]
+
+# ClickHouse (native protocol — REST is already supported via stdlib)
+clickhouse = ["clickhouse-driver>=0.2.7"]
+
+# MongoDB (direct driver — Atlas Data API works over plain HTTP)
+mongodb = ["pymongo>=4.6"]
+
+# Redis (for the Redis connector + future cache use)
+redis = ["redis>=5.0"]
+
+# Apache Cassandra
+cassandra = ["cassandra-driver>=3.29"]
+
+# Neo4j (graph DB)
+neo4j = ["neo4j>=5.18"]
+
+# Elasticsearch (low-level client; the REST manifest works without it
+# for basic search — this extra is for advanced bulk + sniffing).
+elasticsearch = ["elasticsearch>=8.12"]
+
+# Trino / Starburst Galaxy (HTTP client wrapper)
+trino = ["trino>=0.328"]
+
+# ─── Cloud-provider bundles (multiple services per cloud) ──────────────────
+
+# AWS — S3, Kinesis, DynamoDB, Lake Formation, etc.
+aws = [
+    "boto3>=1.34",
+]
+
+# Azure — Blob, Data Lake Gen2, Event Hubs, Cosmos DB
+azure = [
+    "azure-storage-blob>=12.19",
+    "azure-storage-file-datalake>=12.14",
+    "azure-mgmt-eventhub>=11.0",
+    "azure-cosmos>=4.5",
+]
+
+# Google Cloud — Cloud Storage, Pub/Sub, Firestore
+google = [
+    "google-cloud-storage>=2.14",
+    "google-cloud-pubsub>=2.19",
+    "google-cloud-firestore>=2.14",
+]
+
+# ─── Streaming + messaging ─────────────────────────────────────────────────
+
+kafka = ["confluent-kafka>=2.3"]
+
+# ─── File transfer + misc ──────────────────────────────────────────────────
+
+sftp = ["paramiko>=3.4"]
+delta = ["deltalake>=0.15"]
+soap  = ["zeep>=4.2"]                # SOAP API client (some SAP/Oracle paths)
+
+# ─── Vector / AI ───────────────────────────────────────────────────────────
+
+# Pinned ranges only — these libs ship breaking changes often, and the
+# connector code in fpulse.connectors.vector_db is tuned to specific
+# call patterns.
+vector-pinecone   = ["pinecone-client>=3.0"]
+vector-weaviate   = ["weaviate-client>=4.4"]
+vector-qdrant     = ["qdrant-client>=1.7"]
+vector-chroma     = ["chromadb>=0.4"]
+vector-embeddings = ["openai>=1.12", "cohere>=4.50", "sentence-transformers>=2.5"]
+
+# ─── Convenience bundles ───────────────────────────────────────────────────
+
+# All databases that DON'T need an OS-level driver install (Postgres,
+# MySQL, Oracle-thin, Snowflake, BigQuery, Databricks, ClickHouse,
+# MongoDB, Redis, Cassandra, Neo4j, Elasticsearch, Trino). Excludes
+# mssql / db2 / hana / teradata because their wheels need OS-level
+# client libraries — install those explicitly so users opt in.
+all-databases-no-os-deps = [
+    "psycopg2-binary>=2.9",
+    "pymysql>=1.1",
+    "oracledb>=2.0",
+    "snowflake-connector-python>=3.7",
+    "google-cloud-bigquery>=3.18",
+    "databricks-sql-connector>=3.0",
+    "clickhouse-driver>=0.2.7",
+    "pymongo>=4.6",
+    "redis>=5.0",
+    "cassandra-driver>=3.29",
+    "neo4j>=5.18",
+    "elasticsearch>=8.12",
+    "trino>=0.328",
+]
+
+# Everything-except-vector-DBs (those bring large transitive trees and
+# are Plus-tier anyway). Useful for full first-install on a dev laptop.
+all = [
+    "psycopg2-binary>=2.9",
+    "pymysql>=1.1",
+    "oracledb>=2.0",
+    "snowflake-connector-python>=3.7",
+    "google-cloud-bigquery>=3.18",
+    "databricks-sql-connector>=3.0",
+    "clickhouse-driver>=0.2.7",
+    "pymongo>=4.6",
+    "redis>=5.0",
+    "cassandra-driver>=3.29",
+    "neo4j>=5.18",
+    "elasticsearch>=8.12",
+    "trino>=0.328",
+    "boto3>=1.34",
+    "azure-storage-blob>=12.19",
+    "azure-storage-file-datalake>=12.14",
+    "azure-mgmt-eventhub>=11.0",
+    "azure-cosmos>=4.5",
+    "google-cloud-storage>=2.14",
+    "google-cloud-pubsub>=2.19",
+    "google-cloud-firestore>=2.14",
+    "confluent-kafka>=2.3",
+    "paramiko>=3.4",
+    "deltalake>=0.15",
+]
+
+[project.scripts]
+fpulse = "fpulse.cli:main"
+
+[project.urls]
+Homepage = "https://hybridyn.com"
+Documentation = "https://docs.hybridyn.com/f-pulse"
+Repository = "https://github.com/hybridyn/fpulse"
+Issues = "https://github.com/hybridyn/fpulse/issues"
+"F-Pulse+ commercial" = "https://hybridyn.com/f-pulse"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["fpulse*"]
+
+[tool.setuptools.package-data]
+# Non-.py files that MUST ship inside the wheel. Without this section
+# setuptools packages ONLY .py files — which is how the wheel came to
+# contain no UI and no Swagger assets while every source checkout and the
+# Docker image worked fine. `pip install fpulse && fpulse open` opened a
+# browser onto a 404.
+#
+# frontend_dist/ is a BUILD ARTIFACT, not source: it is gitignored and
+# staged by scripts/stage_frontend.py (which the release workflow runs
+# before `python -m build`). Building a wheel without staging first
+# produces a UI-less package, so stage_frontend.py fails loudly rather
+# than letting that ship quietly.
+# Enumerated from the tracked non-.py files under backend/fpulse rather
+# than guessed. Verified by installing the built wheel into a clean target
+# and asserting each is present — see backend/tests/test_packaging.py.
+fpulse = [
+    "frontend_dist/**/*",           # built SPA — served at / by main.py
+    "static/**/*",                  # bundled Swagger UI for /docs
+    "connectors/manifests/*.json",  # the shipped connectors themselves
+    "connectors/ci/*.yml",
+    "connections/*.json",
+    "seed_data/*.csv",              # first-run sample dataset
+    "eval/*.csv",
+    "eval/*.md",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]

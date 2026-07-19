@@ -1,0 +1,55 @@
+{
+  "id": "netsuite",
+  "name": "NetSuite",
+  "description": "NetSuite SuiteQL via REST Web Services",
+  "category": "saas",
+  "base_url": "https://{account_id}.suitetalk.api.netsuite.com",
+  "auth": {
+    "type": "bearer",
+    "token_param": "access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "account_id", "label": "Account ID (lowercase, dashes ok)", "required": true},
+    {"name": "access_token", "label": "OAuth2 Access Token", "required": true, "secret": true}
+  ],
+  "default_headers": {
+    "Accept": "application/json",
+    "Prefer": "transient"
+  },
+  "streams": [
+    {
+      "name": "customers",
+      "label": "Customers",
+      "path": "/services/rest/record/v1/customer",
+      "method": "GET",
+      "data_path": "items",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "sales_orders",
+      "label": "Sales Orders",
+      "path": "/services/rest/record/v1/salesOrder",
+      "method": "GET",
+      "data_path": "items",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "invoices",
+      "label": "Invoices",
+      "path": "/services/rest/record/v1/invoice",
+      "method": "GET",
+      "data_path": "items",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    },
+    {
+      "name": "items",
+      "label": "Inventory Items",
+      "path": "/services/rest/record/v1/inventoryItem",
+      "method": "GET",
+      "data_path": "items",
+      "pagination": {"type": "offset_limit", "offset_param": "offset", "limit_param": "limit", "page_size": 100, "max_pages": 100}
+    }
+  ]
+}

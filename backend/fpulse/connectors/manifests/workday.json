@@ -1,0 +1,52 @@
+{
+  "id": "workday",
+  "name": "Workday",
+  "description": "Workday HCM/Finance via REST API",
+  "category": "saas",
+  "base_url": "https://{host}/ccx/api/v1/{tenant}",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://{host}/ccx/oauth2/{tenant}/token",
+    "access_token_param": "access_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "host", "label": "Workday Host (e.g. wd5-impl-services1.workday.com)", "required": true},
+    {"name": "tenant", "label": "Tenant ID", "required": true},
+    {"name": "client_id", "label": "Client ID (API Client)", "required": true, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": true, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": false, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "workers",
+      "label": "Workers (Employees)",
+      "path": "/workers",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 200}
+    },
+    {
+      "name": "organizations",
+      "label": "Organizations",
+      "path": "/organizations",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 50}
+    },
+    {
+      "name": "job_profiles",
+      "label": "Job Profiles",
+      "path": "/jobProfiles",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 50}
+    }
+  ]
+}

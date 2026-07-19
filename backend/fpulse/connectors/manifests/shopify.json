@@ -1,0 +1,46 @@
+{
+  "tier": "hidden",
+  "id": "shopify",
+  "name": "Shopify",
+  "description": "Shopify Admin API",
+  "category": "saas",
+  "base_url": "https://{shop}.myshopify.com/admin/api/2024-01",
+  "auth": {
+    "type": "api_key",
+    "header_name": "X-Shopify-Access-Token",
+    "key_param": "access_token"
+  },
+  "params": [
+    {"name": "shop", "label": "Shop subdomain", "required": true},
+    {"name": "access_token", "label": "Admin API access token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "products",
+      "label": "Products",
+      "path": "/products.json",
+      "method": "GET",
+      "query": {"limit": 250},
+      "data_path": "products",
+      "pagination": {"type": "link_header", "max_pages": 100}
+    },
+    {
+      "name": "orders",
+      "label": "Orders",
+      "path": "/orders.json",
+      "method": "GET",
+      "query": {"limit": 250, "status": "any"},
+      "data_path": "orders",
+      "pagination": {"type": "link_header", "max_pages": 100}
+    },
+    {
+      "name": "customers",
+      "label": "Customers",
+      "path": "/customers.json",
+      "method": "GET",
+      "query": {"limit": 250},
+      "data_path": "customers",
+      "pagination": {"type": "link_header", "max_pages": 100}
+    }
+  ]
+}

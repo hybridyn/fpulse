@@ -1,0 +1,45 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "description": "GitHub REST API v3",
+  "category": "saas",
+  "base_url": "https://api.github.com",
+  "auth": {
+    "type": "bearer",
+    "token_param": "personal_access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "headers": {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+  "params": [
+    {"name": "personal_access_token", "label": "Personal Access Token", "required": true, "secret": true},
+    {"name": "owner", "label": "Owner/org", "required": true},
+    {"name": "repo", "label": "Repository", "required": false}
+  ],
+  "streams": [
+    {
+      "name": "repos",
+      "label": "Repositories",
+      "path": "/users/{owner}/repos",
+      "method": "GET",
+      "query": {"per_page": 100},
+      "pagination": {"type": "link_header", "max_pages": 100}
+    },
+    {
+      "name": "issues",
+      "label": "Issues",
+      "path": "/repos/{owner}/{repo}/issues",
+      "method": "GET",
+      "query": {"state": "all", "per_page": 100},
+      "pagination": {"type": "link_header", "max_pages": 100}
+    },
+    {
+      "name": "pulls",
+      "label": "Pull Requests",
+      "path": "/repos/{owner}/{repo}/pulls",
+      "method": "GET",
+      "query": {"state": "all", "per_page": 100},
+      "pagination": {"type": "link_header", "max_pages": 100}
+    }
+  ]
+}

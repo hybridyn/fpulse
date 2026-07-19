@@ -1,0 +1,26 @@
+order_id,customer_id,product,quantity,price,region,status,created_at
+1001,C-001,Widget A,10,29.99,North,active,2026-04-12T09:15:00Z
+1002,C-002,Widget B,5,49.99,South,active,2026-04-12T10:02:00Z
+1003,C-003,Widget C,3,99.99,East,inactive,2026-04-12T10:33:00Z
+1004,C-001,Widget D,8,19.99,West,active,2026-04-13T08:21:00Z
+1005,C-004,Widget E,15,39.99,North,active,2026-04-13T11:47:00Z
+1006,C-005,Widget F,2,79.99,South,cancelled,2026-04-13T14:05:00Z
+1007,C-002,Widget A,7,29.99,South,active,2026-04-14T07:30:00Z
+1008,C-006,Widget G,4,59.99,East,active,2026-04-14T09:18:00Z
+1009,C-003,Widget B,6,49.99,East,inactive,2026-04-14T12:42:00Z
+1010,C-007,Widget H,12,14.99,West,active,2026-04-15T08:55:00Z
+1011,C-001,Widget A,3,29.99,North,active,2026-04-15T10:11:00Z
+1012,C-008,Widget I,9,89.99,North,active,2026-04-15T13:28:00Z
+1013,C-004,Widget J,1,199.99,North,cancelled,2026-04-16T09:00:00Z
+1014,C-005,Widget B,4,49.99,South,active,2026-04-16T11:34:00Z
+1015,C-009,Widget K,20,9.99,East,active,2026-04-16T14:50:00Z
+1016,C-006,Widget L,6,69.99,East,active,2026-04-17T08:42:00Z
+1017,C-010,Widget A,8,29.99,West,active,2026-04-17T10:09:00Z
+1018,C-002,Widget C,2,99.99,South,inactive,2026-04-17T12:55:00Z
+1019,C-007,Widget E,11,39.99,West,active,2026-04-18T07:48:00Z
+1020,C-008,Widget M,5,159.99,North,active,2026-04-18T10:30:00Z
+1021,C-003,Widget A,4,29.99,East,active,2026-04-18T13:16:00Z
+1022,C-009,Widget N,3,249.99,East,cancelled,2026-04-19T09:25:00Z
+1023,C-001,Widget B,7,49.99,North,active,2026-04-19T11:50:00Z
+1024,C-010,Widget F,2,79.99,West,active,2026-04-20T08:38:00Z
+1025,C-004,Widget G,9,59.99,North,active,2026-04-20T12:12:00Z

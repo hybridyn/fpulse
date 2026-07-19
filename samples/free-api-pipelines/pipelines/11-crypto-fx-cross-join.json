@@ -1,0 +1,134 @@
+{
+  "name": "11 — Crypto × FX CROSS JOIN → SQL Server (join demo)",
+  "description": "Two parallel sources — CoinGecko top-20 cryptos + Frankfurter USD-base FX rates — combined via CROSS JOIN so every coin gets priced in every quote currency. Real-world ETL pattern for multi-currency pricing fact tables. Lands as dbo.crypto_prices_by_currency.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "CoinGecko (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.coingecko.com",
+        "auth_type": "none"
+      },
+      "description": "Public crypto market-data REST API. No API key for the free tier."
+    },
+    {
+      "name": "Frankfurter FX (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.frankfurter.app",
+        "auth_type": "none"
+      },
+      "description": "Public FX rates API maintained by the European Central Bank."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "CoinGecko top 20",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "CoinGecko (public)",
+        "path": "/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false",
+        "pagination": "none",
+        "timeout": 45,
+        "max_retries": 5
+      },
+      "position": {"x": 100, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "tx1a",
+      "type": "transform",
+      "label": "Slim crypto cols",
+      "params": {
+        "expression": "SELECT id AS coin_id, symbol AS coin_symbol, name AS coin_name, CAST(current_price AS DOUBLE) AS price_usd, CAST(market_cap AS BIGINT) AS market_cap_usd FROM source_table",
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "src2",
+      "type": "source",
+      "label": "Frankfurter USD rates",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "Frankfurter FX (public)",
+        "path": "/latest?from=USD",
+        "pagination": "none",
+        "timeout": 30
+      },
+      "position": {"x": 100, "y": 280},
+      "risk": "low"
+    },
+    {
+      "id": "tx2a",
+      "type": "transform",
+      "label": "Pivot FX rates → rows",
+      "params": {
+        "expression": "SELECT base AS base_currency, CAST(date AS DATE) AS rate_date, UNNEST(map_keys(rates)) AS quote_currency, UNNEST(map_values(rates)) AS fx_rate FROM source_table",
+        "_input_step_ids": ["src2"]
+      },
+      "position": {"x": 350, "y": 280},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "join",
+      "label": "CROSS JOIN crypto × FX",
+      "params": {
+        "join_type": "CROSS",
+        "key_mode": "custom",
+        "custom_on": "TRUE",
+        "_input_step_ids": ["tx1a", "tx2a"]
+      },
+      "position": {"x": 650, "y": 170},
+      "risk": "medium"
+    },
+    {
+      "id": "tx4",
+      "type": "derived_column",
+      "label": "Compute price_in_quote",
+      "params": {
+        "columns": [
+          {"name": "price_in_quote_currency", "expression": "ROUND(price_usd * fx_rate, 6)"},
+          {"name": "pair_label", "expression": "coin_symbol || '/' || quote_currency"},
+          {"name": "snapshot_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 950, "y": 170},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.crypto_prices_by_currency",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "crypto_prices_by_currency",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1250, "y": 170},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1a", "from_port": "output", "to_port": "input"},
+    {"from_step": "src2", "to_step": "tx2a", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1a", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2a", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "join-cross"}
+}

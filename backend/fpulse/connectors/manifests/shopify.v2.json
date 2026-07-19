@@ -1,0 +1,144 @@
+{
+  "version": 2,
+  "tier": "hidden",
+  "connector": {
+    "type": "shopify",
+    "display_name": "Shopify",
+    "category": "ecommerce",
+    "vendor": "Shopify Inc.",
+    "homepage": "https://www.shopify.com",
+    "docs_url": "https://hybridyn.com/connectors/shopify",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "REST Admin API only — GraphQL Admin not yet supported.",
+      "Metafields per resource pulled separately, not embedded in the parent stream.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/shopify/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "api_key",
+        "header": "X-Shopify-Access-Token",
+        "value_template": "{access_token}",
+        "docs": "https://shopify.dev/docs/api/admin-rest/authentication"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 40,
+      "daily_quota": null
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "orders",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 250,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "email": {"type": ["string", "null"], "format": "email"},
+          "total_price": {"type": "string"},
+          "currency": {"type": "string"},
+          "financial_status": {"type": ["string", "null"]},
+          "fulfillment_status": {"type": ["string", "null"]},
+          "customer": {"type": ["object", "null"]},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "products",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 250,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "title", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "title": {"type": "string"},
+          "vendor": {"type": ["string", "null"]},
+          "product_type": {"type": ["string", "null"]},
+          "status": {"type": "string"},
+          "tags": {"type": ["string", "null"]},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "customers",
+      "primary_key": ["id"],
+      "incremental_field": "updated_at",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "cursor",
+        "link_header": "Link",
+        "rel": "next",
+        "page_size": 250,
+        "page_size_param": "limit"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer"},
+          "email": {"type": ["string", "null"], "format": "email"},
+          "first_name": {"type": ["string", "null"]},
+          "last_name": {"type": ["string", "null"]},
+          "orders_count": {"type": "integer"},
+          "total_spent": {"type": "string"},
+          "state": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}

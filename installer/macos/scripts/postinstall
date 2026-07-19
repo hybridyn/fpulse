@@ -1,0 +1,24 @@
+#!/bin/bash
+# installer/macos/scripts/postinstall
+#
+# Runs after the .app bundle is in place. Registers the LaunchAgent
+# under the invoking user's account (so it auto-starts at login).
+#
+# Invoked by macOS Installer as root.
+
+set -u
+
+TARGET_USER="${USER:-${SUDO_USER:-$(/usr/bin/stat -f%Su /dev/console)}}"
+FPULSE_BIN="/Applications/FPulse.app/Contents/Resources/fpulse/fpulse"
+
+if [ -x "$FPULSE_BIN" ]; then
+  # Drop privileges and register the service in the user's LaunchAgents.
+  /usr/bin/su - "$TARGET_USER" -c "'$FPULSE_BIN' install-service" || true
+fi
+
+# Open the UI on first install. The service brings up the port in <2s,
+# launchctl returns once load is enqueued, and Safari/Chrome will
+# retry the loopback connect for us if we're slightly early.
+/usr/bin/su - "$TARGET_USER" -c "/usr/bin/open 'http://localhost:8001'" || true
+
+exit 0

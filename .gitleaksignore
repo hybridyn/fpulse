@@ -1,0 +1,24 @@
+# gitleaks — suppressed findings (fingerprints).
+#
+# Each line silences ONE specific historical finding by fingerprint
+# (commit:path:rule:line). This does NOT weaken any rule: a new secret
+# in these same files, or the same pattern in a new commit, still flags.
+# The scan runs with fetch-depth:0, so benign patterns committed months
+# ago keep re-flagging even though the current files are clean — hence
+# these pins.
+
+# 2026-04-30 — in-app Help page (HelpPage.tsx) renders documented curl
+# examples. The `curl-auth-header` rule fires on the "**curl example**"
+# guide labels; there is no token, only placeholder documentation text.
+c4cb2735e946e26f64888f97d466a85c2d9b319b:frontend/src/components/pages/HelpPage.tsx:curl-auth-header:242
+c4cb2735e946e26f64888f97d466a85c2d9b319b:frontend/src/components/pages/HelpPage.tsx:curl-auth-header:244
+
+# 2026-04-27 — schema-migration bookkeeping SQL against the internal
+# `_meta` table (`INSERT ... (key, value)` / `WHERE key = '...'`).
+# generic-api-key fires on the `key = '...'` predicate; the value is a
+# migration key literal, not a credential.
+d398bbd2c0582bf7dc93d9ede19d4c43e3e6dfa7:backend/fpulse/storage/database.py:generic-api-key:1194
+
+# 2026-04-27 — Sidebar.tsx static UI label describing the obfuscated
+# at-rest credential keystream feature. It is display copy, not a secret.
+d398bbd2c0582bf7dc93d9ede19d4c43e3e6dfa7:frontend/src/components/Sidebar.tsx:generic-api-key:965

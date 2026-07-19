@@ -1,0 +1,30 @@
+{
+  "id": "webhook-order-demo",
+  "name": "Webhook: Order Event → Managed Table",
+  "description": "Fired by POST /api/published/orders-webhook; the JSON body binds to ${param.*}.",
+  "parameters": [
+    { "name": "order_id", "type": "string", "required": true },
+    { "name": "customer", "type": "string", "required": true },
+    { "name": "amount", "type": "float", "default": 0 }
+  ],
+  "steps": [
+    {
+      "id": "src",
+      "type": "db_source",
+      "label": "Webhook payload → row",
+      "params": {
+        "source_mode": "query",
+        "query": "SELECT '${param.order_id}' AS order_id, '${param.customer}' AS customer, CAST(${param.amount} AS DOUBLE) AS amount, CASE WHEN ${param.amount} >= 1000 THEN 'high' ELSE 'standard' END AS tier, now() AS received_at"
+      }
+    },
+    {
+      "id": "sink",
+      "type": "local_table_sink",
+      "label": "Append to webhook_orders",
+      "params": { "schema_name": "default", "table_name": "webhook_orders", "mode": "append" }
+    }
+  ],
+  "connections": [
+    { "from_step": "src", "to_step": "sink" }
+  ]
+}

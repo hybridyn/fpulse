@@ -1,0 +1,37 @@
+{
+  "id": "intercom",
+  "name": "Intercom",
+  "description": "Intercom REST API",
+  "category": "saas",
+  "base_url": "https://api.intercom.io",
+  "auth": {
+    "type": "bearer",
+    "token_param": "access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "headers": {"Intercom-Version": "2.10"},
+  "params": [
+    {"name": "access_token", "label": "Access Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "contacts",
+      "label": "Contacts",
+      "path": "/contacts",
+      "method": "GET",
+      "query": {"per_page": 150},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "pages.next.starting_after", "cursor_param": "starting_after", "max_pages": 100}
+    },
+    {
+      "name": "conversations",
+      "label": "Conversations",
+      "path": "/conversations",
+      "method": "GET",
+      "query": {"per_page": 150},
+      "data_path": "conversations",
+      "pagination": {"type": "cursor", "cursor_field": "pages.next.starting_after", "cursor_param": "starting_after", "max_pages": 100}
+    }
+  ]
+}

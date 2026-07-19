@@ -1,0 +1,87 @@
+name: CodeQL
+
+# 2026-06-03 — added during Phase 1 pre-launch security work.
+# Complements the existing security-scan.yml (Bandit + pip-audit + npm
+# audit + gitleaks + RBAC regression). CodeQL catches bug classes those
+# tools miss — data-flow taint analysis, cross-function injection
+# paths, unsafe deserialisation chains, etc.
+#
+# Free for public repos. Results land in Security → Code scanning alerts.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Weekly nightly — Mondays at 03:30 UTC. Catches new rule packs as
+    # GitHub publishes them without forcing a re-scan on every commit.
+    - cron: "30 3 * * 1"
+  # Manual escape hatch — operators with GHAS enabled on a private repo
+  # can trigger the scan from the Actions UI.
+  workflow_dispatch: {}
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    # 2026-06-04 — gate on repo visibility. CodeQL is free for PUBLIC
+    # GitHub repos but requires a paid GitHub Advanced Security (GHAS)
+    # licence on private ones. While this repo is private (pre-v1.0
+    # launch), the workflow ran to completion but the SARIF upload to
+    # /code-scanning was rejected by the API, producing a red X at the
+    # ~3-4 min mark.
+    #
+    # Skipping the job entirely on private repos keeps CI green. When
+    # the repo is flipped to public at v1.0 launch, this condition
+    # auto-evaluates true and the workflow starts producing alerts on
+    # the Security tab — no further change needed here.
+    #
+    # `manual` dispatch is allowed unconditionally so an operator who
+    # has GHAS enabled can force a scan from the Actions UI.
+    if: github.event_name == 'workflow_dispatch' || github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Python = backend; javascript-typescript covers both .ts and
+        # .tsx in the React frontend (one CodeQL language id covers both).
+        language: ["python", "javascript-typescript"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # 2026-06-04 — switched from `autobuild` to `build-mode: none`.
+          # Autobuild for Python tried `pip install -e .` which compiled
+          # `pyodbc` from backend/requirements.txt; pyodbc needs
+          # `unixodbc-dev` apt headers that aren't on the default runner
+          # image, so autobuild reliably failed at ~4 min. CodeQL doesn't
+          # need a build for Python or JS/TS — it analyses source directly.
+          build-mode: none
+          # 2026-06-04 (second pass) — dropped `queries: security-extended`.
+          # The extended pack is great but it slows analysis significantly
+          # and on a v1.0 codebase produces a large SARIF that can run into
+          # the upload-size ceiling for free public repos. Falling back to
+          # the default `code-scanning` query suite gives the same broad
+          # coverage of CWE Top 25 with a smaller, faster, more reliable
+          # scan. Promote to `security-extended` later once we've triaged
+          # the default-suite findings + know the SARIF size is manageable.
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

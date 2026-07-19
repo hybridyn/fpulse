@@ -1,0 +1,54 @@
+# Live smoke-test allow-list for the connector CI workflow.
+#
+# Connectors listed here are eligible for a real-vendor call in CI
+# (.github/workflows/connector-smoke.yml).  Each entry declares the
+# secret names the live call needs; the CI workflow skips an entry
+# cleanly when any of its declared secrets is unset, so the workflow
+# stays green on forks and on PRs without secret access.
+#
+# Inclusion rules (so we don't accidentally enable a connector that
+# can't actually run live in CI):
+#
+#   1. The vendor offers a free tier, sandbox, or test-mode keys; OR
+#      a local container / emulator can stand in for the real service.
+#   2. A `backend/tests/fixtures/connectors/<id>/smoke.json` fixture
+#      exists describing the smallest call that should succeed.
+#   3. The secret names below are configured in GitHub repository
+#      Secrets (org-level for forks).
+#
+# Adding a connector here is what promotes it to the Verified tier
+# in the cert matrix (see `_compute_tier` in
+# `backend/fpulse/api/cert_matrix.py`).  Removing it (or a red live
+# run for 14+ days) demotes back to Beta automatically.
+#
+# Format:
+#   connectors:
+#     - id: <connector_id>
+#       secrets: [LIST_OF_REQUIRED_SECRET_NAMES]
+#       timeout_seconds: <int, default 60>
+#       notes: <optional human note>
+
+connectors: []
+
+# Example entries (commented out — uncomment when fixtures + secrets land):
+#
+# connectors:
+#   - id: github
+#     secrets: [GITHUB_SMOKE_TOKEN]
+#     timeout_seconds: 30
+#     notes: |
+#       PAT on a throwaway account, repo:read scope only.  Smoke calls
+#       /repos/{owner}/{repo}/issues on a public test repo.
+#
+#   - id: stripe
+#     secrets: [STRIPE_TEST_KEY]
+#     timeout_seconds: 30
+#     notes: |
+#       Test-mode key (sk_test_...).  Smoke lists 1 customer.
+#
+#   - id: postgres
+#     secrets: []
+#     timeout_seconds: 60
+#     notes: |
+#       No vendor secret needed — CI spins up `postgres:16` container
+#       and the workflow injects POSTGRES_URL into the env.

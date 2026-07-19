@@ -1,0 +1,53 @@
+{
+  "id": "pagerduty",
+  "name": "PagerDuty",
+  "description": "PagerDuty incident management and on-call data",
+  "category": "saas",
+  "base_url": "https://api.pagerduty.com",
+  "auth": {
+    "type": "bearer",
+    "header_name": "Authorization",
+    "header_template": "Token token={api_key}"
+  },
+  "params": [
+    {"name": "api_key", "label": "REST API Key (v2)", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "incidents",
+      "label": "Incidents",
+      "path": "/incidents",
+      "method": "GET",
+      "query": {"limit": "100", "sort_by": "created_at:desc"},
+      "data_path": "incidents",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 100}
+    },
+    {
+      "name": "services",
+      "label": "Services",
+      "path": "/services",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "services",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 20}
+    },
+    {
+      "name": "users",
+      "label": "Users",
+      "path": "/users",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "users",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 20}
+    },
+    {
+      "name": "oncalls",
+      "label": "On-Call Schedules",
+      "path": "/oncalls",
+      "method": "GET",
+      "query": {"limit": "100"},
+      "data_path": "oncalls",
+      "pagination": {"type": "offset", "offset_param": "offset", "limit_param": "limit", "max_pages": 10}
+    }
+  ]
+}
