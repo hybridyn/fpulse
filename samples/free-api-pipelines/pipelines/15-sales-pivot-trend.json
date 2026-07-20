@@ -1,0 +1,218 @@
+{
+  "name": "15 — Sales Pivot + Trend Analysis (pivot/unpivot fan-out)",
+  "description": "Daily sales fact table reshaped wide for human review and remelted long for warehouse storage. Aggregates by region+date, pivots regions into columns, derives a day-over-day growth percentage, unions a small baseline file in front, sorts newest first, then forks: branch A writes an Excel report; branch B unpivots the wide shape back to long and lands it in dbo.fact_sales. Offline-capable.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "steps": [
+    {
+      "id": "src_daily",
+      "type": "source",
+      "label": "Local CSV: daily_sales",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "samples/free-api-pipelines/data/daily_sales.csv",
+        "format": "csv",
+        "delimiter": ",",
+        "header": true,
+        "encoding": "utf-8"
+      },
+      "position": {"x": 100, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_cast",
+      "type": "typecast",
+      "label": "Cast date + numerics",
+      "params": {
+        "casts": {
+          "sale_date": "DATE",
+          "units": "INTEGER",
+          "revenue": "DOUBLE"
+        },
+        "_input_step_ids": ["src_daily"]
+      },
+      "position": {"x": 360, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_agg",
+      "type": "aggregate",
+      "label": "GROUP BY region, sale_date",
+      "params": {
+        "group_by": ["region", "sale_date"],
+        "functions": [
+          {"column": "revenue", "function": "SUM", "alias": "revenue"},
+          {"column": "units", "function": "SUM", "alias": "units_sold"}
+        ],
+        "having": "",
+        "order_by": "sale_date, region",
+        "_input_step_ids": ["tx_cast"]
+      },
+      "position": {"x": 620, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_pivot",
+      "type": "pivot",
+      "label": "Pivot region → columns",
+      "params": {
+        "pivot_column": "region",
+        "value_column": "revenue",
+        "agg_function": "SUM",
+        "group_by": ["sale_date"],
+        "_input_step_ids": ["tx_agg"]
+      },
+      "position": {"x": 900, "y": 80},
+      "risk": "medium"
+    },
+    {
+      "id": "tx_growth",
+      "type": "derived_column",
+      "label": "Day-over-day growth %",
+      "params": {
+        "columns": [
+          {"name": "total_revenue", "expression": "COALESCE(EMEA, 0) + COALESCE(AMER, 0) + COALESCE(APAC, 0) + COALESCE(LATAM, 0)"},
+          {"name": "growth_pct", "expression": "ROUND(100.0 * (COALESCE(EMEA, 0) + COALESCE(AMER, 0) + COALESCE(APAC, 0) + COALESCE(LATAM, 0) - LAG(COALESCE(EMEA, 0) + COALESCE(AMER, 0) + COALESCE(APAC, 0) + COALESCE(LATAM, 0)) OVER (ORDER BY sale_date)) / NULLIF(LAG(COALESCE(EMEA, 0) + COALESCE(AMER, 0) + COALESCE(APAC, 0) + COALESCE(LATAM, 0)) OVER (ORDER BY sale_date), 0), 2)"}
+        ],
+        "_input_step_ids": ["tx_pivot"]
+      },
+      "position": {"x": 1180, "y": 80},
+      "risk": "medium"
+    },
+    {
+      "id": "src_baseline",
+      "type": "source",
+      "label": "Local CSV: baseline_sales",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "samples/free-api-pipelines/data/baseline_sales.csv",
+        "format": "csv",
+        "delimiter": ",",
+        "header": true,
+        "encoding": "utf-8"
+      },
+      "position": {"x": 100, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "tx_baseline_shape",
+      "type": "transform",
+      "label": "Reshape baseline → wide",
+      "params": {
+        "expression": "PIVOT (SELECT CAST(sale_date AS DATE) AS sale_date, region, SUM(CAST(revenue AS DOUBLE)) AS revenue FROM source_table GROUP BY 1, 2) ON region USING SUM(revenue) GROUP BY sale_date",
+        "_input_step_ids": ["src_baseline"]
+      },
+      "position": {"x": 380, "y": 320},
+      "risk": "medium"
+    },
+    {
+      "id": "tx_baseline_pad",
+      "type": "derived_column",
+      "label": "Pad baseline cols + growth",
+      "params": {
+        "columns": [
+          {"name": "total_revenue", "expression": "COALESCE(EMEA, 0) + COALESCE(AMER, 0) + COALESCE(APAC, 0) + COALESCE(LATAM, 0)"},
+          {"name": "growth_pct", "expression": "CAST(NULL AS DOUBLE)"}
+        ],
+        "_input_step_ids": ["tx_baseline_shape"]
+      },
+      "position": {"x": 680, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "tx_union",
+      "type": "union",
+      "label": "Baseline ∪ current",
+      "params": {
+        "mode": "all",
+        "_input_step_ids": ["tx_baseline_pad", "tx_growth"]
+      },
+      "position": {"x": 1480, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_sort",
+      "type": "sort",
+      "label": "Sort by sale_date DESC",
+      "params": {
+        "sort_by": ["sale_date"],
+        "direction": "DESC",
+        "_input_step_ids": ["tx_union"]
+      },
+      "position": {"x": 1780, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "snk_excel",
+      "type": "destination",
+      "label": "→ sales_report.xlsx",
+      "params": {
+        "connector_type": "excel",
+        "file_path": "data/sales_report.xlsx",
+        "sheet_name": "RegionTrend",
+        "freeze_header": true,
+        "_input_step_ids": ["tx_sort"]
+      },
+      "position": {"x": 2080, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_unpivot",
+      "type": "unpivot",
+      "label": "Wide → long (back to fact)",
+      "params": {
+        "columns": ["EMEA", "AMER", "APAC", "LATAM"],
+        "name_column": "region",
+        "value_column": "revenue",
+        "_input_step_ids": ["tx_sort"]
+      },
+      "position": {"x": 2080, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "tx_clean_fact",
+      "type": "transform",
+      "label": "Project fact cols",
+      "params": {
+        "expression": "SELECT sale_date, region, CAST(revenue AS DOUBLE) AS revenue, CURRENT_TIMESTAMP AS ingested_at FROM source_table WHERE revenue IS NOT NULL",
+        "_input_step_ids": ["tx_unpivot"]
+      },
+      "position": {"x": 2380, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "snk_fact",
+      "type": "destination",
+      "label": "→ dbo.fact_sales",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "fact_sales",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx_clean_fact"]
+      },
+      "position": {"x": 2680, "y": 320},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src_daily", "to_step": "tx_cast", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_cast", "to_step": "tx_agg", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_agg", "to_step": "tx_pivot", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_pivot", "to_step": "tx_growth", "from_port": "output", "to_port": "input"},
+    {"from_step": "src_baseline", "to_step": "tx_baseline_shape", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_baseline_shape", "to_step": "tx_baseline_pad", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_baseline_pad", "to_step": "tx_union", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_growth", "to_step": "tx_union", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_union", "to_step": "tx_sort", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_sort", "to_step": "snk_excel", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_sort", "to_step": "tx_unpivot", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_unpivot", "to_step": "tx_clean_fact", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_clean_fact", "to_step": "snk_fact", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "pivot-unpivot-trend"}
+}

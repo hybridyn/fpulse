@@ -1,0 +1,53 @@
+# ─────────────────────────────────────────────────────────────────────────
+# F-Pulse on Fly.io
+# ─────────────────────────────────────────────────────────────────────────
+# Quick start:
+#   1. Install flyctl:           https://fly.io/docs/hands-on/install-flyctl/
+#   2. fly auth login
+#   3. fly launch --copy-config --name <your-app-name>
+#   4. fly volumes create fpulse_data --region <your-region> --size 1
+#   5. fly deploy
+#
+# The volume in [mounts] is mandatory — without it every restart wipes
+# the SQLite DB and all credentials. Fly's default volume size is 1 GB;
+# bump --size when you start ingesting real data.
+#
+# For production sizing, multi-region, or Plus-tier topology see
+# docs/deployment.md.
+# ─────────────────────────────────────────────────────────────────────────
+
+app = "fpulse"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  FPULSE_DATA_DIR = "/data"
+  FPULSE_MODE = "prod"
+  FPULSE_PORT = "8001"
+
+[http_service]
+  internal_port = 8001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.checks]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "fpulse_data"
+  destination = "/data"

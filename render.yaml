@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────
+# F-Pulse on Render — Blueprint
+# ─────────────────────────────────────────────────────────────────────────
+# Quick start:
+#   1. Push this repo to GitHub
+#   2. In Render: New → Blueprint → connect this repo
+#   3. Render reads this file, builds the Dockerfile, and provisions
+#      the disk for /data automatically.
+#
+# The disk is mandatory — without it every restart wipes the SQLite
+# DB and all credentials. Render's smallest disk is 1 GB; bump
+# `sizeGB` when you start ingesting real data.
+#
+# For production sizing, custom domains, or Plus-tier topology see
+# docs/deployment.md.
+# ─────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: fpulse
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: FPULSE_DATA_DIR
+        value: /data
+      - key: FPULSE_MODE
+        value: prod
+      - key: FPULSE_PORT
+        value: "8001"
+    disk:
+      name: fpulse-data
+      mountPath: /data
+      sizeGB: 1

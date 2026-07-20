@@ -1,0 +1,45 @@
+{
+  "id": "twilio",
+  "name": "Twilio",
+  "description": "Twilio communications data — calls, messages, usage",
+  "category": "saas",
+  "base_url": "https://api.twilio.com/2010-04-01/Accounts/{account_sid}",
+  "auth": {
+    "type": "basic",
+    "username_param": "account_sid",
+    "password_param": "auth_token"
+  },
+  "params": [
+    {"name": "account_sid", "label": "Account SID", "required": true, "secret": true},
+    {"name": "auth_token", "label": "Auth Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "messages",
+      "label": "Messages (SMS/MMS)",
+      "path": "/Messages.json",
+      "method": "GET",
+      "query": {"PageSize": "1000"},
+      "data_path": "messages",
+      "pagination": {"type": "url", "next_url_path": "next_page_uri", "max_pages": 100}
+    },
+    {
+      "name": "calls",
+      "label": "Calls",
+      "path": "/Calls.json",
+      "method": "GET",
+      "query": {"PageSize": "1000"},
+      "data_path": "calls",
+      "pagination": {"type": "url", "next_url_path": "next_page_uri", "max_pages": 100}
+    },
+    {
+      "name": "usage_records",
+      "label": "Usage Records",
+      "path": "/Usage/Records.json",
+      "method": "GET",
+      "query": {"PageSize": "1000"},
+      "data_path": "usage_records",
+      "pagination": {"type": "url", "next_url_path": "next_page_uri", "max_pages": 20}
+    }
+  ]
+}

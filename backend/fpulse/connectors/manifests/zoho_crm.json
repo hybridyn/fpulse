@@ -1,0 +1,61 @@
+{
+  "tier": "hidden",
+  "id": "zoho_crm",
+  "name": "Zoho CRM",
+  "description": "Zoho CRM data via REST API v6",
+  "category": "saas",
+  "base_url": "https://www.zohoapis.com/crm/v6",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://accounts.zoho.com/oauth/v2/token",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Zoho-oauthtoken {token}"
+  },
+  "params": [
+    {"name": "client_id", "label": "Client ID", "required": true, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": true, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "leads",
+      "label": "Leads",
+      "path": "/Leads",
+      "method": "GET",
+      "query": {"per_page": "200"},
+      "data_path": "data",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    },
+    {
+      "name": "contacts",
+      "label": "Contacts",
+      "path": "/Contacts",
+      "method": "GET",
+      "query": {"per_page": "200"},
+      "data_path": "data",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    },
+    {
+      "name": "deals",
+      "label": "Deals",
+      "path": "/Deals",
+      "method": "GET",
+      "query": {"per_page": "200"},
+      "data_path": "data",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    },
+    {
+      "name": "accounts",
+      "label": "Accounts",
+      "path": "/Accounts",
+      "method": "GET",
+      "query": {"per_page": "200"},
+      "data_path": "data",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 100}
+    }
+  ]
+}

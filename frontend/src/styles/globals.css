@@ -1,0 +1,922 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #FFFBEB;
+}
+
+/* React Flow overrides */
+.react-flow__node {
+  font-size: 12px;
+}
+
+.react-flow__edge-path {
+  stroke: #3B7DD8;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #F5A623;
+  stroke-width: 2.5;
+}
+
+/* Arrow marker for edge endpoints */
+.react-flow__edge marker {
+  fill: #3B7DD8;
+}
+.react-flow__edge.selected marker {
+  fill: #F5A623;
+}
+
+.react-flow__background {
+  background-color: #FFFBEB;
+}
+
+/* Custom node styles — gradient border + glow */
+.react-flow__node {
+  /* allow delete button to overflow */
+  overflow: visible !important;
+}
+
+.fpulse-node {
+  position: relative;
+  background: white;
+  /* 2026-06-02 polish round 2 (clarity pass):
+       - Width 150 → 180px (+20%): more breathing room, less
+         line-clamp on common labels like "Day-over-day growth %".
+         Still ~25% narrower than the common ~240px sidebar; the increase is large
+         enough to matter visually without breaking auto-layout
+         spacing (dagre layer-gap is well above 180px).
+       - Border slate-300 stays — combined with the new left-edge
+         category accent strip (rendered inline in FPulseNode.tsx),
+         the card has both a neutral edge AND a category-coded
+         signal that survives zoom-out.
+       - Shadow stays as cooler-tinted slate (0.08 opacity). */
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  width: 180px;
+  box-shadow: 0 2px 10px rgba(15,23,42,0.08), 0 1px 3px rgba(15,23,42,0.05);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: visible;
+}
+
+.fpulse-node:hover {
+  border-color: #D4880A;
+  /* Stronger hover elevation — translateY -2px (was -1px), bigger
+     shadow blur. Feels more interactive without becoming gaudy. */
+  box-shadow:
+    0 8px 24px rgba(245,166,35,0.18),
+    0 3px 10px rgba(0,0,0,0.10),
+    0 0 0 1px rgba(245,166,35,0.12);
+  transform: translateY(-2px);
+}
+
+/* Show delete button on hover */
+.fpulse-node .node-delete-btn {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.fpulse-node:hover .node-delete-btn {
+  opacity: 1;
+}
+
+.fpulse-node.selected {
+  /* 2026-06-02 — strengthened selected state. Previous design used
+     a 3px low-opacity ring outside the 1.5px border, which read as
+     "fuzzy" rather than "selected" at zoom-out. New design uses a
+     solid 2.5px border in the brand blue, paired with the same
+     ring-shadow but at 0.22 opacity (was 0.15). Selected nodes are
+     now unmistakable without becoming garish. */
+  border-color: #3B7DD8;
+  border-width: 2.5px;
+  box-shadow:
+    0 0 0 3px rgba(59,125,216,0.22),
+    0 6px 22px rgba(59,125,216,0.16),
+    0 2px 8px rgba(0,0,0,0.06);
+}
+
+.fpulse-node.running {
+  border-color: #F5A623;
+  animation: node-pulse 2s ease-in-out infinite;
+}
+
+.fpulse-node.success {
+  border-color: #10b981;
+  box-shadow:
+    0 0 0 2px rgba(16,185,129,0.12),
+    0 2px 8px rgba(16,185,129,0.08);
+}
+
+.fpulse-node.error {
+  border-color: #ef4444;
+  box-shadow:
+    0 0 0 2px rgba(239,68,68,0.12),
+    0 2px 8px rgba(239,68,68,0.08);
+}
+
+.fpulse-node.validation-error {
+  border-color: #ef4444 !important;
+  box-shadow:
+    0 0 0 2.5px rgba(239,68,68,0.18),
+    0 2px 12px rgba(239,68,68,0.12) !important;
+  animation: validation-pulse 2s ease-in-out 3;
+}
+
+/* ── Deactivated node — user explicitly disabled this step.
+      Distinct visual so it's impossible to miss: slate background,
+      amber dashed border, diagonal hatch pattern, label struck
+      through. The executor skips these nodes AND every descendant,
+      so the hatch also makes the "why did nothing run?" debugging
+      trivial at a glance. ── */
+/* ── Active-menu selection effects.
+      Layered approach because the Sidebar is short (h-16) and the
+      next DOM sibling paints an opaque background OVER any shadow
+      that extends below the Sidebar's border box. So we can't rely
+      on a big outer glow alone — instead we stack:
+        1. breathing-pulse animation on brightness (lifts the whole
+           button subtly every ~2.5s — "alive" feeling)
+        2. shimmer sweep via ::before (diagonal highlight passes
+           across the button every ~3s)
+        3. strong inset glow (stays INSIDE the button — impossible
+           to clip by siblings)
+      The outer box-shadow set by the TSX stays narrow (~10px) so it
+      fits inside the Sidebar's own vertical clearance. ── */
+.menu-active-fx {
+  position: relative;
+  overflow: hidden;
+  animation: menu-active-breathe 2.8s ease-in-out infinite;
+}
+.menu-active-fx::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  animation: menu-active-shimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes menu-active-breathe {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.08); }
+}
+@keyframes menu-active-shimmer {
+  0%         { left: -60%; opacity: 0; }
+  15%        { opacity: 1; }
+  55%        { left: 120%; opacity: 1; }
+  60%, 100%  { left: 120%; opacity: 0; }
+}
+/* Dark-mode shimmer needs a softer tint so white doesn't blow out */
+.dark .menu-active-fx::before {
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Brand logo flip (2026-05-25) ─────────────────────────────────
+   Continuous 3D Y-axis rotation with a long pause so the logo
+   periodically draws the eye without being annoying. Inline
+   `perspective()` keeps the depth without needing a wrapper div.
+   - 6s total loop: rests for ~60% of the cycle, flips for ~40%.
+   - `backface-visibility: visible` keeps the image showing while
+     the back face passes through view (looks mirrored mid-spin,
+     which reads as a smooth spin rather than a card flip). */
+.logo-flip {
+  animation: logo-flip 6s ease-in-out infinite;
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}
+@keyframes logo-flip {
+  0%, 60% { transform: perspective(300px) rotateY(0deg); }
+  100%    { transform: perspective(300px) rotateY(360deg); }
+}
+/* Pause the flip on hover so the user can read/click without the
+   logo spinning out from under them. Reduced-motion users get no
+   animation at all (accessibility). */
+.logo-flip:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-flip {
+    animation: none;
+  }
+}
+
+.fpulse-node.deactivated {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #f1f5f9 0px,
+      #f1f5f9 6px,
+      #e2e8f0 6px,
+      #e2e8f0 12px
+    );
+  border-color: #f59e0b;
+  border-style: dashed;
+  border-width: 2px;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.10);
+}
+.fpulse-node.deactivated:hover {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.18), 0 2px 8px rgba(245,158,11,0.12);
+}
+.dark .fpulse-node.deactivated {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      #1e293b 0px,
+      #1e293b 6px,
+      #0f172a 6px,
+      #0f172a 12px
+    );
+  border-color: #f59e0b;
+}
+
+/* ── Blocked-by-upstream — a downstream node that will be skipped
+      because a deactivated ancestor will not produce input. Softer
+      than the deactivated styling (slate dashed, no amber) so the
+      user can still tell the difference between "I turned this
+      off" and "this would run if its parent were enabled". ── */
+.fpulse-node.blocked-upstream {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  border-style: dashed;
+  opacity: 0.65;
+}
+.dark .fpulse-node.blocked-upstream {
+  background: #0f172a;
+  border-color: #475569;
+  opacity: 0.55;
+}
+@keyframes validation-pulse {
+  0%, 100% { box-shadow: 0 0 0 2.5px rgba(239,68,68,0.18), 0 2px 12px rgba(239,68,68,0.12); }
+  50% { box-shadow: 0 0 0 4px rgba(239,68,68,0.25), 0 2px 16px rgba(239,68,68,0.18); }
+}
+
+/* Animated edge flow */
+@keyframes fpulse-edge-flow {
+  to { stroke-dashoffset: -24; }
+}
+
+/* 2026-06-02 Phase 2 — halo pulse for the shadow path of LIVE edges
+   (source node currently running). Pairs with the faster
+   fpulse-edge-flow speed on the main path to produce an unmistakable
+   "this edge is in flight right now" signal. Pure opacity pulse so
+   it does not interfere with the marching-dash effect of the main
+   path on top. */
+@keyframes fpulse-edge-halo {
+  0%, 100% { opacity: 0.25; stroke-width: 6; }
+  50%      { opacity: 0.50; stroke-width: 9; }
+}
+
+@keyframes node-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(245,166,35,0.1), 0 2px 8px rgba(0,0,0,0.06);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245,166,35,0.2), 0 4px 16px rgba(245,166,35,0.15);
+  }
+}
+
+/* Execution animation — green glow pulse on running nodes */
+@keyframes fpulse-exec-glow {
+  0%, 100% { box-shadow: 0 0 4px 2px rgba(34,197,94,0.2), 0 2px 8px rgba(0,0,0,0.06); }
+  50% { box-shadow: 0 0 16px 6px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.15); }
+}
+
+.fpulse-executing {
+  animation: fpulse-exec-glow 1.5s ease-in-out infinite !important;
+  border-color: #22c55e !important;
+}
+
+/* Edge flow animation during execution */
+@keyframes fpulse-data-flow {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+
+.react-flow__edge.executing .react-flow__edge-path {
+  stroke: #22c55e !important;
+  stroke-width: 3 !important;
+  stroke-dasharray: 8 4;
+  animation: fpulse-data-flow 0.6s linear infinite;
+}
+
+/* Handle glow on node hover */
+.fpulse-node:hover .react-flow__handle {
+  box-shadow: 0 0 6px rgba(59,125,216,0.4);
+}
+
+/* Scrollbar — clean 12px gutter with a solid thumb that fills it
+   (no inset border). Wide enough to grip without feeling heavy. */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #C4B89A;
+  border-radius: 6px;
+  min-height: 40px;
+  min-width: 40px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A89878;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* Firefox — `thin` is closer to a 12px feel than `auto` (which on
+   most platforms renders ~17px). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #C4B89A transparent;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   DARK THEME — Full coverage for every page
+   ══════════════════════════════════════════════════════════════════ */
+.dark {
+  color-scheme: dark;
+}
+
+/*
+  Surface Hierarchy (3 levels):
+  L0 Page background   = #0B1220  (deepest navy)
+  L1 Card / panel      = #111827  (one step lighter — "elevated")
+  L2 Nested / table    = #1a2332  (interactive surfaces)
+  Borders              = rgba(255,255,255,0.08) — soft, not harsh
+  Text primary         = #F1F5F9
+  Text secondary       = rgba(241,245,249,0.65)
+  Text muted           = rgba(241,245,249,0.4)
+*/
+.dark html, .dark body, .dark #root {
+  background: #0B1220;
+  color: #F1F5F9;
+}
+
+/* ════════════════════════════════════
+   1. BASE BACKGROUNDS  (L0 = #0B1220)
+   ════════════════════════════════════ */
+.dark .bg-canvas-bg { background-color: #0B1220 !important; }
+
+/* React Flow canvas + controls */
+.dark .react-flow,
+.dark .react-flow__renderer,
+.dark .react-flow__pane,
+.dark .react-flow__background { background-color: #0B1220 !important; }
+.dark .react-flow__minimap { background-color: #111827 !important; }
+.dark .react-flow__controls { background-color: #111827 !important; border-color: rgba(255,255,255,0.08) !important; }
+.dark .react-flow__controls button { background-color: #111827 !important; color: #F1F5F9 !important; border-color: rgba(255,255,255,0.08) !important; }
+.dark .react-flow__controls button:hover { background-color: #1a2332 !important; }
+.dark .react-flow__panel { background-color: transparent !important; }
+.dark .react-flow__edge-path { stroke: #60a5fa; }
+.dark .react-flow__handle { background-color: #475569 !important; border-color: #64748b !important; }
+
+/* White → L1 Card (#111827) */
+.dark .bg-white { background-color: #111827 !important; color: #F1F5F9; }
+.dark .bg-white\/80 { background-color: rgba(17,24,39,0.8) !important; color: #F1F5F9; }
+.dark .bg-white\/90 { background-color: rgba(17,24,39,0.9) !important; color: #F1F5F9; }
+.dark .bg-white\/50 { background-color: rgba(17,24,39,0.5) !important; color: #F1F5F9; }
+
+/* Slate scale — mapped to surface hierarchy */
+.dark .bg-slate-50 { background-color: #111827 !important; }   /* L1 */
+.dark .bg-slate-50\/80 { background-color: rgba(17,24,39,0.8) !important; }
+.dark .bg-slate-50\/50 { background-color: rgba(17,24,39,0.5) !important; }
+.dark .bg-slate-100 { background-color: #1a2332 !important; }  /* L2 */
+.dark .bg-slate-200 { background-color: #1f2b3d !important; }
+.dark .bg-slate-300 { background-color: #2a3a50 !important; }
+.dark .bg-slate-800 { background-color: #0B1220 !important; }  /* L0 */
+.dark .bg-slate-900 { background-color: #060d18 !important; }
+
+/* Gray scale */
+.dark .bg-gray-50 { background-color: #111827 !important; }   /* L1 */
+.dark .bg-gray-100 { background-color: #1a2332 !important; }  /* L2 */
+.dark .bg-gray-200 { background-color: #1f2b3d !important; }
+
+/* ════════════════════════════════════
+   2. TEXT COLORS — opacity-based hierarchy
+   ════════════════════════════════════ */
+.dark .text-slate-900 { color: #F1F5F9 !important; }            /* primary */
+.dark .text-slate-800 { color: #F1F5F9 !important; }            /* primary */
+.dark .text-slate-700 { color: rgba(241,245,249,0.85) !important; }
+.dark .text-slate-600 { color: rgba(241,245,249,0.65) !important; } /* secondary */
+.dark .text-slate-500 { color: rgba(241,245,249,0.5) !important; }
+.dark .text-slate-400 { color: rgba(241,245,249,0.4) !important; }  /* muted */
+.dark .text-slate-300 { color: rgba(241,245,249,0.5) !important; }
+
+.dark .text-gray-900 { color: #F1F5F9 !important; }
+.dark .text-gray-800 { color: #F1F5F9 !important; }
+.dark .text-gray-700 { color: rgba(241,245,249,0.85) !important; }
+.dark .text-gray-600 { color: rgba(241,245,249,0.65) !important; }
+.dark .text-gray-500 { color: rgba(241,245,249,0.5) !important; }
+.dark .text-gray-400 { color: rgba(241,245,249,0.4) !important; }
+
+/* Colored text — desaturated for dark surfaces */
+.dark .text-blue-500 { color: #60a5fa !important; }
+.dark .text-blue-600, .dark .text-blue-700 { color: #93c5fd !important; }
+.dark .text-green-500 { color: #4ade80 !important; }
+.dark .text-green-600, .dark .text-green-700 { color: #86efac !important; }
+.dark .text-red-400 { color: #fca5a5 !important; }
+.dark .text-red-500 { color: #f87171 !important; }  /* soft coral, not harsh red */
+.dark .text-red-600, .dark .text-red-700 { color: #fca5a5 !important; }
+.dark .text-amber-500 { color: #f59e0b !important; }
+.dark .text-amber-600, .dark .text-amber-700 { color: #fbbf24 !important; }
+.dark .text-purple-600, .dark .text-purple-700 { color: #c084fc !important; }
+.dark .text-emerald-500 { color: #10b981 !important; }
+.dark .text-emerald-600, .dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-teal-600, .dark .text-teal-700 { color: #2dd4bf !important; }
+.dark .text-indigo-600, .dark .text-indigo-700 { color: #818cf8 !important; }
+.dark .text-indigo-600\/80 { color: rgba(129,140,248,0.8) !important; }
+.dark .text-pink-600, .dark .text-pink-700 { color: #f472b6 !important; }
+.dark .text-orange-500, .dark .text-orange-600, .dark .text-orange-700 { color: #fb923c !important; }
+.dark .text-cyan-600, .dark .text-cyan-700 { color: #22d3ee !important; }
+.dark .text-violet-600, .dark .text-violet-700 { color: #a78bfa !important; }
+
+/* Pipe text */
+.dark .text-pipe-500 { color: #f59e0b !important; }
+.dark .text-pipe-600, .dark .text-pipe-700 { color: #fbbf24 !important; }
+
+/* ════════════════════════════════════
+   3. BORDERS — soft rgba for depth, not harsh lines
+   ════════════════════════════════════ */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/80,
+.dark .border-amber-200\/40 {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+.dark .border-slate-300 { border-color: rgba(255,255,255,0.12) !important; }
+.dark .border-slate-400 { border-color: rgba(255,255,255,0.16) !important; }
+.dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-300 { border-color: rgba(255,255,255,0.08) !important; }
+
+/* Colored borders */
+.dark .border-blue-100, .dark .border-blue-200, .dark .border-blue-300 { border-color: rgba(59,130,246,0.3) !important; }
+.dark .border-green-100, .dark .border-green-200, .dark .border-green-300 { border-color: rgba(34,197,94,0.3) !important; }
+.dark .border-red-100, .dark .border-red-200, .dark .border-red-300 { border-color: rgba(239,68,68,0.3) !important; }
+.dark .border-amber-100, .dark .border-amber-200, .dark .border-amber-300 { border-color: rgba(245,158,11,0.3) !important; }
+.dark .border-purple-100, .dark .border-purple-200, .dark .border-purple-300 { border-color: rgba(168,85,247,0.3) !important; }
+.dark .border-emerald-100, .dark .border-emerald-200, .dark .border-emerald-300 { border-color: rgba(16,185,129,0.3) !important; }
+.dark .border-indigo-100, .dark .border-indigo-200, .dark .border-indigo-300 { border-color: rgba(99,102,241,0.3) !important; }
+.dark .border-indigo-200\/40 { border-color: rgba(99,102,241,0.2) !important; }
+.dark .border-teal-100, .dark .border-teal-200, .dark .border-teal-300 { border-color: rgba(20,184,166,0.3) !important; }
+.dark .border-orange-200, .dark .border-orange-300 { border-color: rgba(249,115,22,0.3) !important; }
+.dark .border-pink-200, .dark .border-pink-300 { border-color: rgba(236,72,153,0.3) !important; }
+.dark .border-pipe-200 { border-color: rgba(245,166,35,0.3) !important; }
+
+/* Dividers */
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* ════════════════════════════════════
+   4. COLORED BACKGROUNDS (50/100/200 shades)
+   ════════════════════════════════════ */
+.dark .bg-blue-50 { background-color: rgba(59,130,246,0.12) !important; }
+.dark .bg-blue-100 { background-color: rgba(59,130,246,0.18) !important; }
+.dark .bg-blue-50\/50 { background-color: rgba(59,130,246,0.08) !important; }
+.dark .bg-green-50 { background-color: rgba(34,197,94,0.12) !important; }
+.dark .bg-green-100 { background-color: rgba(34,197,94,0.18) !important; }
+.dark .bg-red-50 { background-color: rgba(239,68,68,0.12) !important; }
+.dark .bg-red-100 { background-color: rgba(239,68,68,0.18) !important; }
+.dark .bg-red-50\/30 { background-color: rgba(239,68,68,0.06) !important; }
+.dark .bg-red-50\/50 { background-color: rgba(239,68,68,0.08) !important; }
+.dark .bg-amber-50 { background-color: rgba(245,158,11,0.12) !important; }
+.dark .bg-amber-100 { background-color: rgba(245,158,11,0.18) !important; }
+.dark .bg-amber-200 { background-color: rgba(245,158,11,0.25) !important; }
+.dark .bg-amber-50\/30 { background-color: rgba(245,158,11,0.06) !important; }
+.dark .bg-purple-50 { background-color: rgba(168,85,247,0.12) !important; }
+.dark .bg-purple-100 { background-color: rgba(168,85,247,0.18) !important; }
+.dark .bg-emerald-50 { background-color: rgba(16,185,129,0.12) !important; }
+.dark .bg-emerald-100 { background-color: rgba(16,185,129,0.18) !important; }
+.dark .bg-emerald-50\/30 { background-color: rgba(16,185,129,0.06) !important; }
+.dark .bg-indigo-50 { background-color: rgba(99,102,241,0.12) !important; }
+.dark .bg-indigo-50\/50 { background-color: rgba(99,102,241,0.08) !important; }
+.dark .bg-indigo-100 { background-color: rgba(99,102,241,0.18) !important; }
+.dark .bg-pink-50 { background-color: rgba(236,72,153,0.12) !important; }
+.dark .bg-pink-100 { background-color: rgba(236,72,153,0.18) !important; }
+.dark .bg-teal-50 { background-color: rgba(20,184,166,0.12) !important; }
+.dark .bg-teal-100 { background-color: rgba(20,184,166,0.18) !important; }
+.dark .bg-cyan-50 { background-color: rgba(6,182,212,0.12) !important; }
+.dark .bg-cyan-100 { background-color: rgba(6,182,212,0.18) !important; }
+.dark .bg-orange-50 { background-color: rgba(249,115,22,0.12) !important; }
+.dark .bg-orange-100 { background-color: rgba(249,115,22,0.18) !important; }
+.dark .bg-violet-50 { background-color: rgba(139,92,246,0.12) !important; }
+.dark .bg-violet-100 { background-color: rgba(139,92,246,0.18) !important; }
+.dark .bg-yellow-50 { background-color: rgba(234,179,8,0.12) !important; }
+.dark .bg-yellow-100 { background-color: rgba(234,179,8,0.18) !important; }
+
+/* Pipe backgrounds */
+.dark .bg-pipe-50 { background-color: rgba(245,166,35,0.12) !important; }
+.dark .bg-pipe-100 { background-color: rgba(245,166,35,0.18) !important; }
+.dark .bg-pipe-500 { background-color: #d97706 !important; }
+
+/* ════════════════════════════════════
+   5. GRADIENT BACKGROUNDS
+   ════════════════════════════════════ */
+/* Tailwind gradient utilities */
+.dark .bg-gradient-to-r,
+.dark .bg-gradient-to-l,
+.dark .bg-gradient-to-b,
+.dark .bg-gradient-to-t,
+.dark .bg-gradient-to-br,
+.dark .bg-gradient-to-tr {
+  --tw-gradient-from: #111827 !important;
+  --tw-gradient-to: #1a2332 !important;
+}
+
+/* Override from/to stops */
+.dark [class*="from-blue-50"], .dark [class*="from-indigo-50"],
+.dark [class*="from-green-50"], .dark [class*="from-emerald-50"],
+.dark [class*="from-amber-50"], .dark [class*="from-red-50"],
+.dark [class*="from-purple-50"], .dark [class*="from-slate-50"],
+.dark [class*="from-white"] {
+  --tw-gradient-from: #111827 !important;
+}
+.dark [class*="to-blue-50"], .dark [class*="to-indigo-50"],
+.dark [class*="to-green-50"], .dark [class*="to-emerald-50"],
+.dark [class*="to-amber-50"], .dark [class*="to-red-50"],
+.dark [class*="to-purple-50"], .dark [class*="to-slate-50"],
+.dark [class*="to-white"] {
+  --tw-gradient-to: #1a2332 !important;
+}
+
+/* Inline gradient overrides — catch ALL white-based inline gradients */
+.dark [style*="linear-gradient"][style*="#FFFFFF"],
+.dark [style*="linear-gradient"][style*="#FFF "],
+.dark [style*="linear-gradient"][style*="#FAFBFF"],
+.dark [style*="linear-gradient"][style*="#EFF6FF"],
+.dark [style*="linear-gradient"][style*="#ECFDF5"],
+.dark [style*="linear-gradient"][style*="#F5F3FF"],
+.dark [style*="linear-gradient"][style*="#FFF8E1"],
+.dark [style*="linear-gradient"][style*="#FFFDF2"],
+.dark [style*="linear-gradient"][style*="#FEF3C7"],
+.dark [style*="linear-gradient"][style*="#F0FDF4"],
+.dark [style*="linear-gradient"][style*="#F8FAFC"],
+.dark [style*="linear-gradient"][style*="#FFFBEB"] {
+  background: #111827 !important;
+}
+
+/* Inline border overrides (dynamic hex) */
+.dark [style*="border: 1px solid"],
+.dark [style*="border: 2px solid"] {
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* ════════════════════════════════════
+   THEME V2 — env-aware overrides
+   ════════════════════════════════════
+   Apr 20 2026. The app had ~28 occurrences of the old "navy gradient"
+   pattern `bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900`
+   hard-coded across 13 pages (table theads, section-header cards,
+   toolbar strips, dashboard bands). Rather than refactor every call
+   site, we override the compiled classes based on the `data-env`
+   attribute set on the app root in App.tsx:
+
+     DEV  → solid slate-700 charcoal (#334155)
+     PROD → solid blue-900 navy      (#1E3A8A)
+
+   Same selector pair also handles the DEV-only `bg-white border-amber-
+   200/40` page-header pattern → amber-100 chrome (#FEF3C7) for DEV.
+   PROD pages already use `bg-slate-900 border-slate-700` inline so no
+   override needed there.
+
+   Using `!important` because Tailwind utility classes ship with
+   `background-image`/`background-color` that we need to beat. These
+   selectors are narrowly scoped (compound class match plus data-env)
+   so they don't bleed into unrelated UI.
+*/
+
+/* Theads + section-header bands + toolbar strips — DEV.
+   slate-700 (#334155) — matches ProjectsPage confirmed as the
+   correct DEV weight. Differentiation from PROD is by hue (grey-blue vs
+   pure navy), not luminance. Both are dark enough to read as banners. */
+[data-env="dev"] .bg-gradient-to-r.from-slate-900.via-blue-950.to-slate-900 {
+  background-image: none !important;
+  background-color: #334155 !important;
+}
+
+/* Theads + section-header bands + toolbar strips — PROD.
+   Uses blue-950 (#172554) not blue-900 (#1E3A8A) because the original
+   gradient (slate-900 → blue-950 → slate-900) sat in that weight class;
+   blue-900 reads noticeably lighter and looks washed out for PROD. */
+[data-env="prod"] .bg-gradient-to-r.from-slate-900.via-blue-950.to-slate-900 {
+  background-image: none !important;
+  background-color: #172554 !important;
+}
+
+/* Page-header chrome — DEV only. Pale warm brown to pair with the tan navbar
+   (#D2B48C) above; canvas below stays amber-50 cream for warmth continuity.
+   PROD pages use bg-slate-900 directly and don't hit this selector. */
+[data-env="dev"] .bg-white.border-amber-200\/40 {
+  background-color: #E8D5B7 !important;  /* pale warm brown */
+  border-color: #A88656 !important;      /* tan — matches navbar bottom-border */
+}
+/* ProjectsPage uses the `bg-chrome` token (Tailwind custom colour) directly
+   instead of the `bg-white border-amber-200/40` pattern — override here too
+   so it picks up the same pale-brown page-header treatment. */
+[data-env="dev"] .bg-chrome {
+  background-color: #E8D5B7 !important;
+}
+
+/* Table-card outer border — thicken to 2px in env colour.
+   Constrained to rounded wrapper divs (the actual card) so inner overflow
+   wrappers like <div class="overflow-x-auto"> don't accidentally get the
+   border — that was creating a visible "gap" line between the toolbar and
+   thead on CredentialsPage. Descendant :has() (no `>`) means the table can
+   be deeper than one level. */
+[data-env="dev"] div:is(.rounded-lg, .rounded-xl, .rounded-2xl):has(table.border-collapse) {
+  border-width: 2px !important;
+  border-color: #475569 !important;      /* slate-600 — matches DEV thead */
+}
+[data-env="prod"] div:is(.rounded-lg, .rounded-xl, .rounded-2xl):has(table.border-collapse) {
+  border-width: 2px !important;
+  border-color: #172554 !important;      /* blue-950 — matches PROD thead */
+}
+
+/* Card outer borders — 2px wasn't visibly distinct from hairlines when the
+   border colour is a pale tint (emerald-200, amber-200 etc). Pushing to 2.5px
+   gives consistent visible weight without looking chunky. Border-radius also
+   normalised to 1rem (rounded-2xl) so every card/table curves the same —
+   matches the Workflows table reference.
+   Scope covers <div>, <button>, <a> because dashboard KPI cards and nav tiles
+   are often rendered as clickable <button> or <a> — excluding them leaves
+   hairline borders on exactly the cards users care about. */
+[data-env="dev"]  :is(div, button, a).rounded-lg.border:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-xl.border:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-2xl.border:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-lg.border:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-xl.border:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-2xl.border:not(.absolute):not(.fixed) {
+  border-width: 2.5px !important;
+  border-radius: 1rem !important;   /* 16px — same as rounded-2xl, matches Workflows table */
+}
+
+/* Table-card outer wrapper — force rounded-2xl radius so tables on every
+   page share one corner radius. Same constraint as above (actual rounded
+   wrapper only; descendant match) to avoid hitting overflow-x-auto wrappers. */
+[data-env="dev"] div:is(.rounded-lg, .rounded-xl, .rounded-2xl):has(table.border-collapse),
+[data-env="prod"] div:is(.rounded-lg, .rounded-xl, .rounded-2xl):has(table.border-collapse) {
+  border-radius: 1rem !important;
+}
+
+/* Cards that set their border via INLINE style (e.g. Dashboard KPI tiles use
+   `style={{ border: '1px solid #...' }}` for dynamic category colour).
+   Those skip the .border utility class so the width-bump rule above misses
+   them. Match via attribute selector on the literal `border:` substring
+   (doesn't collide with `border-radius:` or `border-top:`).
+   Scope covers div/button/a so the ProdGlancePanel buttons + Dashboard
+   nav tiles all qualify. */
+[data-env="dev"]  :is(div, button, a).rounded-lg[style*="border:"]:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-xl[style*="border:"]:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-2xl[style*="border:"]:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-lg[style*="border:"]:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-xl[style*="border:"]:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-2xl[style*="border:"]:not(.absolute):not(.fixed) {
+  border-width: 2.5px !important;
+  border-radius: 1rem !important;
+}
+
+/* Pale-tinted category borders (emerald-200/amber-200/blue-200/red-200/...)
+   — darken one shade so the 2.5px width actually reads. Keeps the category
+   colour hue, just raises contrast. */
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-emerald-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-emerald-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-emerald-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-emerald-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-emerald-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-emerald-200 { border-color: #6EE7B7 !important; } /* emerald-300 */
+
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-amber-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-amber-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-amber-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-amber-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-amber-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-amber-200 { border-color: #FCD34D !important; } /* amber-300 */
+
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-blue-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-blue-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-blue-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-blue-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-blue-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-blue-200 { border-color: #93C5FD !important; } /* blue-300 */
+
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-red-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-red-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-red-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-red-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-red-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-red-200 { border-color: #FCA5A5 !important; } /* red-300 */
+
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-violet-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-violet-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-violet-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-violet-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-violet-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-violet-200 { border-color: #C4B5FD !important; } /* violet-300 */
+
+[data-env="dev"]  :is(div,button,a).rounded-lg.border-indigo-200, [data-env="prod"] :is(div,button,a).rounded-lg.border-indigo-200,
+[data-env="dev"]  :is(div,button,a).rounded-xl.border-indigo-200, [data-env="prod"] :is(div,button,a).rounded-xl.border-indigo-200,
+[data-env="dev"]  :is(div,button,a).rounded-2xl.border-indigo-200, [data-env="prod"] :is(div,button,a).rounded-2xl.border-indigo-200 { border-color: #A5B4FC !important; } /* indigo-300 */
+
+/* Additionally — generic cards with pale slate borders read as near-invisible
+   hairlines. Darken those specifically so every card outline is plainly
+   visible. Tinted cards (emerald/amber/red/etc) are left alone to preserve
+   category colour coding. Scope includes button/a. */
+[data-env="dev"]  :is(div, button, a).rounded-lg.border-slate-200:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-xl.border-slate-200:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-2xl.border-slate-200:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-lg.border-slate-200:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-xl.border-slate-200:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-2xl.border-slate-200:not(.absolute):not(.fixed) {
+  border-color: #cbd5e1 !important;  /* slate-300 — two shades darker, readable */
+}
+[data-env="dev"]  :is(div, button, a).rounded-lg.border-slate-100:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-xl.border-slate-100:not(.absolute):not(.fixed),
+[data-env="dev"]  :is(div, button, a).rounded-2xl.border-slate-100:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-lg.border-slate-100:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-xl.border-slate-100:not(.absolute):not(.fixed),
+[data-env="prod"] :is(div, button, a).rounded-2xl.border-slate-100:not(.absolute):not(.fixed) {
+  border-color: #94a3b8 !important;  /* slate-400 — was near-invisible, now clear */
+}
+
+/* TableToolbar toolbar strip uses `bg-thead-dev-bg` (DEV default prop) even on
+   PROD pages that don't thread env through. Force it to navy in PROD context so
+   the toolbar band matches the thead band below it. Same for the text/border tokens. */
+[data-env="prod"] .bg-thead-dev-bg {
+  background-color: #172554 !important;   /* blue-950 — PROD thead colour */
+}
+[data-env="prod"] .text-thead-dev-text {
+  color: #FAD564 !important;              /* NAPLES yellow — PROD thead text */
+}
+[data-env="prod"] .border-thead-dev-border {
+  border-color: #172554 !important;       /* blue-950 — PROD thead border */
+}
+
+/* ════════════════════════════════════
+   6. HOVER STATES
+   ════════════════════════════════════ */
+.dark .hover\:bg-slate-50:hover { background-color: #1a2332 !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #1f2b3d !important; }
+.dark .hover\:bg-slate-200:hover { background-color: #2a3a50 !important; }
+.dark .hover\:bg-white:hover { background-color: #1a2332 !important; }
+.dark .hover\:bg-gray-50:hover { background-color: #1a2332 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #1f2b3d !important; }
+.dark .hover\:bg-red-50:hover { background-color: rgba(239,68,68,0.12) !important; }
+.dark .hover\:bg-blue-50:hover { background-color: rgba(59,130,246,0.12) !important; }
+.dark .hover\:text-slate-700:hover { color: #F1F5F9 !important; }
+.dark .hover\:text-slate-800:hover { color: #F1F5F9 !important; }
+.dark .hover\:text-slate-900:hover { color: #F1F5F9 !important; }
+.dark .hover\:text-red-500:hover { color: #fca5a5 !important; }
+.dark .hover\:text-blue-700:hover { color: #93c5fd !important; }
+.dark .hover\:border-slate-300:hover { border-color: rgba(255,255,255,0.16) !important; }
+.dark .hover\:border-blue-300:hover { border-color: rgba(59,130,246,0.3) !important; }
+.dark .hover\:shadow-md:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
+.dark .hover\:shadow-lg:hover { box-shadow: 0 10px 30px rgba(0,0,0,0.6) !important; }
+.dark .hover\:-translate-y-0\.5:hover { transform: translateY(-2px); }
+
+/* ════════════════════════════════════
+   7. SHADOWS
+   ════════════════════════════════════ */
+.dark .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.4) !important; }
+.dark .shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3) !important; }
+.dark .shadow-lg { box-shadow: 0 10px 25px rgba(0,0,0,0.5), 0 5px 10px rgba(0,0,0,0.3) !important; }
+.dark .shadow-xl { box-shadow: 0 20px 40px rgba(0,0,0,0.5), 0 8px 16px rgba(0,0,0,0.3) !important; }
+.dark .shadow-2xl { box-shadow: 0 25px 50px rgba(0,0,0,0.6) !important; }
+
+/* ════════════════════════════════════
+   8. FOCUS / RING STATES
+   ════════════════════════════════════ */
+.dark .focus\:ring-pipe-200:focus { --tw-ring-color: rgba(245,166,35,0.25) !important; }
+.dark .focus\:ring-pipe-300:focus { --tw-ring-color: rgba(245,166,35,0.35) !important; }
+.dark .focus\:border-pipe-400:focus { border-color: #f59e0b !important; }
+.dark .ring-pipe-200 { --tw-ring-color: rgba(245,166,35,0.25) !important; }
+
+/* ════════════════════════════════════
+   9. NODE CARDS (React Flow) — L1 surface
+   ════════════════════════════════════ */
+.dark .fpulse-node {
+  background: #111827;
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+}
+.dark .fpulse-node:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 4px 20px rgba(245,166,35,0.15), 0 2px 8px rgba(0,0,0,0.4);
+}
+.dark .fpulse-node.selected {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.15), 0 4px 20px rgba(96,165,250,0.1);
+}
+
+/* ════════════════════════════════════
+   10. INPUTS / FORMS — L0 inset for depth
+   ════════════════════════════════════ */
+.dark input, .dark textarea, .dark select {
+  background-color: #0B1220 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: #F1F5F9 !important;
+}
+.dark input:focus, .dark textarea:focus, .dark select:focus {
+  border-color: rgba(96,165,250,0.4) !important;
+  box-shadow: 0 0 0 2px rgba(96,165,250,0.1) !important;
+}
+.dark input::placeholder, .dark textarea::placeholder {
+  color: rgba(241,245,249,0.3) !important;
+}
+/* Prevent select option bg bleed */
+.dark option {
+  background-color: #111827 !important;
+  color: #F1F5F9 !important;
+}
+
+/* ════════════════════════════════════
+   11. TABLES — L2 surface with subtle header
+   ════════════════════════════════════ */
+.dark table thead { background-color: #0f1726 !important; }
+.dark table tbody tr { border-color: rgba(255,255,255,0.06) !important; }
+.dark table tbody tr:hover { background-color: rgba(255,255,255,0.04) !important; }
+.dark th { color: rgba(241,245,249,0.5) !important; font-weight: 500; letter-spacing: 0.02em; }
+
+/* ════════════════════════════════════
+   12. MODALS / OVERLAYS
+   ════════════════════════════════════ */
+.dark .bg-black\/20 { background-color: rgba(0,0,0,0.4) !important; }
+.dark .bg-black\/30 { background-color: rgba(0,0,0,0.5) !important; }
+.dark .bg-black\/40 { background-color: rgba(0,0,0,0.6) !important; }
+.dark .bg-black\/50 { background-color: rgba(0,0,0,0.7) !important; }
+
+/* ════════════════════════════════════
+   13. BUTTONS — slightly muted for dark surfaces
+   ════════════════════════════════════ */
+.dark .bg-amber-500 { background-color: #d97706 !important; }
+.dark .bg-amber-600 { background-color: #b45309 !important; }
+.dark .bg-red-500 { background-color: #dc2626 !important; }
+.dark .bg-red-600 { background-color: #b91c1c !important; }
+.dark .bg-blue-500 { background-color: #2563eb !important; }
+.dark .bg-blue-600 { background-color: #1d4ed8 !important; }
+
+/* ════════════════════════════════════
+   14. DASHBOARD / CARD GRID — L1 cards
+   ════════════════════════════════════ */
+.dark [class*="rounded-xl"][class*="border"][class*="shadow"] {
+  background-color: #111827 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+.dark [class*="rounded-2xl"][class*="border"][class*="shadow"] {
+  background-color: #111827 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* ════════════════════════════════════
+   15. EDITOR PAGE — L1 sidebars, L2 nested
+   ════════════════════════════════════ */
+/* Activities sidebar + Chat sidebar */
+.dark [class*="overflow-y-auto"][class*="border-l"] {
+  background-color: #111827 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+.dark [class*="bg-slate-50"][class*="border-r"],
+.dark [class*="bg-white"][class*="border-r"] {
+  background-color: #111827 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* Bottom toolbar / Quick Actions footer */
+.dark [class*="bg-white"][class*="border-t"],
+.dark [class*="bg-slate-50"][class*="border-t"] {
+  background-color: #0f1726 !important;
+  border-color: rgba(255,255,255,0.08) !important;
+}
+
+/* ════════════════════════════════════
+   16. HEADER / NAV — subtle bottom glow
+   ════════════════════════════════════ */
+.dark .shadow-sm.border-b { box-shadow: 0 1px 4px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.05) !important; }
+.dark .border-b.border-amber-200\/40 { border-color: rgba(255,255,255,0.06) !important; }
+
+/* Active nav tab glow */
+.dark nav a.font-bold,
+.dark nav button.font-bold {
+  text-shadow: 0 0 8px rgba(251,191,36,0.3);
+}
+
+/* ════════════════════════════════════
+   17. SCROLLBAR
+   ════════════════════════════════════ */
+.dark ::-webkit-scrollbar-thumb { background: #475569; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* Utility: hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

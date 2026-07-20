@@ -1,0 +1,46 @@
+{
+  "hidden": true,
+  "id": "facebook_ads",
+  "name": "Facebook / Meta Ads",
+  "description": "Facebook & Instagram advertising data via Marketing API",
+  "category": "saas",
+  "base_url": "https://graph.facebook.com/v19.0",
+  "auth": {
+    "type": "bearer",
+    "header_name": "Authorization",
+    "header_template": "Bearer {access_token}"
+  },
+  "params": [
+    {"name": "access_token", "label": "Long-Lived Access Token", "required": true, "secret": true},
+    {"name": "account_id", "label": "Ad Account ID (act_XXXXX)", "required": true}
+  ],
+  "streams": [
+    {
+      "name": "campaigns",
+      "label": "Campaigns",
+      "path": "/{account_id}/campaigns",
+      "method": "GET",
+      "query": {"fields": "id,name,status,objective,created_time,updated_time,daily_budget,lifetime_budget", "limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "next_url_path": "paging.next", "max_pages": 50}
+    },
+    {
+      "name": "campaign_insights",
+      "label": "Campaign Insights (Last 30d)",
+      "path": "/{account_id}/insights",
+      "method": "GET",
+      "query": {"fields": "campaign_id,campaign_name,impressions,clicks,spend,cpc,cpm,ctr,reach,frequency", "date_preset": "last_30d", "level": "campaign", "limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "next_url_path": "paging.next", "max_pages": 50}
+    },
+    {
+      "name": "adsets",
+      "label": "Ad Sets",
+      "path": "/{account_id}/adsets",
+      "method": "GET",
+      "query": {"fields": "id,name,status,campaign_id,daily_budget,targeting,created_time", "limit": "100"},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "next_url_path": "paging.next", "max_pages": 50}
+    }
+  ]
+}

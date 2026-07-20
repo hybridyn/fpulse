@@ -1,0 +1,66 @@
+name: Unit + Integration Tests
+
+on:
+  push:
+    branches: [main, develop, "week*-*", "sprint/*"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: {}
+
+concurrency:
+  group: unit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit + Integration (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install minimal deps (avoid heavy native wheels)
+        run: pip install "pydantic>=2.10"
+
+      - name: Run smoke suite
+        working-directory: backend
+        run: python run_all_tests.py --fast
+        env:
+          FPULSE_ENV: ci
+          PYTHONIOENCODING: utf-8
+
+  frontend:
+    name: Frontend Vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install
+        working-directory: frontend
+        run: npm install
+
+      - name: Install test deps
+        working-directory: frontend
+        run: |
+          npm install --no-save \
+            vitest@^2 @vitest/coverage-v8@^2 jsdom \
+            @testing-library/react @testing-library/jest-dom
+
+      - name: Run Vitest
+        working-directory: frontend
+        run: npx vitest run --passWithNoTests

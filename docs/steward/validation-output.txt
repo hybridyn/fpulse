@@ -1,0 +1,88 @@
+﻿======================================================================
+F-Pulse Steward — end-to-end validation
+======================================================================
+Workspace data: C:\Users\<user>\AppData\Local\Temp\fpulse-steward-validate-0g2xe9ip
+Workflows in test set: 9
+
+[1] Default settings (from a brand-new workspace):
+{
+  "enabled": true,
+  "min_severity": "p3",
+  "scan_on_save": true,
+  "auto_stale_days": 30,
+  "escalate_after_n_occurrences": 5
+}
+
+[1b] Tightened `escalate_after_n_occurrences` to 3 for the demo.
+
+[2] FIRST SCAN — 4 findings emitted:
+    [P2] duplicate_source     3 pipelines read the same source
+        id=dup-src-c5f1cad12b74b83d
+        workflows: ['Orders → Analytics', 'Orders → Finance', 'Orders → Ops']
+        occurrences (this scan): 3
+    [P2] duplicate_source     2 pipelines read the same source
+        id=dup-src-e19bc34a14aa7d21
+        workflows: ['Customers ETL (Engineer A)', 'Customers ETL (Engineer B)']
+        occurrences (this scan): 2
+    [P2] duplicate_source     2 pipelines read the same source
+        id=dup-src-454cc53aa5c89646
+        workflows: ['DR Primary (us-west)', 'DR Secondary (us-east)']
+        occurrences (this scan): 2
+    [P2] duplicate_pipeline   2 pipelines have identical source → sink shape
+        id=dup-pipe-276640b6eb5074e8
+        workflows: ['Customers ETL (Engineer A)', 'Customers ETL (Engineer B)']
+        occurrences (this scan): 2
+
+[2a] Distinct duplicate-source findings: 3
+
+[3] DISMISSED '2 pipelines read the same source' with reason:
+    "DR replication across regions — intentional"
+    signature=454cc53aa5c89646
+
+[4] SECOND SCAN after dismiss — 3 findings.
+    DR signature still present? False  ← expect False
+
+[5] AFTER 4 IGNORED SCANS — escalation check:
+    Orders duplicate severity: P1
+    (baseline was P2 — should now be P1 after 3+ persistent occurrences)
+    Persistent occurrences for this signature: 4
+    Escalation note in body: "..._Severity escalated from P2 to P1 because this finding has been surfaced in 4 se..."
+
+[6] REBOUND DETECTION:
+    Title: (rebounded) 2 pipelines have identical source → sink shape
+    Body tail: "..._This finding had been **resolved previously** (last on 2026-06-05T12:17:19.994470+00:00) ..."
+
+[7] MEMORY JOURNAL — durable learning log:
+{
+  "total_events": 16,
+  "total_scans": 7,
+  "total_emits": 14,
+  "total_dismisses": 1,
+  "total_resolves": 1,
+  "distinct_signatures_seen": 4
+}
+
+[7a] Persistent occurrence counts (per signature):
+    c5f1cad12b74b83d  →  4 scans ⚠ ESCALATED
+    e19bc34a14aa7d21  →  4 scans ⚠ ESCALATED
+    454cc53aa5c89646  →  1 scans
+    276640b6eb5074e8  →  5 scans ⚠ ESCALATED
+
+[7b] Recent journal events (newest first, last 8):
+    12:17:19Z  resolve  sig=276640b6eb50…  
+    12:17:19Z  emit     sig=276640b6eb50…  
+    12:17:19Z  emit     sig=c5f1cad12b74…  
+    12:17:19Z  emit     sig=e19bc34a14aa…  
+    12:17:19Z  emit     sig=276640b6eb50…  
+    12:17:19Z  emit     sig=c5f1cad12b74…  
+    12:17:19Z  emit     sig=e19bc34a14aa…  
+    12:17:19Z  emit     sig=276640b6eb50…  
+
+[8] On-disk journal: C:\Users\<user>\AppData\Local\Temp\fpulse-steward-validate-0g2xe9ip\default\memory.jsonl
+    Lines: 16
+
+======================================================================
+✓ All Steward learning behaviours validated end-to-end.
+======================================================================
+
+Artifacts preserved at: C:\Users\<user>\AppData\Local\Temp\fpulse-steward-validate-0g2xe9ip

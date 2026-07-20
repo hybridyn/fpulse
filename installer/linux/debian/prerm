@@ -1,0 +1,25 @@
+#!/bin/sh
+# installer/linux/debian/prerm
+#
+# Runs before files are removed. Stops + unregisters the systemd
+# --user unit so we don't leave a broken unit file pointing at a
+# binary we're about to delete.
+
+set -e
+
+case "$1" in
+  remove|upgrade|deconfigure)
+    TARGET_USER="${SUDO_USER:-}"
+    if [ -z "$TARGET_USER" ] && [ -n "${PKEXEC_UID:-}" ]; then
+      TARGET_USER="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+    fi
+
+    if [ -n "$TARGET_USER" ] && [ "$TARGET_USER" != "root" ]; then
+      # Best-effort stop+disable. Never fail the uninstall because
+      # the service was already stopped or the unit was gone.
+      su - "$TARGET_USER" -c "/usr/bin/fpulse uninstall-service" || true
+    fi
+    ;;
+esac
+
+exit 0

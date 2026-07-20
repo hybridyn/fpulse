@@ -1,0 +1,30 @@
+{
+  "tier": "hidden",
+  "id": "airtable",
+  "name": "Airtable",
+  "description": "Airtable database via REST API",
+  "category": "saas",
+  "base_url": "https://api.airtable.com/v0/{base_id}",
+  "auth": {
+    "type": "bearer",
+    "token_param": "personal_access_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "base_id", "label": "Base ID (app...)", "required": true},
+    {"name": "table_name", "label": "Table name", "required": true},
+    {"name": "personal_access_token", "label": "Personal Access Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "records",
+      "label": "Records",
+      "path": "/{table_name}",
+      "method": "GET",
+      "query": {"pageSize": 100},
+      "data_path": "records",
+      "pagination": {"type": "cursor", "cursor_field": "offset", "cursor_param": "offset", "max_pages": 100}
+    }
+  ]
+}

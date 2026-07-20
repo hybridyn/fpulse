@@ -1,0 +1,171 @@
+name: Publish to TestPyPI (rehearsal)
+
+# Manual only. This is the dress rehearsal for a real PyPI release.
+#
+# Why bother: PyPI refuses re-uploads of a version. If `fpulse 1.0.0` goes up
+# broken, it cannot be replaced — only yanked, and 1.0.0 is burned forever.
+# TestPyPI is a throwaway index with the same API and the same trusted-
+# publishing flow, so a mistake there costs nothing.
+#
+# What it proves:
+#   * the OIDC trusted-publishing handshake is configured correctly
+#   * the upload succeeds
+#   * `pip install` FROM AN INDEX (not a local file) produces a working app
+#     on Linux — the last untested link in the chain
+#
+# Setup (once, on test.pypi.org — a SEPARATE site and account from pypi.org;
+# a publisher registered on pypi.org does nothing for uploads to here):
+#
+#   1. You cannot create an empty project — there is no "new project" button.
+#      Register a PENDING publisher instead and the project is created on the
+#      first successful upload:
+#        test.pypi.org -> Your account -> Publishing -> Add a new pending
+#        publisher   (NOT the per-project Publishing tab; that only appears
+#                     once the project exists)
+#          PyPI Project Name: fpulse
+#          Owner:             hybridyn
+#          Repository name:   fpulse                  <- exact repo name
+#          Workflow name:     publish-testpypi.yml    <- THIS file, not
+#                                                        release.yml; each
+#                                                        workflow needs its
+#                                                        own publisher
+#          Environment name:  (leave blank)
+#   2. Run this workflow from the Actions tab.
+#
+# Every field is matched against the OIDC token's claims. Any mismatch fails
+# with `invalid-publisher: valid token, but no corresponding publisher`, which
+# does not say which field is wrong. The job log prints the claims it sent —
+# compare them field by field against the form.
+#
+# TestPyPI keeps its own version history: once 1.0.0 is uploaded there it
+# cannot be re-uploaded either. Use `version_suffix` to push 1.0.0.dev1,
+# .dev2 … while iterating.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_suffix:
+        description: "Appended to the version, e.g. dev1 -> 1.0.0.dev1 (TestPyPI also refuses re-uploads)"
+        required: false
+        default: "dev1"
+
+jobs:
+  publish:
+    name: Build, publish to TestPyPI, then install from it
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      id-token: write     # OIDC trusted publishing — no token secret
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Apply the dev suffix
+        # Keeps the repo's real version untouched; only this build is renamed.
+        if: inputs.version_suffix != ''
+        run: |
+          python - <<'PY'
+          import os, re, pathlib
+          suffix = os.environ["SUFFIX"]
+          p = pathlib.Path("pyproject.toml")
+          s = p.read_text(encoding="utf-8")
+          new, n = re.subn(r'(?m)^version = "([^"]+)"', lambda m: f'version = "{m.group(1)}.{suffix}"', s, count=1)
+          if n != 1:
+              raise SystemExit("could not find the version line in pyproject.toml")
+          p.write_text(new, encoding="utf-8")
+          print(re.search(r'(?m)^version = ".*"', new).group(0))
+          PY
+        env:
+          SUFFIX: ${{ inputs.version_suffix }}
+
+      - name: Build + stage the frontend
+        # Without this the wheel ships no UI — see scripts/stage_frontend.py.
+        run: |
+          cd frontend && npm ci && npm run build && cd ..
+          python scripts/stage_frontend.py
+
+      - name: Build sdist + wheel
+        run: |
+          pip install build
+          python -m build
+
+      - name: Verify the wheel before uploading
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          checks = {
+              "frontend index.html": any(n.endswith("fpulse/frontend_dist/index.html") for n in names),
+              "frontend assets":     any("/frontend_dist/assets/" in n for n in names),
+              "connector manifests": len([n for n in names if "/connectors/manifests/" in n and n.endswith(".json")]) >= 40,
+              "swagger-ui assets":   any("/static/swagger-ui/" in n for n in names),
+          }
+          for label, ok in checks.items():
+              print(f"  {'OK  ' if ok else 'FAIL'}  {label}")
+          if not all(checks.values()):
+              sys.exit("wheel is missing required content — refusing to upload")
+          print(f"{wheel}: {len(names)} files")
+          PY
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Install FROM TestPyPI and prove the app runs
+        # The part a local wheel can never prove: index resolution, the
+        # download, and the installed artifact actually serving the app.
+        #
+        # IMPORTANT: fetch ONLY the fpulse wheel from TestPyPI (--no-deps), then
+        # install it with dependencies resolved from *real* PyPI. TestPyPI is not
+        # a mirror — it is full of unrelated, often-broken sdists uploaded under
+        # common names by other people. Resolving fpulse's deps against it (even
+        # as an --extra-index-url) lets pip pick one of those broken sdists and
+        # die building it (e.g. "FileNotFoundError: DESCRIPTION.txt"). Real PyPI
+        # has the correct dep set — which is also exactly what an end user gets.
+        run: |
+          VERSION=$(python -c "import re,pathlib; print(re.search(r'(?m)^version = \"([^\"]+)\"', pathlib.Path('pyproject.toml').read_text()).group(1))")
+          echo "fetching fpulse==$VERSION wheel from TestPyPI (deps come from real PyPI)"
+          cd /tmp
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet --upgrade pip
+          # 1. Download ONLY the fpulse wheel from TestPyPI, no dependencies.
+          #    Retry until the freshly uploaded release is indexed.
+          for i in $(seq 1 10); do
+            /tmp/venv/bin/pip download --quiet --no-deps --only-binary=:all: \
+              --index-url https://test.pypi.org/simple/ \
+              "fpulse==$VERSION" -d /tmp/wheelhouse && break
+            echo "  TestPyPI index not ready yet, retrying in 15s ($i/10)"
+            sleep 15
+          done
+          # 2. Install that wheel with dependencies from real PyPI (default index).
+          /tmp/venv/bin/pip install --quiet /tmp/wheelhouse/fpulse-*.whl
+          /tmp/venv/bin/pip show fpulse | head -3
+
+          FPULSE_DATA_DIR=/tmp/fpulse-data FPULSE_MODE=dev \
+            /tmp/venv/bin/fpulse serve --no-open --port 8199 > /tmp/fpulse.log 2>&1 &
+          for i in $(seq 1 45); do
+            curl -sf http://127.0.0.1:8199/api/health > /dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8199/api/health > /dev/null || { echo "::error::backend never came up"; cat /tmp/fpulse.log; exit 1; }
+
+          code=$(curl -s -o /tmp/index.html -w '%{http_code}' http://127.0.0.1:8199/)
+          [ "$code" = "200" ] || { echo "::error::GET / returned $code"; cat /tmp/fpulse.log; exit 1; }
+          grep -q 'id="root"' /tmp/index.html || { echo "::error::/ is not the SPA"; exit 1; }
+          for a in $(grep -oE '/assets/[^"]+' /tmp/index.html | sort -u); do
+            ac=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8199$a")
+            [ "$ac" = "200" ] || { echo "::error::asset $a -> $ac"; exit 1; }
+          done
+          curl -sf http://127.0.0.1:8199/api/connectors/cert-matrix > /dev/null || { echo "::error::connectors missing"; exit 1; }
+
+          echo "Installed from TestPyPI on Linux and served the full app."

@@ -1,0 +1,165 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Tests / coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+.npm
+.eslintcache
+dist/
+build/
+*.log
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# AI-assistant scratch dirs. These belong on individual dev machines, not
+# in the OSS repo (they can carry per-user telemetry, memory exports,
+# and machine-specific launch configs).
+.claude/
+.codex/
+.codex_*.txt
+
+# Local data / runtime
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+logs/
+.env
+.env.local
+.env.*.local
+
+# Launcher runtime (start.bat / start.ps1 write the resolved port pair
+# + spawned PIDs here; stop.bat reads it back to identify what to kill).
+# Per-checkout state, never committed.
+.fpulse/runtime/
+.env.runtime
+
+# 2026-06-01: Secrets — broaden coverage so a future accidental commit
+# of an encryption key, TLS cert, SSH key, PKCS#12 bundle, or bootstrap
+# credentials file is caught by .gitignore instead of leaking to the
+# public repo. The original `.env*` rules above don't cover these.
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+*.crt
+*.cer
+*.gpg
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+secret.key
+*_master.key
+*.master.key
+INITIAL_ADMIN_PASSWORD*
+.fpulse_master.key
+backend/.fpulse_master.key
+
+# Build artifacts
+*.exe
+*.dll
+*.dylib
+fpulse-bundle/
+release/
+
+# Per-tool caches and incremental build state
+*.tsbuildinfo
+.vite/
+.parcel-cache/
+
+# Validator / debugging artifacts that some agents drop in the tree
+# (2026-05-22 hygiene). These are runtime outputs of validation scripts,
+# not source — they don't belong in commits.
+.codex-validation-data/
+pytest_*_results.txt
+docker-build.log
+git-files.txt
+git-status.txt
+git-tracked-count.txt
+# Catch-all for debug / audit dumps that earlier tooling produced
+# in the repo root. Prevents the "OSS launch prep" recovery sweeps
+# from accidentally re-adding what we just removed.
+node_validation*.csv
+node_validation*.md
+SESSION_SUMMARY_*.md
+*.duckdb
+*.duckdb.wal
+*.db-shm
+*.db-wal
+eval_results/
+
+# Seed / runtime data dir copies (the canonical data dir is `data/`,
+# already gitignored above; this catches workspace-scoped variants).
+backend/data/
+**/data/samples/
+**/data/duckdb_spill/
+**/data/uploads/
+**/data/backups/
+
+# 2026-05-31: The broad `lib/` (line 13) and `data/` (line 68) rules
+# above are intended for Python build/runtime artifacts, but they ALSO
+# match the frontend source directories. CI clones don't get those
+# files, so `tsc -b` fails with "Cannot find module '../../lib/cost'"
+# etc. on every commit. Explicitly un-ignore the frontend source
+# subtrees so they're tracked and shipped with the repo.
+!frontend/src/lib/
+!frontend/src/lib/**
+!frontend/src/data/
+!frontend/src/data/**
+
+# Test/regression scratch output (do not commit)
+backend/_regress.txt
+
+# Local validation / run artifacts (not for the repo)
+.fpulse-validation-*.txt
+# Staged frontend build — copied from frontend/dist by
+# scripts/stage_frontend.py so the wheel can carry the UI.
+# Build artifact, never source: it is rewritten on every stage.
+backend/fpulse/frontend_dist/

@@ -1,0 +1,51 @@
+{
+  "id": "datadog",
+  "name": "Datadog",
+  "description": "Datadog monitoring and observability platform",
+  "category": "saas",
+  "base_url": "https://api.datadoghq.com/api",
+  "auth": {
+    "type": "api_key",
+    "header_name": "DD-API-KEY",
+    "header_template": "{api_key}",
+    "extra_headers": {"DD-APPLICATION-KEY": "{app_key}"}
+  },
+  "params": [
+    {"name": "api_key", "label": "API Key", "required": true, "secret": true},
+    {"name": "app_key", "label": "Application Key", "required": true, "secret": true},
+    {"name": "site", "label": "Datadog Site (e.g. datadoghq.com, datadoghq.eu)", "required": false, "default": "datadoghq.com"}
+  ],
+  "streams": [
+    {
+      "name": "monitors",
+      "label": "Monitors",
+      "path": "/v1/monitor",
+      "method": "GET",
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "page_size", "max_pages": 20}
+    },
+    {
+      "name": "dashboards",
+      "label": "Dashboard List",
+      "path": "/v1/dashboard",
+      "method": "GET",
+      "data_path": "dashboards"
+    },
+    {
+      "name": "hosts",
+      "label": "Infrastructure Hosts",
+      "path": "/v1/hosts",
+      "method": "GET",
+      "query": {"count": "1000"},
+      "data_path": "host_list"
+    },
+    {
+      "name": "events",
+      "label": "Events (Last 24h)",
+      "path": "/v1/events",
+      "method": "GET",
+      "query": {"start": "{start_ts}", "end": "{end_ts}"},
+      "data_path": "events"
+    }
+  ]
+}

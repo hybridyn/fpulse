@@ -1,0 +1,150 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop, "week*-*"]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 4 * * *"   # 04:00 UTC nightly
+  workflow_dispatch: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sast-python:
+    name: Bandit (Python SAST)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install bandit[toml]
+      - name: Run Bandit
+        working-directory: backend
+        run: |
+          bandit -r fpulse -ll -f json -o bandit-report.json || true
+          bandit -r fpulse -ll --exit-zero --format screen
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: backend/bandit-report.json
+
+  deps-audit:
+    name: pip-audit + npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: pip-audit (Python deps)
+        # Audit requirements.txt directly — avoids installing the project,
+        # which has heavy native deps that can flake in CI. Report-only:
+        # a real CVE shows up in the human log AND the uploaded JSON.
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt --format json -o pip-audit.json || true
+          pip-audit -r backend/requirements.txt --desc || echo "::warning::pip-audit found vulnerabilities — see pip-audit.json artifact"
+
+      - name: npm audit (Node deps)
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only --ignore-scripts
+          npm audit --audit-level=high --json > npm-audit.json || true
+          npm audit --audit-level=high || echo "HIGH vulnerabilities present"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audits
+          path: |
+            pip-audit.json
+            frontend/npm-audit.json
+
+  secrets-scan:
+    name: gitleaks (secrets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # 2026-07-15: was gitleaks/gitleaks-action@v2, which hard-fails under a
+    # GitHub ORGANISATION without a paid licence ("[hybridyn] is an
+    # organization. License key is required"). It passed on a personal account
+    # and went red the moment this repo moved to the hybridyn org - with no
+    # secret found; the scan never ran at all. The gitleaks BINARY is
+    # MIT-licensed and unrestricted, so invoke it directly: identical scan, no
+    # licence, and one less third-party action holding a token.
+    #
+    # Consequences of dropping the action: no auto PR summary comment (so the
+    # write scopes are gone - the job needs read only), and dependabot PRs are
+    # no longer skipped, since the skip only existed because their read-only
+    # token broke the action's commenting. Findings surface in the job log.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        # Scans full git history (fetch-depth: 0 above), not just the worktree.
+        # Non-zero exit on any finding fails the job.
+        run: |
+          VER=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks version
+          ./gitleaks git --config .gitleaks.toml --redact --verbose --no-banner .
+
+  rbac-regression:
+    name: RBAC + Anonymous-access regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: pip install "pydantic>=2.10"
+
+      - name: Run security-focused smoke
+        working-directory: backend
+        run: python run_all_tests.py --security
+        env:
+          FPULSE_ENV: ci
+
+  security-headers:
+    name: Security headers (response middleware)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend requirements
+        # 2026-05-31: this job used to install only `pydantic+fastapi+
+        # httpx+pytest`. The pytest import path `from fpulse.api.
+        # security_headers import SecurityHeadersMiddleware` triggers
+        # `fpulse/api/__init__.py`, which eagerly imports ALL 30+ router
+        # modules — those need cryptography, bcrypt, python-jose, pyyaml,
+        # croniter, etc. Without the full requirements.txt set, the
+        # import dies during pytest collection (~11s, exit 1) and the
+        # job goes red on every commit. Install the full deps so the
+        # collection succeeds.
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Pin scanner-visible response headers
+        env:
+          PYTHONPATH: backend
+        run: pytest backend/tests/test_security_headers.py --noconftest -v

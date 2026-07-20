@@ -1,0 +1,55 @@
+{
+  "hidden": true,
+  "id": "google_ads",
+  "name": "Google Ads",
+  "description": "Google Ads campaign and performance data via REST API",
+  "category": "saas",
+  "base_url": "https://googleads.googleapis.com/v16/customers/{customer_id}",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "customer_id", "label": "Customer ID (without dashes)", "required": true},
+    {"name": "client_id", "label": "OAuth Client ID", "required": true, "secret": true},
+    {"name": "client_secret", "label": "OAuth Client Secret", "required": true, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": true, "secret": true},
+    {"name": "developer_token", "label": "Developer Token", "required": true, "secret": true},
+    {"name": "login_customer_id", "label": "Manager Account ID (optional)", "required": false}
+  ],
+  "streams": [
+    {
+      "name": "campaigns",
+      "label": "Campaigns",
+      "path": "/googleAds:searchStream",
+      "method": "POST",
+      "body": {"query": "SELECT campaign.id, campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE segments.date DURING LAST_30_DAYS"},
+      "data_path": "results",
+      "headers": {"developer-token": "{developer_token}"}
+    },
+    {
+      "name": "ad_groups",
+      "label": "Ad Groups",
+      "path": "/googleAds:searchStream",
+      "method": "POST",
+      "body": {"query": "SELECT ad_group.id, ad_group.name, ad_group.status, campaign.name, metrics.impressions, metrics.clicks FROM ad_group WHERE segments.date DURING LAST_30_DAYS"},
+      "data_path": "results",
+      "headers": {"developer-token": "{developer_token}"}
+    },
+    {
+      "name": "keywords",
+      "label": "Keywords Performance",
+      "path": "/googleAds:searchStream",
+      "method": "POST",
+      "body": {"query": "SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, metrics.impressions, metrics.clicks, metrics.cost_micros FROM keyword_view WHERE segments.date DURING LAST_30_DAYS"},
+      "data_path": "results",
+      "headers": {"developer-token": "{developer_token}"}
+    }
+  ]
+}

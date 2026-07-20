@@ -1,0 +1,136 @@
+{
+  "name": "13 — Local CSV + Materialize → diamond DAG (offline, multi-sink)",
+  "description": "Offline-capable pipeline. Reads a local fake-orders CSV via the generic Source node, materializes the cleaned relation to a temp table, then forks into TWO downstream branches that both read the cache (instead of re-reading + re-cleaning the source twice). Branch A: high-value orders → MSSQL. Branch B: per-country aggregate → CSV. Showcases materialize's diamond-DAG value.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "Local CSV",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "samples/free-api-pipelines/data/orders.csv",
+        "format": "csv",
+        "delimiter": ",",
+        "header": true,
+        "encoding": "utf-8"
+      },
+      "position": {"x": 100, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "typecast",
+      "label": "Cast numerics + dates",
+      "params": {
+        "casts": {
+          "order_id": "INTEGER",
+          "quantity": "INTEGER",
+          "unit_price": "DOUBLE",
+          "order_date": "DATE"
+        },
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "derived_column",
+      "label": "Add line_total",
+      "params": {
+        "columns": [
+          {"name": "line_total", "expression": "quantity * unit_price"}
+        ],
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 600, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "mat1",
+      "type": "materialize",
+      "label": "Cache cleaned orders",
+      "params": {
+        "table_name": "orders_cleaned",
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 850, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx3a",
+      "type": "filter",
+      "label": "High-value (≥$500)",
+      "params": {
+        "mode": "expression",
+        "condition": "line_total >= 500",
+        "_input_step_ids": ["mat1"]
+      },
+      "position": {"x": 1100, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.orders_high_value",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "orders_high_value",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx3a"]
+      },
+      "position": {"x": 1350, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx3b",
+      "type": "aggregate",
+      "label": "Per-country totals",
+      "params": {
+        "group_by": ["country"],
+        "functions": [
+          {"column": "*", "function": "COUNT", "alias": "order_count"},
+          {"column": "line_total", "function": "SUM", "alias": "revenue"},
+          {"column": "line_total", "function": "AVG", "alias": "avg_order_value"},
+          {"column": "quantity", "function": "SUM", "alias": "total_units"}
+        ],
+        "having": "",
+        "order_by": "revenue DESC",
+        "_input_step_ids": ["mat1"]
+      },
+      "position": {"x": 1100, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "snk2",
+      "type": "destination",
+      "label": "→ orders_by_country.csv",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "data/samples/orders_by_country.csv",
+        "delimiter": ",",
+        "header": true,
+        "_input_step_ids": ["tx3b"]
+      },
+      "position": {"x": 1350, "y": 320},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "mat1", "from_port": "output", "to_port": "input"},
+    {"from_step": "mat1", "to_step": "tx3a", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3a", "to_step": "snk1", "from_port": "output", "to_port": "input"},
+    {"from_step": "mat1", "to_step": "tx3b", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3b", "to_step": "snk2", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "offline-materialize-diamond"}
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!--
+  installer/macos/distribution.xml
+
+  productbuild distribution file: titles the installer window, locks
+  the OS floor, and pulls in the single component .pkg.
+
+  build.sh consumes this when wrapping the component pkg.
+-->
+<installer-gui-script minSpecVersion="2">
+  <title>F-Pulse</title>
+  <organization>com.hybridyn</organization>
+
+  <!-- Refuse to install on anything older than macOS 12 (Monterey). -->
+  <volume-check>
+    <allowed-os-versions>
+      <os-version min="12.0"/>
+    </allowed-os-versions>
+  </volume-check>
+
+  <options customize="never" require-scripts="true" hostArchitectures="x86_64,arm64"/>
+
+  <!-- License + welcome screens, if present alongside this file. -->
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <license file="../../LICENSE" mime-type="text/plain"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+
+  <choices-outline>
+    <line choice="default">
+      <line choice="com.hybridyn.fpulse"/>
+    </line>
+  </choices-outline>
+
+  <choice id="default"/>
+  <choice id="com.hybridyn.fpulse" visible="false">
+    <pkg-ref id="com.hybridyn.fpulse"/>
+  </choice>
+
+  <pkg-ref id="com.hybridyn.fpulse" version="1.0.0" onConclusion="none">FPulse-component.pkg</pkg-ref>
+</installer-gui-script>

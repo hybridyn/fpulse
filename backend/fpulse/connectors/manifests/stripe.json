@@ -1,0 +1,54 @@
+{
+  "id": "stripe",
+  "name": "Stripe",
+  "description": "Stripe payments via REST API",
+  "category": "saas",
+  "base_url": "https://api.stripe.com/v1",
+  "auth": {
+    "type": "bearer",
+    "token_param": "api_key",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "api_key", "label": "Secret Key (sk_live_... or sk_test_...)", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "customers",
+      "label": "Customers",
+      "path": "/customers",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "data.-1.id", "cursor_param": "starting_after", "max_pages": 100}
+    },
+    {
+      "name": "charges",
+      "label": "Charges",
+      "path": "/charges",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "data.-1.id", "cursor_param": "starting_after", "max_pages": 100}
+    },
+    {
+      "name": "invoices",
+      "label": "Invoices",
+      "path": "/invoices",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "data.-1.id", "cursor_param": "starting_after", "max_pages": 100}
+    },
+    {
+      "name": "subscriptions",
+      "label": "Subscriptions",
+      "path": "/subscriptions",
+      "method": "GET",
+      "query": {"limit": 100},
+      "data_path": "data",
+      "pagination": {"type": "cursor", "cursor_field": "data.-1.id", "cursor_param": "starting_after", "max_pages": 100}
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+duckdb>=1.2.0
+pydantic>=2.10.0
+python-multipart>=0.0.18
+aiofiles>=24.1.0
+httpx>=0.27.0
+# System Inventory Report (docx + pdf generation) — Apr 2026
+# Both are pure Python; no system/GTK dependencies. Works on Windows out of the box.
+python-docx>=1.1.0
+reportlab>=4.0.0
+# Credential + AI provider API key encryption at rest (May 4 2026).
+# Fernet (AES-128-CBC + HMAC-SHA256). Always-on for both OSS and Plus.
+cryptography>=42.0
+# 2026-06-03 — bcrypt for user password hashing (auth/models.py).
+# Replaces the previous single-round salted SHA-256, which was fast
+# enough that a leaked auth-store file was crackable at GPU speed.
+# bcrypt cost 12 = ~250ms per hash = years to brute-force a real
+# password. Backward compat: legacy hashes verified by the old method
+# and rehashed in-place on the next successful login. See
+# docs/security/audit-2026-06-03.md finding H1.
+bcrypt>=4.0
+# 2026-05-29: process / memory introspection (dashboard System tile,
+# /api/health/memory, pool diagnostics). Was only in pyproject.toml;
+# fresh `pip install -r requirements.txt` runs missed it and the
+# /api/health/memory endpoint returned `{"error":"No module named
+# 'psutil'"}` until manually patched.
+psutil>=5.9.0
+# 2026-05-29: pandas + pyarrow are imported by the heavy-mode warmup
+# (main.py:550) and by the CSV/Excel reader, several nodes
+# (cloud_files, flow_control, activities), and the preview helper in
+# workflows.py. A fresh install without these printed "Warmup failed:
+# No module named 'pandas'" on every boot, and CSV preview / Excel
+# read / pivot nodes failed at runtime. They're not "optional".
+pandas>=2.0.0
+pyarrow>=14.0.0
+# 2026-05-30: Excel sink uses openpyxl. Without it, any pipeline
+# whose destination is .xlsx fails at runtime with
+# "Excel Sink: openpyxl is required". Pure-Python wheel,
+# no system deps, safe to require unconditionally.
+openpyxl>=3.1.0
+# 2026-05-30: pyodbc for MSSQL / SQL Server / ODBC connector source +
+# sink. Requires the matching ODBC driver to be installed at the OS
+# level (Microsoft ODBC Driver for SQL Server on Windows; unixODBC on
+# Linux). If pip install fails on your platform, install the system
+# driver first or skip pyodbc and avoid the SQL Server connector.
+pyodbc>=5.0
+# 2026-06-01: Avro file reader (File node, Cloud Files node). ORC reads
+# go through pyarrow.orc (already shipped with pyarrow), but Avro is
+# row-oriented + schema-embedded and needs fastavro to parse — there's
+# no native pyarrow Avro reader. Pure-Python, no system deps.
+fastavro>=1.9
+# tzdata bundles the IANA time-zone database in a Python wheel.
+# pyarrow.orc's C++ backend refuses to open an ORC file without one
+# ("IANA time zone database is unavailable") — Linux/macOS have a
+# system tzdb at /usr/share/zoneinfo but Windows venvs don't.
+# The File node's `_read_orc` points TZDIR at this wheel automatically.
+tzdata>=2024.1
+
+# 2026-05-30 (later, same audit): silent-gap sweep using
+# scripts/audit_deps.py. Every entry below was imported by F-Pulse
+# code AND already installed in venvs but NOT declared anywhere —
+# the exact failure mode that bit openpyxl + pyodbc earlier today.
+# Declaring explicitly so a venv refresh can't drop them silently.
+#
+# pyyaml — OpenAPI YAML specs in connector_authoring; required by
+#          fetch_openapi_spec for vendors that publish YAML instead
+#          of JSON specs.
+# numpy  — flow_control node (foreach / conditional batch math).
+#          Transitive of pandas but worth declaring so a future
+#          pandas version that drops it doesn't surprise us.
+# anyio  — connector_authoring + agent async-thread helpers.
+#          Transitive of FastAPI; declared so version stays controlled.
+# starlette — main.py middleware. Transitive of FastAPI; declared
+#             to control the version surface ourselves.
+# requests — used by several connector testers + JDBC helpers.
+#            Not in the venv before today's audit; some pipelines
+#            using HTTP-API connectors were one-step away from a
+#            ModuleNotFoundError at runtime.
+# prometheus-client — /api/metrics endpoint. Same pattern as above —
+#                     the endpoint was wired but the dep wasn't
+#                     declared, so it would 500 on first hit.
+pyyaml>=6.0
+numpy>=1.24
+anyio>=4.0
+starlette>=0.40
+requests>=2.31
+prometheus-client>=0.19
+
+# 2026-06-18: pywebview powers `fpulse app` — the native desktop window
+# (resizable, sized-to-fit, no browser chrome). On Windows it uses the
+# built-in WebView2 runtime via pythonnet (pulled automatically). If
+# unavailable, `fpulse app` falls back to a Chromium --app window, so this
+# is effectively required only for the best desktop experience.
+pywebview>=5.0
+
+# ── Optional, Plus tier ────────────────────────────────────────
+# Distributed event bus over NATS + JetStream. Required ONLY when
+# FPULSE_EVENT_BUS=nats. The OSS default (FPULSE_EVENT_BUS=inprocess)
+# uses SQLite + in-memory queues and needs no extra dep. Uncomment
+# the line below — or `pip install "nats-py>=2.6"` — when wiring
+# Plus deployments.
+#   nats-py>=2.6.0

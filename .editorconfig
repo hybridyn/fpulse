@@ -1,0 +1,46 @@
+# EditorConfig — cross-IDE / cross-editor formatting baseline.
+# https://editorconfig.org/
+#
+# Added 2026-06-03 during the pre-launch repo-standardisation pass.
+# Eliminates the LF/CRLF warning storm we were getting from
+# contributors on Windows vs CI on Linux, plus pins indentation so
+# tabs-vs-spaces drift can't sneak in via a misconfigured editor.
+
+root = true
+
+# Default for every file in the repo: UTF-8, LF line endings, 2-space
+# indent, final newline, trailing whitespace stripped. These are the
+# settings the .gitattributes file is already telling git to enforce
+# on commit; here we make the editor produce them in the first place.
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python — 4-space indent per PEP 8. Backend is the bulk of the
+# Python code; tests and scripts follow the same rule.
+[*.{py,pyi}]
+indent_size = 4
+
+# Markdown — DON'T strip trailing whitespace; two-space trailing on a
+# line is a hard line-break in CommonMark. Stripping breaks rendering.
+[*.md]
+trim_trailing_whitespace = false
+
+# Makefiles require literal tabs for recipe lines. Don't expand.
+[Makefile]
+indent_style = tab
+
+# Windows batch / PowerShell — CRLF is the platform convention and
+# some shells (cmd.exe especially) misbehave with LF.
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
+
+# JSON, YAML, TOML — 2-space indent (matches the global default, but
+# called out so a future editor that auto-detects per-language picks
+# the same setting we already use everywhere).
+[*.{json,yaml,yml,toml}]
+indent_size = 2

@@ -1,0 +1,77 @@
+{
+  "_comment": "Connection configs that match the docker-compose.dev.yml services. Used by `python -m fpulse.connections.cli verify-all` to drive every supported provider against its emulator/container. Add or override entries via the CLI's --config flag.",
+
+  "postgresql": {"host": "localhost", "port": 5432, "database": "fpulse_test", "user": "postgres", "password": "postgres"},
+  "redshift":   {"host": "localhost", "port": 5432, "database": "fpulse_test", "user": "postgres", "password": "postgres"},
+  "cockroachdb":{"host": "localhost", "port": 5432, "database": "fpulse_test", "user": "postgres", "password": "postgres"},
+  "pgvector":   {"host": "localhost", "port": 5432, "database": "fpulse_test", "user": "postgres", "password": "postgres"},
+
+  "mysql":   {"host": "localhost", "port": 3306, "database": "fpulse_test", "user": "root", "password": "root"},
+  "mariadb": {"host": "localhost", "port": 3307, "database": "fpulse_test", "user": "root", "password": "root"},
+
+  "mssql":   {"host": "localhost", "port": 1433, "database": "master", "user": "sa", "password": "Fpulse_Test_1!", "trust_server_certificate": true},
+  "synapse": {"host": "localhost", "port": 1433, "database": "master", "user": "sa", "password": "Fpulse_Test_1!", "trust_server_certificate": true},
+
+  "oracle": {"host": "localhost", "port": 1521, "service_name": "XEPDB1", "user": "system", "password": "oracle"},
+  "db2":    {"host": "localhost", "port": 50000, "database": "TESTDB", "user": "db2inst1", "password": "db2inst1"},
+
+  "sqlite": {"database": ":memory:"},
+  "duckdb": {"database": ":memory:"},
+
+  "clickhouse": {"host": "localhost", "port": 9000, "database": "default", "user": "default", "password": ""},
+  "trino":      {"host": "localhost", "port": 8080, "user": "anonymous"},
+  "presto":     {"host": "localhost", "port": 8080, "user": "anonymous"},
+
+  "mongodb":    {"host": "localhost", "port": 27017},
+  "cassandra":  {"contact_points": ["localhost"], "port": 9042},
+  "neo4j":      {"uri": "bolt://localhost:7687", "user": "neo4j", "password": "neo4j_test"},
+  "arangodb":   {"url": "http://localhost:8529", "user": "root", "password": "arangodb"},
+  "couchbase":  {"host": "localhost", "management_port": 8091, "user": "Administrator", "password": "password"},
+
+  "redis":         {"host": "localhost", "port": 6379},
+  "elasticsearch": {"host": "localhost", "port": 9200, "scheme": "http"},
+  "opensearch":    {"host": "localhost", "port": 9201, "scheme": "http"},
+  "solr":          {"base_url": "http://localhost:8983"},
+
+  "kafka":     {"bootstrap_servers": "localhost:9092"},
+  "rabbitmq":  {"host": "localhost", "management_port": 15672, "user": "guest", "password": "guest"},
+  "pulsar":    {"admin_url": "http://localhost:8085"},
+  "nats":      {"servers": ["nats://localhost:4222"]},
+
+  "s3":    {"endpoint_url": "http://localhost:9000", "access_key_id": "minioadmin", "secret_access_key": "minioadmin", "region": "us-east-1"},
+  "minio": {"endpoint_url": "http://localhost:9000", "access_key_id": "minioadmin", "secret_access_key": "minioadmin", "region": "us-east-1"},
+  "azure_blob": {"connection_string": "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://localhost:10000/devstoreaccount1;"},
+  "adls_gen2":  {"account_url": "http://localhost:10000/devstoreaccount1", "account_key": "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw=="},
+  "dynamodb":   {"endpoint_url": "http://localhost:8000", "region": "us-east-1", "access_key_id": "test", "secret_access_key": "test"},
+  "cosmosdb":   {"endpoint": "https://localhost:8081", "account_key": "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="},
+
+  "qdrant":   {"url": "http://localhost:6333"},
+  "weaviate": {"url": "http://localhost:8090"},
+  "chroma":   {"url": "http://localhost:8001"},
+  "milvus":   {"url": "http://localhost:9091"},
+
+  "prometheus": {"base_url": "http://localhost:9090"},
+  "grafana":    {"base_url": "http://localhost:3000", "api_key": ""},
+
+  "ftp":  {"host": "localhost", "port": 21, "user": "fpulse", "password": "fpulse", "path": "/home/fpulse"},
+  "sftp": {"host": "localhost", "port": 2222, "user": "fpulse", "password": "fpulse", "path": "upload"},
+
+  "local_file": {"path": "."},
+  "rest_api":   {"openapi_url": "https://petstore3.swagger.io/api/v3/openapi.json"},
+  "graphql":    {"url": "https://countries.trevorblades.com/"},
+
+  "_no_local_emulator": [
+    "snowflake", "bigquery", "databricks", "athena",
+    "salesforce", "hubspot", "zendesk", "jira", "servicenow", "netsuite", "dynamics365", "sap", "workday",
+    "sharepoint", "onedrive", "gdrive", "dropbox", "box", "gsheet",
+    "datadog", "splunk", "newrelic",
+    "pinecone", "firebase", "gcs", "kinesis", "sqs", "eventhub", "pubsub",
+    "oracle_api", "oracle_fusion", "oracle_bip", "sap_s4hana", "sap_successfactors",
+    "odata", "soap",
+    "informix", "sap_hana", "teradata",
+    "memcached", "custom",
+    "slack", "smtp", "sendgrid", "twilio", "pagerduty", "teams",
+    "airbyte", "fivetran", "dbt",
+    "hdfs"
+  ]
+}

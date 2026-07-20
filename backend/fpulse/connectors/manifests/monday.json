@@ -1,0 +1,26 @@
+{
+  "tier": "hidden",
+  "id": "monday",
+  "name": "Monday.com",
+  "description": "Monday.com via REST proxy (board items via /v2)",
+  "category": "saas",
+  "base_url": "https://api.monday.com/v2",
+  "auth": {
+    "type": "api_key",
+    "header_name": "Authorization",
+    "key_param": "api_key"
+  },
+  "params": [
+    {"name": "api_key", "label": "API Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "boards",
+      "label": "Boards (REST gateway)",
+      "path": "/boards",
+      "method": "GET",
+      "data_path": "data",
+      "pagination": {"type": "none"}
+    }
+  ]
+}

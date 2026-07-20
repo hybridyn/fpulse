@@ -1,0 +1,36 @@
+{
+  "tier": "hidden",
+  "id": "google_analytics",
+  "name": "Google Analytics 4",
+  "description": "GA4 Data API (Reporting)",
+  "category": "saas",
+  "base_url": "https://analyticsdata.googleapis.com/v1beta",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://oauth2.googleapis.com/token",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "property_id", "label": "GA4 Property ID", "required": true},
+    {"name": "client_id", "label": "Client ID", "required": false, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": false, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": false, "secret": true},
+    {"name": "access_token", "label": "Access Token", "required": false, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "report_sessions",
+      "label": "Sessions Report (last 30d)",
+      "path": "/properties/{property_id}:runReport",
+      "method": "GET",
+      "query": {"dimensions": "date,country", "metrics": "sessions,activeUsers", "dateRanges": "30daysAgo,today"},
+      "data_path": "rows",
+      "pagination": {"type": "none"}
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "id": "elasticsearch",
+  "name": "Elasticsearch",
+  "description": "Elasticsearch / OpenSearch search and analytics engine",
+  "category": "saas",
+  "base_url": "{host}",
+  "auth": {
+    "type": "basic",
+    "username_param": "username",
+    "password_param": "password"
+  },
+  "params": [
+    {"name": "host", "label": "Host URL (e.g. https://es-cluster:9200)", "required": true},
+    {"name": "username", "label": "Username", "required": false, "secret": true},
+    {"name": "password", "label": "Password", "required": false, "secret": true},
+    {"name": "index", "label": "Index Name", "required": true},
+    {"name": "api_key", "label": "API Key (alternative to basic auth)", "required": false, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "search",
+      "label": "Search (all documents)",
+      "path": "/{index}/_search",
+      "method": "POST",
+      "body": {"size": 1000, "query": {"match_all": {}}},
+      "data_path": "hits.hits",
+      "pagination": {"type": "cursor", "next_url_path": "_scroll_id", "max_pages": 100}
+    },
+    {
+      "name": "index_stats",
+      "label": "Index Stats",
+      "path": "/{index}/_stats",
+      "method": "GET",
+      "data_path": "indices"
+    },
+    {
+      "name": "cluster_health",
+      "label": "Cluster Health",
+      "path": "/_cluster/health",
+      "method": "GET",
+      "data_path": ""
+    }
+  ]
+}

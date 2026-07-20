@@ -1,0 +1,124 @@
+{
+  "name": "09 — NASA APOD → SQL Server + Excel (dual sink)",
+  "description": "Pulls the last 14 Astronomy-Picture-of-the-Day entries using the public DEMO_KEY. Renames hdurl, derives image_year, and fans out to dbo.nasa_apod (append) AND data/nasa_apod.xlsx. Replace DEMO_KEY in the URL with your own key from api.nasa.gov for higher rate limits.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "NASA API (DEMO_KEY)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.nasa.gov",
+        "auth_type": "none"
+      },
+      "description": "NASA REST API. DEMO_KEY is shared and rate-limited; for production use get your own at api.nasa.gov and switch this connection's auth_type to 'api_key' with the key as 'api_key' param."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "NASA APOD (last 14 days)",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "NASA API (DEMO_KEY)",
+        "path": "/planetary/apod?api_key=DEMO_KEY&count=14",
+        "pagination": "none",
+        "timeout": 30,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "rename",
+      "label": "Rename media URLs",
+      "params": {
+        "mappings": {
+          "date": "image_date",
+          "title": "title",
+          "explanation": "description",
+          "url": "image_url",
+          "hdurl": "high_res_url",
+          "media_type": "media_type",
+          "copyright": "copyright"
+        },
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "filter",
+      "label": "Keep images only",
+      "params": {
+        "mode": "rules",
+        "combinator": "AND",
+        "rules": [
+          {"column": "media_type", "op": "=", "value": "image"}
+        ],
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "derived_column",
+      "label": "Derive year + load_ts",
+      "params": {
+        "columns": [
+          {"name": "image_year", "expression": "CAST(SUBSTR(image_date, 1, 4) AS INTEGER)"},
+          {"name": "image_month", "expression": "CAST(SUBSTR(image_date, 6, 2) AS INTEGER)"},
+          {"name": "description_length", "expression": "LENGTH(description)"},
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.nasa_apod",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "nasa_apod",
+        "schema": "dbo",
+        "mode": "append",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1300, "y": 60},
+      "risk": "low"
+    },
+    {
+      "id": "snk2",
+      "type": "destination",
+      "label": "→ nasa_apod.xlsx",
+      "params": {
+        "connector_type": "excel",
+        "file_path": "data/nasa_apod.xlsx",
+        "sheet_name": "APOD",
+        "freeze_header": true,
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1300, "y": 220},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "snk1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "snk2", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "dual-sink-excel"}
+}

@@ -1,0 +1,81 @@
+# Dependabot — automated dependency updates + security alerts.
+#
+# Covers three ecosystems F-Pulse depends on:
+#   1. Python (backend) — pyproject.toml + backend/requirements.txt
+#   2. npm (frontend)   — frontend/package.json
+#   3. GitHub Actions  — pinned action SHAs in .github/workflows/*
+#
+# Weekly cadence keeps churn manageable while still surfacing CVEs in
+# under 7 days. GitHub also fires security alerts immediately for any
+# tracked vulnerability regardless of this schedule.
+#
+# All update PRs land grouped where it makes sense to reduce review
+# load. Major-version bumps are kept separate so they get explicit
+# attention.
+
+version: 2
+
+updates:
+  # ── Python backend deps ─────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 8
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "deps(py)"
+    groups:
+      python-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── Frontend npm deps ───────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 8
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "deps(npm)"
+    groups:
+      npm-minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Vite ecosystem is updated together; we pin minor bumps via
+      # the group above and skip dev-only pins here.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # ── GitHub Actions ──────────────────────────────────────────────────
+  # Catches outdated actions (which can have their own CVEs) and keeps
+  # the workflow pin SHAs current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 4
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "deps(actions)"

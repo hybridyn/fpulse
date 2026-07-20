@@ -1,0 +1,134 @@
+{
+  "name": "10 — USGS Earthquakes (GeoJSON) → SQL Server (aggregate)",
+  "description": "Pulls last-30-day M2.5+ earthquakes worldwide from USGS FDSN as GeoJSON. Uses data_key=features to grab the rows, flattens properties + geometry, projects useful columns, then aggregates per day + magnitude bucket. Lands as dbo.quakes_daily_agg.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "USGS Earthquake Feed (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://earthquake.usgs.gov",
+        "auth_type": "none"
+      },
+      "description": "Public USGS earthquake-feed API. No auth, no API key."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "USGS earthquake feed (GeoJSON)",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "USGS Earthquake Feed (public)",
+        "path": "/earthquakes/feed/v1.0/summary/2.5_month.geojson",
+        "pagination": "none",
+        "data_key": "features",
+        "timeout": 60,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "flatten_explode",
+      "label": "Flatten properties",
+      "params": {
+        "mode": "flatten",
+        "column": "properties",
+        "prefix": "p",
+        "keep_original": false,
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 400, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "transform",
+      "label": "Project + extract geometry",
+      "params": {
+        "expression": "SELECT id AS event_id, p_mag AS magnitude, p_place AS location, TO_TIMESTAMP(CAST(p_time AS BIGINT) / 1000) AS event_time, p_tsunami AS tsunami_flag, p_sig AS significance, p_type AS event_type, geometry.coordinates[1] AS longitude, geometry.coordinates[2] AS latitude, geometry.coordinates[3] AS depth_km FROM source_table WHERE p_mag IS NOT NULL",
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 700, "y": 100},
+      "risk": "medium"
+    },
+    {
+      "id": "tx3",
+      "type": "derived_column",
+      "label": "Add date + mag bucket",
+      "params": {
+        "columns": [
+          {"name": "event_date", "expression": "CAST(event_time AS DATE)"},
+          {"name": "mag_bucket", "expression": "CASE WHEN magnitude >= 6 THEN '6+_major' WHEN magnitude >= 5 THEN '5-6_moderate' WHEN magnitude >= 4 THEN '4-5_light' WHEN magnitude >= 3 THEN '3-4_minor' ELSE '2.5-3_micro' END"}
+        ],
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 1000, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx4",
+      "type": "aggregate",
+      "label": "Daily counts + stats",
+      "params": {
+        "group_by": ["event_date", "mag_bucket"],
+        "functions": [
+          {"column": "*", "function": "COUNT", "alias": "event_count"},
+          {"column": "magnitude", "function": "AVG", "alias": "avg_magnitude"},
+          {"column": "magnitude", "function": "MAX", "alias": "max_magnitude"},
+          {"column": "depth_km", "function": "AVG", "alias": "avg_depth_km"},
+          {"column": "significance", "function": "MAX", "alias": "max_significance"}
+        ],
+        "having": "",
+        "order_by": "event_date DESC, mag_bucket",
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1300, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx5",
+      "type": "derived_column",
+      "label": "Add ingested_at",
+      "params": {
+        "columns": [
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1600, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.quakes_daily_agg",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "quakes_daily_agg",
+        "schema": "dbo",
+        "mode": "truncate",
+        "auto_evolve": true,
+        "_input_step_ids": ["tx5"]
+      },
+      "position": {"x": 1900, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "tx5", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx5", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "geojson-aggregate"}
+}

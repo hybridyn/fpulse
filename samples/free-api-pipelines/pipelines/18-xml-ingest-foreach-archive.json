@@ -1,0 +1,204 @@
+{
+  "name": "18 — XML Ingest + ForEach + Archive (validation/file_system/execute_sql_task)",
+  "description": "Multi-format ingestion + cleanup workflow. Validation waits for products.xml to appear in data/, xml_source parses the <product> elements, execute_sql_task truncates the staging table on the SQL Server side, typecast + data_quality clean and profile, then warehouse_sink loads dbo.products_staging. A parallel branch reads the staging table back, shapes per-partner rows via transform, batches them through a foreach_loop, and writes a per-partner exports CSV. Finally a file_system step moves the consumed XML to data/archive/. Offline-capable (no network). Note: execute_sql_task and warehouse_sink target SQL Server via the conn_mssql_prod connection — verify dbo.products_staging exists or change the mode to 'create'.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "steps": [
+    {
+      "id": "tx_wait",
+      "type": "validation",
+      "label": "Wait for products.xml",
+      "params": {
+        "path": "samples/free-api-pipelines/data/products.xml",
+        "timeout": 60,
+        "sleep": 2,
+        "minimum_size": 100,
+        "child_items": false
+      },
+      "position": {"x": 100, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "src_xml",
+      "type": "xml_source",
+      "label": "Parse products.xml",
+      "params": {
+        "file_path": "samples/free-api-pipelines/data/products.xml",
+        "row_tag": "product",
+        "encoding": "utf-8",
+        "_input_step_ids": ["tx_wait"]
+      },
+      "position": {"x": 400, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_truncate",
+      "type": "execute_sql_task",
+      "label": "TRUNCATE staging",
+      "params": {
+        "connection_id": "conn_mssql_prod",
+        "sql": "IF OBJECT_ID('dbo.products_staging', 'U') IS NOT NULL TRUNCATE TABLE dbo.products_staging;",
+        "return_mode": "rowcount",
+        "timeout": 30,
+        "_input_step_ids": ["src_xml"]
+      },
+      "position": {"x": 700, "y": 200},
+      "risk": "medium"
+    },
+    {
+      "id": "tx_cast",
+      "type": "typecast",
+      "label": "Cast price + stock",
+      "params": {
+        "casts": {
+          "id": "INTEGER",
+          "price": "DECIMAL(10,2)",
+          "stock": "INTEGER"
+        },
+        "_input_step_ids": ["tx_truncate"]
+      },
+      "position": {"x": 1000, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_dq",
+      "type": "data_quality",
+      "label": "DQ: drop nulls + profile",
+      "params": {
+        "mode": "drop",
+        "rules": [
+          {"column": "id", "op": "not_null"},
+          {"column": "sku", "op": "not_null"},
+          {"column": "price", "op": "gte", "value": "0"},
+          {"column": "stock", "op": "gte", "value": "0"}
+        ],
+        "include_score": true,
+        "include_profile": true,
+        "_input_step_ids": ["tx_cast"]
+      },
+      "position": {"x": 1300, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_stamp",
+      "type": "derived_column",
+      "label": "Add ingested_at",
+      "params": {
+        "columns": [
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"},
+          {"name": "source_file", "expression": "'products.xml'"}
+        ],
+        "_input_step_ids": ["tx_dq"]
+      },
+      "position": {"x": 1600, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "snk_staging",
+      "type": "destination",
+      "label": "→ dbo.products_staging",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "conn_mssql_prod",
+        "table": "products_staging",
+        "schema": "dbo",
+        "mode": "append",
+        "auto_evolve": true,
+        "batch_size": 500,
+        "_input_step_ids": ["tx_stamp"],
+        "idempotent_override": true,
+        "_idempotent_override_reason": "Upstream execute_sql_task at step pre_truncate runs TRUNCATE TABLE dbo.products_staging before every load, so the net effect is idempotent across re-runs. The badge classifier scans this sink in isolation; the override attests to the cross-step guarantee."
+      },
+      "position": {"x": 1900, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "src_back",
+      "type": "db_source",
+      "label": "Read back staging",
+      "params": {
+        "connection_id": "conn_mssql_prod",
+        "source_mode": "table",
+        "schema": "dbo",
+        "table": "products_staging",
+        "columns": "id, sku, name, price, stock, category, ingested_at",
+        "where": "",
+        "order_by": "category, sku",
+        "sample_rows": 1000,
+        "_input_step_ids": ["snk_staging"]
+      },
+      "position": {"x": 1900, "y": 320},
+      "risk": "medium"
+    },
+    {
+      "id": "tx_partner_shape",
+      "type": "transform",
+      "label": "Per-partner shaping",
+      "params": {
+        "expression": "SELECT id AS product_id, sku, name AS product_name, CAST(price AS DOUBLE) AS list_price, stock, category, CASE category WHEN 'tools' THEN 'acme' WHEN 'electronics' THEN 'globex' WHEN 'bundles' THEN 'initech' ELSE 'umbrella' END AS partner, ROUND(CAST(price AS DOUBLE) * 0.85, 2) AS partner_wholesale_price, ingested_at FROM source_table",
+        "_input_step_ids": ["src_back"]
+      },
+      "position": {"x": 2200, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "tx_foreach",
+      "type": "foreach_loop",
+      "label": "Batch per 5 rows",
+      "params": {
+        "batch_size": 5,
+        "mode": "sequential",
+        "on_error": "continue",
+        "_input_step_ids": ["tx_partner_shape"]
+      },
+      "position": {"x": 2500, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "snk_partner_csv",
+      "type": "destination",
+      "label": "→ exports/partner_exports.csv",
+      "params": {
+        "connector_type": "csv",
+        "file_path": "data/exports/partner_exports.csv",
+        "delimiter": ",",
+        "header": true,
+        "quote_all": false,
+        "_input_step_ids": ["tx_foreach"]
+      },
+      "position": {"x": 2800, "y": 320},
+      "risk": "low"
+    },
+    {
+      "id": "tx_archive",
+      "type": "file_system",
+      "label": "Archive XML",
+      "params": {
+        "operation": "move_file",
+        "source": "samples/free-api-pipelines/data/products.xml",
+        "destination": "samples/free-api-pipelines/data/archive/products_archived.xml",
+        "overwrite": true,
+        "continue_on_error": true,
+        "_input_step_ids": ["snk_staging"]
+      },
+      "position": {"x": 2200, "y": 80},
+      "risk": "medium"
+    }
+  ],
+  "connections": [
+    {"from_step": "tx_wait", "to_step": "src_xml", "from_port": "output", "to_port": "input"},
+    {"from_step": "src_xml", "to_step": "tx_truncate", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_truncate", "to_step": "tx_cast", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_cast", "to_step": "tx_dq", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_dq", "to_step": "tx_stamp", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_stamp", "to_step": "snk_staging", "from_port": "output", "to_port": "input"},
+    {"from_step": "snk_staging", "to_step": "src_back", "from_port": "output", "to_port": "input"},
+    {"from_step": "src_back", "to_step": "tx_partner_shape", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_partner_shape", "to_step": "tx_foreach", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_foreach", "to_step": "snk_partner_csv", "from_port": "output", "to_port": "input"},
+    {"from_step": "snk_staging", "to_step": "tx_archive", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "xml-foreach-archive"}
+}

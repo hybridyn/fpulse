@@ -1,0 +1,55 @@
+{
+  "id": "sap_odata",
+  "name": "SAP OData",
+  "description": "SAP S/4HANA and Business Suite via OData v2/v4",
+  "category": "saas",
+  "base_url": "{base_url}",
+  "auth": {
+    "type": "basic",
+    "username_param": "username",
+    "password_param": "password",
+    "header_name": "Authorization"
+  },
+  "params": [
+    {"name": "base_url", "label": "OData Service Root (https://host/sap/opu/odata/sap/SERVICE)", "required": true},
+    {"name": "username", "label": "Username", "required": true},
+    {"name": "password", "label": "Password", "required": true, "secret": true},
+    {"name": "client", "label": "SAP Client (sap-client)", "required": false, "default": "100"}
+  ],
+  "default_query": {"$format": "json", "sap-client": "{client}"},
+  "default_headers": {"Accept": "application/json"},
+  "streams": [
+    {
+      "name": "business_partners",
+      "label": "Business Partners",
+      "path": "/A_BusinessPartner",
+      "method": "GET",
+      "data_path": "d.results",
+      "pagination": {"type": "cursor", "next_url_path": "d.__next", "max_pages": 200}
+    },
+    {
+      "name": "sales_orders",
+      "label": "Sales Orders",
+      "path": "/A_SalesOrder",
+      "method": "GET",
+      "data_path": "d.results",
+      "pagination": {"type": "cursor", "next_url_path": "d.__next", "max_pages": 200}
+    },
+    {
+      "name": "purchase_orders",
+      "label": "Purchase Orders",
+      "path": "/A_PurchaseOrder",
+      "method": "GET",
+      "data_path": "d.results",
+      "pagination": {"type": "cursor", "next_url_path": "d.__next", "max_pages": 200}
+    },
+    {
+      "name": "material_documents",
+      "label": "Material Documents",
+      "path": "/A_MaterialDocumentHeader",
+      "method": "GET",
+      "data_path": "d.results",
+      "pagination": {"type": "cursor", "next_url_path": "d.__next", "max_pages": 200}
+    }
+  ]
+}

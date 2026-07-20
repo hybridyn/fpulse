@@ -1,0 +1,54 @@
+{
+  "id": "gitlab",
+  "name": "GitLab",
+  "description": "GitLab DevOps platform — projects, pipelines, merge requests",
+  "category": "saas",
+  "base_url": "{host}/api/v4",
+  "auth": {
+    "type": "bearer",
+    "header_name": "PRIVATE-TOKEN",
+    "header_template": "{access_token}"
+  },
+  "params": [
+    {"name": "host", "label": "GitLab URL (default: https://gitlab.com)", "required": false, "default": "https://gitlab.com"},
+    {"name": "access_token", "label": "Personal Access Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "projects",
+      "label": "Projects",
+      "path": "/projects",
+      "method": "GET",
+      "query": {"membership": "true", "per_page": "100", "order_by": "last_activity_at"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 50}
+    },
+    {
+      "name": "pipelines",
+      "label": "CI/CD Pipelines",
+      "path": "/projects/{project_id}/pipelines",
+      "method": "GET",
+      "query": {"per_page": "100"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 50}
+    },
+    {
+      "name": "merge_requests",
+      "label": "Merge Requests",
+      "path": "/merge_requests",
+      "method": "GET",
+      "query": {"scope": "all", "per_page": "100", "state": "all"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 50}
+    },
+    {
+      "name": "users",
+      "label": "Users",
+      "path": "/users",
+      "method": "GET",
+      "query": {"per_page": "100"},
+      "data_path": "",
+      "pagination": {"type": "page", "page_param": "page", "per_page_param": "per_page", "max_pages": 20}
+    }
+  ]
+}

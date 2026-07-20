@@ -1,0 +1,116 @@
+name: Playwright E2E
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC, after nightly soak starts
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "backend/fpulse/api/**"
+      - "backend/fpulse/auth/**"
+      - "backend/fpulse/plus/**"
+  workflow_dispatch: {}
+
+jobs:
+  playwright:
+    name: E2E — auth + authenticated page-render smoke + author surfaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          # 2026-06-01: setup-node looks for the lockfile in the repo
+          # root by default, but ours lives at frontend/package-lock.json.
+          # Without this path hint the action fails with
+          # "Dependencies lock file is not found" and the whole job
+          # dies in ~18s before any tests run. See cache docs:
+          # https://github.com/actions/setup-node#caching-global-packages-data
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend
+        # pyproject.toml lives at the repo ROOT, not backend/. Installing
+        # from backend/ fails instantly with "neither setup.py nor
+        # pyproject.toml found" - the long-standing ~18s nightly failure.
+        # Install from the repo root instead.
+        run: pip install -e .
+
+      - name: Start backend (with dev-seeded test users)
+        working-directory: backend
+        run: |
+          mkdir -p /tmp/fpulse-e2e
+          # FPULSE_BOOTSTRAP_ADMIN=1: auto-seed admin@fpulse.local for the E2E
+          # suite. Production defaults to NO auto-seed (the operator creates the
+          # admin on first launch); this is the headless/CI opt-in, and the next
+          # step reads the generated INITIAL_ADMIN_PASSWORD.txt.
+          FPULSE_DATA_DIR=/tmp/fpulse-e2e FPULSE_BOOTSTRAP_ADMIN=1 \
+            python -m uvicorn fpulse.main:app --host 0.0.0.0 --port 8001 \
+            > /tmp/fpulse.log 2>&1 &
+          for i in {1..60}; do
+            curl -sf http://localhost:8001/api/health > /dev/null && exit 0
+            sleep 2
+          done
+          cat /tmp/fpulse.log
+          exit 1
+
+      - name: Extract bootstrap admin password
+        run: |
+          # The E2E suite logs in programmatically as the bootstrap admin
+          # (created on first backend start) and injects the session into
+          # localStorage — no separate seed script needed. Pull the generated
+          # password out of the data dir and mask it in the logs.
+          PWFILE=$(find /tmp/fpulse-e2e -name INITIAL_ADMIN_PASSWORD.txt | head -1)
+          if [ -z "$PWFILE" ]; then echo "bootstrap password file not found under /tmp/fpulse-e2e"; exit 1; fi
+          PW=$(grep -m1 'password:' "$PWFILE" | awk '{print $2}')
+          echo "::add-mask::$PW"
+          echo "FPULSE_E2E_EMAIL=admin@fpulse.local" >> "$GITHUB_ENV"
+          echo "FPULSE_E2E_PASSWORD=$PW" >> "$GITHUB_ENV"
+
+      - name: Install frontend + Playwright
+        working-directory: frontend
+        run: |
+          npm install
+          npm install --save-dev @playwright/test
+          npx playwright install --with-deps chromium
+
+      - name: Start frontend
+        working-directory: frontend
+        run: |
+          npm run dev > /tmp/frontend.log 2>&1 &
+          for i in {1..60}; do
+            curl -sf http://localhost:5174 > /dev/null && exit 0
+            sleep 2
+          done
+          cat /tmp/frontend.log
+          exit 1
+
+      - name: Run Playwright specs
+        working-directory: frontend
+        env:
+          FPULSE_URL: http://localhost:5174
+          NO_SERVER: "1"   # dev server already running
+        run: npx playwright test
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+      - name: Upload backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-log
+          path: /tmp/fpulse.log

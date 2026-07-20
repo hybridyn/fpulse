@@ -1,0 +1,42 @@
+F-Pulse
+Copyright 2026 Hybridyn Data Labs
+
+This product includes software developed at
+Hybridyn Data Labs (https://hybridyn.com).
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this product except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+
+================================================================
+Derivations from third-party Apache License 2.0 software
+================================================================
+
+Some F-Pulse connectors and node implementations have been derived
+from logic in other Apache License 2.0 OSS projects. Each entry
+below records:
+
+  * The F-Pulse component (manifest path or node module)
+  * The upstream project + commit hash the logic was read from
+  * Which aspects were ported (auth, pagination, error map, etc.)
+  * Confirmation that the upstream component was Apache 2.0 at
+    the cited commit (we pin to a specific revision because some
+    repos changed terms after acquisition / re-licensing)
+
+This is required by Apache 2.0 Section 4(b) when redistributing
+derivative works. The upstream license must be verified for the
+specific component and commit being read from — license terms vary
+across a project's own repositories and change over time (e.g. after
+an acquisition or re-licensing), so a project-level answer is not
+sufficient.
+
+  (No components derived to date. The first entry takes the form:
+
+    * backend/fpulse/connectors/manifests/<name>.v2.json
+      Derived from: <upstream project>/<component-path> @ <commit>
+      Ported: auth flow, pagination, error response handling
+      License verified at that commit: <license>
+      Date: <YYYY-MM-DD>)

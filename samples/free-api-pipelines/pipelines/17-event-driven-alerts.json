@@ -1,0 +1,235 @@
+{
+  "name": "17 — Event-Driven Alerts (SQL Transform + if_condition + Slack/Email/Webhook)",
+  "description": "Polls open issues on the public duckdb/duckdb repo, filters to those touched in the last 24h, runs a SQL Transform that assigns a severity column from title keywords, then forks: critical rows go to Slack via if_condition, the main flow aggregates by label and sends an email digest, and a parallel branch sets a critical_count variable and POSTs a metric payload to a monitoring webhook. IMPORTANT: the Slack, SMTP and monitoring-webhook connections are PLACEHOLDERS — they will fail silently (logged) until you replace the URLs/host with real ones in the Connections page. Pipeline still runs end-to-end with the placeholders.",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "GitHub API (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.github.com",
+        "auth_type": "none"
+      },
+      "description": "GitHub REST API. Anonymous: 60 req/hr. For 5000/hr add a Personal Access Token to this connection."
+    },
+    {
+      "name": "Slack Webhook (placeholder)",
+      "type": "webhook",
+      "config": {
+        "url": "https://hooks.slack.com/services/PLACEHOLDER/REPLACE/ME"
+      },
+      "description": "PLACEHOLDER — replace the URL with a real Slack Incoming Webhook before live demos. Until then SlackNotify logs the message instead of POSTing."
+    },
+    {
+      "name": "SMTP (placeholder)",
+      "type": "smtp",
+      "config": {
+        "host": "localhost",
+        "port": 1025,
+        "from": "noreply@fpulse.local",
+        "security": "none"
+      },
+      "description": "PLACEHOLDER — points at a local MailHog-style port (1025). Replace with a real SMTP host or run MailHog locally to actually receive the digest."
+    },
+    {
+      "name": "Monitoring Webhook (placeholder)",
+      "type": "webhook",
+      "config": {
+        "url": "https://webhook.site/PLACEHOLDER-REPLACE-WITH-YOUR-URL"
+      },
+      "description": "PLACEHOLDER — replace with a real monitoring URL (webhook.site is fine for demos). The HTTP Request node here POSTs a small JSON metric payload per run."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src_github",
+      "type": "source",
+      "label": "GitHub /repos/duckdb/duckdb/issues",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "GitHub API (public)",
+        "path": "/repos/duckdb/duckdb/issues?state=open&per_page=100&sort=created&direction=desc",
+        "pagination": "offset",
+        "page_size": 100,
+        "offset_param": "page",
+        "max_pages": 2,
+        "headers": {
+          "Accept": "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        "timeout": 30,
+        "max_retries": 3
+      },
+      "position": {"x": 100, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_cast",
+      "type": "typecast",
+      "label": "Cast timestamps",
+      "params": {
+        "casts": {
+          "created_at": "TIMESTAMP",
+          "updated_at": "TIMESTAMP",
+          "number": "INTEGER",
+          "comments": "INTEGER"
+        },
+        "_input_step_ids": ["src_github"]
+      },
+      "position": {"x": 400, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_recent",
+      "type": "filter",
+      "label": "Last 24h only",
+      "params": {
+        "mode": "expression",
+        "condition": "created_at >= (CURRENT_TIMESTAMP - INTERVAL '24 hours')",
+        "_input_step_ids": ["tx_cast"]
+      },
+      "position": {"x": 700, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_project",
+      "type": "transform",
+      "label": "Slim cols + flatten labels",
+      "params": {
+        "expression": "SELECT number AS issue_number, title, state, CAST(labels AS VARCHAR) AS labels_json, COALESCE(labels[1].name, 'unlabeled') AS primary_label, comments, created_at, html_url FROM source_table",
+        "_input_step_ids": ["tx_recent"]
+      },
+      "position": {"x": 1000, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_classify",
+      "type": "transform",
+      "label": "Classify severity (SQL)",
+      "params": {
+        "expression": "SELECT *, CASE WHEN lower(title) LIKE '%crash%' OR lower(title) LIKE '%data loss%' OR lower(title) LIKE '%segfault%' OR lower(title) LIKE '%cve%' OR lower(title) LIKE '%security%' THEN 'critical' WHEN lower(title) LIKE '%bug%' OR lower(title) LIKE '%regression%' OR lower(title) LIKE '%broken%' THEN 'major' ELSE 'minor' END AS severity FROM source_table",
+        "_input_step_ids": ["tx_project"]
+      },
+      "position": {"x": 1300, "y": 200},
+      "risk": "low"
+    },
+    {
+      "id": "tx_only_critical",
+      "type": "if_condition",
+      "label": "If severity = critical",
+      "params": {
+        "condition": "severity = 'critical'",
+        "_input_step_ids": ["tx_classify"]
+      },
+      "position": {"x": 1600, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_slack",
+      "type": "slack_notify",
+      "label": "Slack alert (placeholder)",
+      "params": {
+        "webhook_url": "https://hooks.slack.com/services/PLACEHOLDER/REPLACE/ME",
+        "message": "[CRITICAL] duckdb issue #{issue_number}: {title} ({html_url})",
+        "channel": "#alerts",
+        "_input_step_ids": ["tx_only_critical"]
+      },
+      "position": {"x": 1900, "y": 80},
+      "risk": "low"
+    },
+    {
+      "id": "tx_label_agg",
+      "type": "aggregate",
+      "label": "Count by label",
+      "params": {
+        "group_by": ["primary_label", "severity"],
+        "functions": [
+          {"column": "*", "function": "COUNT", "alias": "issue_count"},
+          {"column": "comments", "function": "SUM", "alias": "total_comments"}
+        ],
+        "having": "",
+        "order_by": "issue_count DESC",
+        "_input_step_ids": ["tx_classify"]
+      },
+      "position": {"x": 1600, "y": 240},
+      "risk": "low"
+    },
+    {
+      "id": "tx_email",
+      "type": "send_email",
+      "label": "Send digest (placeholder SMTP)",
+      "params": {
+        "connection_id": "SMTP (placeholder)",
+        "to": "ops@fpulse.local",
+        "cc": "",
+        "bcc": "",
+        "subject": "F-Pulse daily digest: duckdb/duckdb open issues",
+        "body_type": "plain",
+        "body": "Daily digest of open duckdb/duckdb issues, grouped by label + severity. Top row: {primary_label} ({severity}) = {issue_count} issues. See dashboard for full breakdown.",
+        "per_row": false,
+        "on_error": "continue",
+        "_input_step_ids": ["tx_label_agg"]
+      },
+      "position": {"x": 1900, "y": 240},
+      "risk": "low"
+    },
+    {
+      "id": "tx_set_var",
+      "type": "set_variable",
+      "label": "critical_count column",
+      "params": {
+        "variables": [
+          {"name": "critical_count", "expression": "SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) OVER ()"},
+          {"name": "run_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx_classify"]
+      },
+      "position": {"x": 1600, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "tx_metric_project",
+      "type": "transform",
+      "label": "Shape metric payload",
+      "params": {
+        "expression": "SELECT MAX(critical_count) AS critical_count, COUNT(*) AS total_issues_24h, MAX(run_at) AS run_at FROM source_table",
+        "_input_step_ids": ["tx_set_var"]
+      },
+      "position": {"x": 1900, "y": 400},
+      "risk": "low"
+    },
+    {
+      "id": "tx_monitoring",
+      "type": "http_request",
+      "label": "POST metric → monitoring (placeholder)",
+      "params": {
+        "url": "https://webhook.site/PLACEHOLDER-REPLACE-WITH-YOUR-URL",
+        "method": "POST",
+        "headers": {"Content-Type": "application/json"},
+        "body": "{\"metric\": \"fpulse.duckdb_issues\", \"critical_count\": {critical_count}, \"total_issues_24h\": {total_issues_24h}, \"run_at\": \"{run_at}\"}",
+        "per_row": false,
+        "timeout": 10,
+        "_input_step_ids": ["tx_metric_project"]
+      },
+      "position": {"x": 2200, "y": 400},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src_github", "to_step": "tx_cast", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_cast", "to_step": "tx_recent", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_recent", "to_step": "tx_project", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_project", "to_step": "tx_classify", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_classify", "to_step": "tx_only_critical", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_only_critical", "to_step": "tx_slack", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_classify", "to_step": "tx_label_agg", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_label_agg", "to_step": "tx_email", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_classify", "to_step": "tx_set_var", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_set_var", "to_step": "tx_metric_project", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx_metric_project", "to_step": "tx_monitoring", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "event-driven-alerts", "placeholders": ["slack_webhook", "smtp_host", "monitoring_webhook"]}
+}

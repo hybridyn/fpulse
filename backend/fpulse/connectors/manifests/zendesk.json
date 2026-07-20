@@ -1,0 +1,43 @@
+{
+  "id": "zendesk",
+  "name": "Zendesk",
+  "description": "Zendesk Support API",
+  "category": "saas",
+  "base_url": "https://{subdomain}.zendesk.com/api/v2",
+  "auth": {
+    "type": "basic",
+    "username_param": "email_token",
+    "password_param": "api_token"
+  },
+  "params": [
+    {"name": "subdomain", "label": "Subdomain", "required": true},
+    {"name": "email_token", "label": "Email/token (e.g. user@co.com/token)", "required": true},
+    {"name": "api_token", "label": "API Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "tickets",
+      "label": "Tickets",
+      "path": "/tickets.json",
+      "method": "GET",
+      "data_path": "tickets",
+      "pagination": {"type": "cursor", "next_url_path": "next_page", "max_pages": 100}
+    },
+    {
+      "name": "users",
+      "label": "Users",
+      "path": "/users.json",
+      "method": "GET",
+      "data_path": "users",
+      "pagination": {"type": "cursor", "next_url_path": "next_page", "max_pages": 100}
+    },
+    {
+      "name": "organizations",
+      "label": "Organizations",
+      "path": "/organizations.json",
+      "method": "GET",
+      "data_path": "organizations",
+      "pagination": {"type": "cursor", "next_url_path": "next_page", "max_pages": 100}
+    }
+  ]
+}

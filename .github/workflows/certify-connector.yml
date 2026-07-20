@@ -1,0 +1,85 @@
+name: Certify connector manifests
+
+on:
+  pull_request:
+    paths:
+      - 'community-connectors/**/*.json'
+      - 'backend/fpulse/connectors/manifests/**/*.json'
+      - 'backend/fpulse/connectors/certify.py'
+      - 'backend/fpulse/connectors/manifest_v2.py'
+
+jobs:
+  certify:
+    name: F0.1 schema validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Find changed manifests
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only --diff-filter=AM "$base" "$head" \
+            | grep -E '^(community-connectors|backend/fpulse/connectors/manifests)/.*\.json$' \
+            || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ -z "$changed" ]; then
+            echo "No connector manifests changed; nothing to certify."
+          else
+            echo "Changed manifests:"
+            echo "$changed"
+          fi
+
+      - name: Validate changed manifests
+        if: steps.changed.outputs.files != ''
+        env:
+          CHANGED: ${{ steps.changed.outputs.files }}
+          PYTHONPATH: backend
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+          from fpulse.connectors.manifest_v2 import validate_manifest_file
+
+          changed = [Path(p) for p in os.environ["CHANGED"].splitlines() if p.strip()]
+          fail = 0
+          for path in changed:
+              if not path.exists():
+                  print(f"skip (deleted): {path}")
+                  continue
+              print(f"\n--- {path} ---")
+              result = validate_manifest_file(path)
+              print(f"  valid:                 {result.valid}")
+              print(f"  declared depth score:  {result.declared_depth_score}")
+              print(f"  computed depth score:  {result.computed_depth_score}")
+              print(f"  effective depth score: {result.effective_depth_score}")
+              for e in result.errors:
+                  print(f"  ERROR: {e}")
+                  fail = 1
+              for w in result.warnings:
+                  print(f"  warn:  {w}")
+          sys.exit(fail)
+          PY
+
+      - name: Certification summary
+        if: steps.changed.outputs.files == ''
+        run: echo "No manifest changes detected — certify skipped."

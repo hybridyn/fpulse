@@ -1,0 +1,11 @@
+# FUNDING.yml — surfaces a "Sponsor" button on the GitHub repo page.
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+#
+# Added 2026-06-03 during pre-launch standardisation.
+# The custom array is the OSS-friendly path until/if Hybridyn enrols
+# in GitHub Sponsors. Points contributors at the commercial F-Pulse+
+# track — sustaining the project via product revenue rather than
+# tip-jar donations.
+
+custom:
+  - "https://hybridyn.com/f-pulse"

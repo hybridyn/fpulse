@@ -1,0 +1,138 @@
+{
+  "name": "03 — Open-Meteo Hourly → SQL Server (data_quality + upsert)",
+  "description": "Pulls 7-day hourly forecast for Chennai, UNNESTs the parallel time + temperature arrays into rows, runs data_quality rules (drop NULL/negative-humidity/extreme temps), then upserts on observed_at so the pipeline is idempotent on replay. Lands as dbo.weather_hourly (append).",
+  "project_id": "default",
+  "workspace_id": "default",
+  "status": "draft",
+  "connection_definitions": [
+    {
+      "name": "Open-Meteo (public)",
+      "type": "rest_api",
+      "config": {
+        "base_url": "https://api.open-meteo.com",
+        "auth_type": "none"
+      },
+      "description": "Public weather-forecast REST API. No auth, no API key."
+    }
+  ],
+  "steps": [
+    {
+      "id": "src1",
+      "type": "source",
+      "label": "Open-Meteo /forecast",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "Open-Meteo (public)",
+        "path": "/v1/forecast?latitude=13.08&longitude=80.27&hourly=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m&timezone=Asia%2FKolkata",
+        "pagination": "none",
+        "timeout": 30
+      },
+      "position": {"x": 100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx1",
+      "type": "transform",
+      "label": "UNNEST hourly arrays → rows",
+      "params": {
+        "expression": "SELECT 'Chennai' AS location, latitude, longitude, timezone, elevation, UNNEST(hourly.time) AS observed_at, UNNEST(hourly.temperature_2m) AS temperature_c, UNNEST(hourly.relative_humidity_2m) AS humidity_pct, UNNEST(hourly.precipitation) AS precipitation_mm, UNNEST(hourly.wind_speed_10m) AS wind_kmh FROM source_table",
+        "_input_step_ids": ["src1"]
+      },
+      "position": {"x": 350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx2",
+      "type": "typecast",
+      "label": "Cast timestamp + numerics",
+      "params": {
+        "casts": {
+          "observed_at": "TIMESTAMP",
+          "temperature_c": "DOUBLE",
+          "humidity_pct": "DOUBLE",
+          "precipitation_mm": "DOUBLE",
+          "wind_kmh": "DOUBLE",
+          "latitude": "DOUBLE",
+          "longitude": "DOUBLE"
+        },
+        "_input_step_ids": ["tx1"]
+      },
+      "position": {"x": 600, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx3",
+      "type": "data_quality",
+      "label": "DQ: drop bad rows + add score",
+      "params": {
+        "mode": "drop",
+        "rules": [
+          {"column": "observed_at", "op": "not_null"},
+          {"column": "temperature_c", "op": "between", "value": "-60,60"},
+          {"column": "humidity_pct", "op": "between", "value": "0,100"},
+          {"column": "precipitation_mm", "op": "gte", "value": "0"},
+          {"column": "wind_kmh", "op": "gte", "value": "0"}
+        ],
+        "include_score": true,
+        "include_profile": true,
+        "_input_step_ids": ["tx2"]
+      },
+      "position": {"x": 850, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx4",
+      "type": "derived_column",
+      "label": "Add observed_date + flags",
+      "params": {
+        "columns": [
+          {"name": "observed_date", "expression": "CAST(observed_at AS DATE)"},
+          {"name": "is_rainy", "expression": "CASE WHEN precipitation_mm > 0.1 THEN 1 ELSE 0 END"},
+          {"name": "ingested_at", "expression": "CURRENT_TIMESTAMP"}
+        ],
+        "_input_step_ids": ["tx3"]
+      },
+      "position": {"x": 1100, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "tx5",
+      "type": "upsert",
+      "label": "Upsert on (location, observed_at)",
+      "params": {
+        "key": ["location", "observed_at"],
+        "order_by": "ingested_at DESC",
+        "_input_step_ids": ["tx4"]
+      },
+      "position": {"x": 1350, "y": 100},
+      "risk": "low"
+    },
+    {
+      "id": "snk1",
+      "type": "destination",
+      "label": "→ dbo.weather_hourly",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "d9880bfabd79",
+        "table": "weather_hourly",
+        "schema": "dbo",
+        "mode": "append",
+        "auto_evolve": true,
+        "batch_size": 500,
+        "_input_step_ids": ["tx5"]
+      },
+      "position": {"x": 1600, "y": 100},
+      "risk": "low"
+    }
+  ],
+  "connections": [
+    {"from_step": "src1", "to_step": "tx1", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx1", "to_step": "tx2", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx2", "to_step": "tx3", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx3", "to_step": "tx4", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx4", "to_step": "tx5", "from_port": "output", "to_port": "input"},
+    {"from_step": "tx5", "to_step": "snk1", "from_port": "output", "to_port": "input"}
+  ],
+  "parameters": [],
+  "metadata": {"sample": true, "category": "time-series-dq-upsert"}
+}

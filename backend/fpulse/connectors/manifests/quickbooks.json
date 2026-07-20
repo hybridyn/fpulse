@@ -1,0 +1,70 @@
+{
+  "id": "quickbooks",
+  "name": "QuickBooks Online",
+  "description": "QuickBooks Online accounting data via REST API",
+  "category": "saas",
+  "base_url": "https://quickbooks.api.intuit.com/v3/company/{realm_id}",
+  "auth": {
+    "type": "oauth2",
+    "token_url": "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+    "access_token_param": "access_token",
+    "refresh_token_param": "refresh_token",
+    "client_id_param": "client_id",
+    "client_secret_param": "client_secret",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "realm_id", "label": "Company ID (Realm ID)", "required": true},
+    {"name": "client_id", "label": "Client ID", "required": true, "secret": true},
+    {"name": "client_secret", "label": "Client Secret", "required": true, "secret": true},
+    {"name": "refresh_token", "label": "Refresh Token", "required": true, "secret": true}
+  ],
+  "streams": [
+    {
+      "name": "invoices",
+      "label": "Invoices",
+      "path": "/query",
+      "method": "GET",
+      "query": {"query": "SELECT * FROM Invoice MAXRESULTS 1000", "minorversion": "65"},
+      "data_path": "QueryResponse.Invoice",
+      "pagination": {"type": "offset", "offset_param": "startPosition", "limit_param": "maxResults", "max_pages": 100}
+    },
+    {
+      "name": "customers",
+      "label": "Customers",
+      "path": "/query",
+      "method": "GET",
+      "query": {"query": "SELECT * FROM Customer MAXRESULTS 1000", "minorversion": "65"},
+      "data_path": "QueryResponse.Customer",
+      "pagination": {"type": "offset", "offset_param": "startPosition", "limit_param": "maxResults", "max_pages": 100}
+    },
+    {
+      "name": "payments",
+      "label": "Payments",
+      "path": "/query",
+      "method": "GET",
+      "query": {"query": "SELECT * FROM Payment MAXRESULTS 1000", "minorversion": "65"},
+      "data_path": "QueryResponse.Payment",
+      "pagination": {"type": "offset", "offset_param": "startPosition", "limit_param": "maxResults", "max_pages": 100}
+    },
+    {
+      "name": "accounts",
+      "label": "Chart of Accounts",
+      "path": "/query",
+      "method": "GET",
+      "query": {"query": "SELECT * FROM Account MAXRESULTS 1000", "minorversion": "65"},
+      "data_path": "QueryResponse.Account",
+      "pagination": {"type": "offset", "offset_param": "startPosition", "limit_param": "maxResults", "max_pages": 10}
+    },
+    {
+      "name": "vendors",
+      "label": "Vendors",
+      "path": "/query",
+      "method": "GET",
+      "query": {"query": "SELECT * FROM Vendor MAXRESULTS 1000", "minorversion": "65"},
+      "data_path": "QueryResponse.Vendor",
+      "pagination": {"type": "offset", "offset_param": "startPosition", "limit_param": "maxResults", "max_pages": 100}
+    }
+  ]
+}

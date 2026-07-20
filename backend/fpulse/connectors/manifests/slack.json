@@ -1,0 +1,46 @@
+{
+  "id": "slack_api",
+  "name": "Slack",
+  "description": "Slack Web API",
+  "category": "saas",
+  "base_url": "https://slack.com/api",
+  "auth": {
+    "type": "bearer",
+    "token_param": "bot_token",
+    "header_name": "Authorization",
+    "header_template": "Bearer {token}"
+  },
+  "params": [
+    {"name": "bot_token", "label": "Bot User OAuth Token (xoxb-...)", "required": true, "secret": true},
+    {"name": "channel", "label": "Channel ID", "required": false}
+  ],
+  "streams": [
+    {
+      "name": "users_list",
+      "label": "Users",
+      "path": "/users.list",
+      "method": "GET",
+      "query": {"limit": 200},
+      "data_path": "members",
+      "pagination": {"type": "cursor", "cursor_field": "response_metadata.next_cursor", "cursor_param": "cursor", "max_pages": 50}
+    },
+    {
+      "name": "channels_list",
+      "label": "Channels",
+      "path": "/conversations.list",
+      "method": "GET",
+      "query": {"limit": 200, "exclude_archived": true},
+      "data_path": "channels",
+      "pagination": {"type": "cursor", "cursor_field": "response_metadata.next_cursor", "cursor_param": "cursor", "max_pages": 50}
+    },
+    {
+      "name": "channel_history",
+      "label": "Channel Messages",
+      "path": "/conversations.history",
+      "method": "GET",
+      "query": {"channel": "{channel}", "limit": 200},
+      "data_path": "messages",
+      "pagination": {"type": "cursor", "cursor_field": "response_metadata.next_cursor", "cursor_param": "cursor", "max_pages": 50}
+    }
+  ]
+}

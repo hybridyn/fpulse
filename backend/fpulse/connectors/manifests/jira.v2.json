@@ -1,0 +1,139 @@
+{
+  "version": 2,
+  "connector": {
+    "type": "jira",
+    "display_name": "Jira",
+    "category": "project_mgmt",
+    "vendor": "Atlassian",
+    "homepage": "https://www.atlassian.com/software/jira",
+    "docs_url": "https://hybridyn.com/connectors/jira",
+    "oss": true
+  },
+  "certification": {
+    "depth_score": 3,
+    "status": "beta",
+    "last_validated": "2026-05-04",
+    "owner": "core",
+    "validator": "ci.fpulse",
+    "known_issues": [
+      "Jira Cloud only; Jira Server / Data Center deferred (different auth + endpoints).",
+      "Custom fields exposed as raw 'customfield_*' keys; no per-tenant schema discovery.",
+      "Fixture coverage pending — depth-5 requires the 5 fixture types under manifests/jira/fixtures/."
+    ]
+  },
+  "auth": {
+    "schemes": [
+      {
+        "type": "basic",
+        "username_template": "{email}",
+        "password_template": "{api_token}",
+        "docs": "https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/"
+      }
+    ]
+  },
+  "rate_limit": {
+    "default": {
+      "requests_per_minute": 100,
+      "daily_quota": null
+    },
+    "retry": {
+      "max_attempts": 5,
+      "backoff": "exponential",
+      "base_seconds": 2,
+      "max_seconds": 60,
+      "retry_on_status": [429, 500, 502, 503, 504]
+    }
+  },
+  "streams": [
+    {
+      "name": "projects",
+      "primary_key": ["id"],
+      "incremental_field": null,
+      "cursor_strategy": "full_refresh",
+      "pagination": {
+        "strategy": "offset",
+        "offset_param": "startAt",
+        "page_size": 50,
+        "page_size_param": "maxResults"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "key", "name"],
+        "properties": {
+          "id": {"type": "string"},
+          "key": {"type": "string"},
+          "name": {"type": "string"},
+          "projectTypeKey": {"type": ["string", "null"]},
+          "lead": {"type": ["object", "null"]},
+          "url": {"type": ["string", "null"]}
+        }
+      }
+    },
+    {
+      "name": "issues",
+      "primary_key": ["id"],
+      "incremental_field": "updated",
+      "incremental_format": "iso8601",
+      "cursor_strategy": "timestamp",
+      "pagination": {
+        "strategy": "offset",
+        "offset_param": "startAt",
+        "page_size": 50,
+        "page_size_param": "maxResults"
+      },
+      "depends_on": ["projects"],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["id", "key", "fields"],
+        "properties": {
+          "id": {"type": "string"},
+          "key": {"type": "string"},
+          "fields": {
+            "type": "object",
+            "properties": {
+              "summary": {"type": ["string", "null"]},
+              "status": {"type": ["object", "null"]},
+              "issuetype": {"type": ["object", "null"]},
+              "priority": {"type": ["object", "null"]},
+              "assignee": {"type": ["object", "null"]},
+              "reporter": {"type": ["object", "null"]},
+              "created": {"type": "string", "format": "date-time"},
+              "updated": {"type": "string", "format": "date-time"},
+              "resolutiondate": {"type": ["string", "null"], "format": "date-time"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "users",
+      "primary_key": ["accountId"],
+      "incremental_field": null,
+      "cursor_strategy": "full_refresh",
+      "pagination": {
+        "strategy": "offset",
+        "offset_param": "startAt",
+        "page_size": 50,
+        "page_size_param": "maxResults"
+      },
+      "depends_on": [],
+      "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["accountId"],
+        "properties": {
+          "accountId": {"type": "string"},
+          "accountType": {"type": ["string", "null"]},
+          "emailAddress": {"type": ["string", "null"], "format": "email"},
+          "displayName": {"type": ["string", "null"]},
+          "active": {"type": "boolean"},
+          "timeZone": {"type": ["string", "null"]}
+        }
+      }
+    }
+  ],
+  "fixtures": []
+}
