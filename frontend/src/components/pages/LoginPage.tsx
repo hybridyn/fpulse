@@ -486,7 +486,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div className="mb-7 text-center">
               <h2 className="text-lg font-bold text-slate-700">Sign in</h2>
               <p className="text-xs text-slate-400 mt-1">
-                This instance is invite-only. Ask your administrator to create your account.
+                Sign in with the account you created when you first launched this instance.
               </p>
             </div>
           )}

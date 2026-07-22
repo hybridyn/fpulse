@@ -1028,9 +1028,7 @@ export default function ExecutionPoolPage({
               </svg>
               <span className="text-xs text-blue-700">
                 <span className="font-bold">Live worker pool</span> &middot; Utilization, queue, and
-                throughput metrics on this page are updated in real time. Pool-level
-                alerting (queue saturation, retry exhaustion, priority preemption) is
-                part of the F-Pulse+ governance layer.
+                throughput metrics on this page are updated in real time.
               </span>
             </div>
           ) : null}
@@ -1613,7 +1611,7 @@ export default function ExecutionPoolPage({
               <p className="text-xs font-bold text-amber-800">Preview — rules are session-only</p>
               <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
                 You can shape rules here to evaluate the workflow, but they live in this browser tab only — a reload clears them and the
-                watchdog daemon does not yet evaluate them. Persistent alert-rule storage and live evaluation ship in F-Pulse+ v1.0.
+                watchdog daemon does not yet evaluate them.
               </p>
             </div>
           </div>

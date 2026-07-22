@@ -704,7 +704,7 @@ export default function ReportsPage({
                       plus: true,
                     },
                   ];
-                  return sections.map((s) => {
+                  return sections.filter((s) => !(s.plus && isFree)).map((s) => {
                     const plusGated = s.plus && isFree;
                     return (
                       <li
@@ -732,7 +732,8 @@ export default function ReportsPage({
                     );
                   });
                 })()}
-                {summary.tier === 'free' && (
+                {/* Upgrade appendix — hidden in single-operator OSS */}
+                {false && summary?.tier === 'free' && (
                   <li className="flex items-start gap-3 rounded-md px-2 py-1.5 mt-1 border-t border-slate-100 pt-3">
                     <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold shrink-0">
                       +

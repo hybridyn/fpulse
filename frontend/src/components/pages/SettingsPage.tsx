@@ -395,7 +395,7 @@ function BackupSettingsPanel({ dark, isPlus }: { dark: boolean; isPlus: boolean 
       <div className={`rounded-lg border p-4 ${dark ? 'bg-[#0f1726] border-white/[0.06]' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className={`text-xs font-bold uppercase tracking-wider ${dark ? 'text-slate-400' : 'text-slate-600'}`}>Backup destinations</div>
-          {!isPlus && (
+          {false && !isPlus && (
             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">F-Pulse+</span>
           )}
         </div>
@@ -410,8 +410,8 @@ function BackupSettingsPanel({ dark, isPlus }: { dark: boolean; isPlus: boolean 
               Snapshots written to the configured directory above. Default ships with OSS.
             </p>
           </div>
-          {/* Cloud destinations — Plus only */}
-          {CLOUD_DESTINATIONS.map((c) => (
+          {/* Cloud destinations — Plus only; hidden in single-operator OSS */}
+          {isPlus && CLOUD_DESTINATIONS.map((c) => (
             <div
               key={c.id}
               className={`px-3 py-2 rounded-lg border ${isPlus
@@ -432,7 +432,7 @@ function BackupSettingsPanel({ dark, isPlus }: { dark: boolean; isPlus: boolean 
           ))}
         </div>
         <p className={`text-[11px] mt-2 ${dark ? 'text-slate-500' : 'text-slate-500'}`}>
-          OSS ships the <b>Local</b> destination only. Cloud destinations land with F-Pulse+ — same backup API path, per-workspace credentials and policies surface in the Plus admin panel.
+          Snapshots are written to the <b>Local</b> destination.
         </p>
       </div>
 
@@ -1404,7 +1404,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-sm font-medium ${dark ? 'text-slate-200' : 'text-slate-700'}`}>{item.label}</span>
-                          {item.tier === 'plus' && !isPlus && (
+                          {false && item.tier === 'plus' && !isPlus && (
                             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">F-Pulse+</span>
                           )}
                           <span className={`text-xs ${item.ok ? (dark ? 'text-emerald-400' : 'text-emerald-700') : (dark ? 'text-violet-400' : 'text-violet-700')}`}>
@@ -1738,7 +1738,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
                                   {isActive ? (
                                     <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-500 text-white">Active</span>
                                   ) : isPlusGated ? (
-                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">F-Pulse+</span>
+                                    null
                                   ) : (
                                     <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${dark ? 'bg-slate-700 text-slate-400' : 'bg-slate-200 text-slate-600'}`}>Off</span>
                                   )}
@@ -1751,7 +1751,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
                           })}
                         </div>
                         <p className="text-xs text-slate-400 mt-2">
-                          OSS ships the <b>Local</b> backend only — every metadata row carries a <code>backend</code> field from day one so F-Pulse+ adds remote backends without a schema migration. Per-workspace bucket/credential routing arrives with Plus.
+                          Metadata is written to the <b>Local</b> backend.
                         </p>
                       </div>
                     </div>
@@ -1822,7 +1822,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`text-sm ${tone}`}>{item.label}</span>
-                              {showsPlusChip && (
+                              {false && showsPlusChip && (
                                 <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">F-Pulse+</span>
                               )}
                             </div>
