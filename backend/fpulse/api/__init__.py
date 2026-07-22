@@ -52,6 +52,7 @@ from .sync_state import router as sync_state_router
 from .trust import router as trust_router
 from .product_knowledge import router as product_knowledge_router
 from .connector_authoring import router as connector_authoring_router
+from .connector_drafts import router as connector_drafts_router
 from .app_meta import router as app_meta_router
 from .extraction import router as extraction_router
 from .auth_health import router as auth_health_router
@@ -116,6 +117,7 @@ __all__ = [
     "trust_router",
     "product_knowledge_router",
     "connector_authoring_router",
+    "connector_drafts_router",
     "app_meta_router",
     "extraction_router",
     "auth_health_router",

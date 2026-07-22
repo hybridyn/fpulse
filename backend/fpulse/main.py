@@ -150,6 +150,7 @@ from fpulse.api import (
     trust_router,
     product_knowledge_router,
     connector_authoring_router,
+    connector_drafts_router,
     app_meta_router,
 )
 
@@ -1316,6 +1317,7 @@ app.include_router(sync_state_router)
 app.include_router(trust_router)
 app.include_router(product_knowledge_router)
 app.include_router(connector_authoring_router)
+app.include_router(connector_drafts_router)
 app.include_router(app_meta_router)
 app.include_router(templates_router)
 app.include_router(exports_router)
