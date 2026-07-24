@@ -481,8 +481,9 @@ async def register(body: RegisterRequest):
     if not policy["allow_self_registration"] and not policy["first_user_bootstrap"]:
         raise HTTPException(
             403,
-            "Self-registration is disabled on this server. "
-            "Ask an administrator to invite you.",
+            "This instance already has its account. F-Pulse OSS runs as a "
+            "single operator — sign in with it, or point FPULSE_DATA_DIR at a "
+            "new folder to start a separate instance.",
         )
 
     # Strong-password gate. Runs BEFORE we touch the user store so a

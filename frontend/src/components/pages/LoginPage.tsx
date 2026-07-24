@@ -32,14 +32,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [sso, setSso] = useState<{ enabled: boolean; provider_label: string }>({ enabled: false, provider_label: '' });
-  // Signup policy — defaults to "register visible" since OSS F-Pulse ships
-  // with open signup ON. The policy call still runs on mount and will hide
-  // the Register tab if the admin has flipped the instance to invite-only,
-  // but the optimistic default avoids hiding signup for one paint cycle on
-  // every fresh load (which would otherwise look like F-Pulse is invite-only
-  // even on a brand-new install). `firstBootstrap` is still computed and
-  // wins over the flag: if the DB is empty the Register tab always shows.
-  const [signupAllowed, setSignupAllowed] = useState<boolean>(true);
+  // Signup policy — defaults to "register hidden", matching the server
+  // (`allow_self_registration` defaults to False: F-Pulse OSS is a
+  // single-operator install and the operator's account is seeded on first
+  // boot). Defaulting to hidden means we never flash a Register tab that
+  // the policy call is about to take away. `firstBootstrap` still wins
+  // over the flag: if the user table is empty the tab always shows, so a
+  // wiped data dir can still create its first account.
+  const [signupAllowed, setSignupAllowed] = useState<boolean>(false);
   const [firstBootstrap, setFirstBootstrap] = useState<boolean>(false);
 
   // Password policy + live strength check
@@ -84,13 +84,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         }
       })
       .catch(() => {
-        // Endpoint is missing or unreachable — leave the optimistic
-        // default in place. F-Pulse OSS ships with signup ON; if the
-        // server is actually invite-only it will return 403 on submit
-        // and the user will see a clear error then. Hiding the tab
-        // here would mean an old client paired with a new server
-        // briefly thought signup was off after every network blip.
-        setSignupAllowed(true);
+        // Endpoint missing or unreachable — stay closed, matching the
+        // server default. Showing a Register tab we can't back up would
+        // send the operator into a form that 403s on submit.
+        setSignupAllowed(false);
       });
 
     // Deep-link entry into the reset flow via query string, e.g.
@@ -486,7 +483,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div className="mb-7 text-center">
               <h2 className="text-lg font-bold text-slate-700">Sign in</h2>
               <p className="text-xs text-slate-400 mt-1">
-                Sign in with the account you created when you first launched this instance.
+                F-Pulse OSS runs as a single operator. Sign in with this instance's
+                account — Docker and headless installs find the initial password in{' '}
+                <span className="font-mono">INITIAL_ADMIN_PASSWORD.txt</span> in the data folder.
               </p>
             </div>
           )}
