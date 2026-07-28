@@ -840,6 +840,52 @@ _MAX_OPENAPI_SPEC_BYTES = 2 * 1024 * 1024   # 2 MB
 _MAX_OPENAPI_REDIRECTS = 5
 
 
+def parse_spec_text(text: str) -> dict:
+    """Parse an OpenAPI/Swagger spec from raw text (JSON first, then YAML).
+
+    The shared parser behind both the URL-fetch path and the paste/upload
+    path, so a spec typed or dropped into the Author page (or handed to the
+    Copilot as text) is decoded exactly like one fetched from a URL. Size-
+    capped identically to the fetch path so a huge paste can't exhaust memory.
+
+    Raises ``ValueError`` if the text is empty, too large, or decodes to
+    something that isn't a JSON/YAML object.
+    """
+    if not isinstance(text, str):
+        raise ValueError("spec text must be a string")
+    raw = text.strip()
+    if not raw:
+        raise ValueError("spec text is empty")
+    # Cap on the raw character length — the same 2 MB ceiling the fetch path
+    # enforces on the response body. Bytes ≥ chars for UTF-8, so measuring
+    # the encoded length is the honest bound.
+    if len(raw.encode("utf-8", errors="ignore")) > _MAX_OPENAPI_SPEC_BYTES:
+        raise ValueError(
+            f"Spec exceeds {_MAX_OPENAPI_SPEC_BYTES} bytes; refusing to parse"
+        )
+
+    # JSON first (cheaper, most common).
+    try:
+        loaded = json.loads(raw)
+    except json.JSONDecodeError:
+        # YAML fallback if PyYAML is available; otherwise surface a clear error.
+        try:
+            import yaml
+        except ImportError as e:
+            raise ValueError(
+                "Spec is not JSON and PyYAML is not installed. "
+                "Paste a JSON spec or install pyyaml."
+            ) from e
+        try:
+            loaded = yaml.safe_load(raw)
+        except yaml.YAMLError as e:  # noqa: BLE001 — user-facing parse error
+            raise ValueError(f"Spec is not valid JSON or YAML: {e}") from e
+
+    if not isinstance(loaded, dict):
+        raise ValueError("OpenAPI spec must decode to an object (a JSON/YAML mapping)")
+    return loaded
+
+
 def _ssrf_check_url(url: str) -> tuple[str, str, int]:
     """Validate a URL against the OpenAPI-fetch SSRF policy.
 
@@ -915,23 +961,8 @@ def fetch_openapi_spec(url: str, *, timeout: float = 10.0) -> dict:
             f"Too many redirects (>{_MAX_OPENAPI_REDIRECTS}); possible loop"
         )
 
-    # JSON first (cheaper, most common).
-    try:
-        return json.loads(body_str)
-    except json.JSONDecodeError:
-        pass
-
-    # YAML fallback if PyYAML is available; otherwise raise.
-    try:
-        import yaml
-        loaded = yaml.safe_load(body_str)
-        if not isinstance(loaded, dict):
-            raise ValueError("OpenAPI spec must decode to a dict")
-        return loaded
-    except ImportError as e:
-        raise RuntimeError(
-            "Spec is not JSON and PyYAML is not installed. Provide a JSON spec or install pyyaml."
-        ) from e
+    # Decode via the shared JSON-then-YAML parser (same path as pasted specs).
+    return parse_spec_text(body_str)
 
 
 class _NoRedirect(__import__("urllib.request", fromlist=["HTTPRedirectHandler"]).HTTPRedirectHandler):

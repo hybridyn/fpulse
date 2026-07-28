@@ -30,6 +30,7 @@ async def _handler(inputs: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
     display_name = (inputs.get("display_name") or "").strip()
     openapi_url = (inputs.get("openapi_url") or "").strip()
     openapi_spec = inputs.get("openapi_spec")
+    openapi_text = (inputs.get("openapi_text") or "").strip()
     category = (inputs.get("category") or "saas").strip() or "saas"
     idempotency_key = inputs.get("idempotency_key")
 
@@ -37,8 +38,10 @@ async def _handler(inputs: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         raise ValueError("connector_id is required (letters, digits, underscore)")
     if not idempotency_key:
         raise ValueError("idempotency_key is required for safe-write tools")
-    if openapi_spec is None and not openapi_url:
-        raise ValueError("provide openapi_spec (a parsed dict) or openapi_url")
+    if openapi_spec is None and not openapi_text and not openapi_url:
+        raise ValueError(
+            "provide openapi_spec (a parsed dict), openapi_text (pasted JSON/YAML), or openapi_url"
+        )
 
     if ctx.dry_run:
         return {
@@ -50,8 +53,18 @@ async def _handler(inputs: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             "next_step": "[dry-run]",
         }
 
-    # 1. Resolve the spec — fetch the URL through the SSRF-hardened fetcher.
+    # 1. Resolve the spec. Precedence: parsed dict > pasted text > fetched URL.
+    #    Pasted text is parsed server-side (JSON then YAML) so a spec the user
+    #    can't host publicly — the common case for gated vendor APIs — still
+    #    works fully offline.
     spec = openapi_spec
+    if spec is None and openapi_text:
+        from fpulse.connectors.ai_authoring import parse_spec_text
+
+        try:
+            spec = parse_spec_text(openapi_text)
+        except ValueError as exc:
+            raise ValueError(f"Could not parse the pasted spec: {exc}")
     if spec is None:
         import anyio
 
@@ -63,7 +76,7 @@ async def _handler(inputs: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
             raise RuntimeError(
                 f"Could not fetch the OpenAPI spec from that URL: {type(exc).__name__}: {exc}. "
                 "The URL must be public (private/loopback/metadata hosts are blocked). "
-                "Alternatively paste the spec JSON directly as openapi_spec."
+                "Alternatively paste the spec directly as openapi_text (JSON or YAML)."
             )
 
     if not isinstance(spec, dict) or not spec.get("paths"):
@@ -124,13 +137,17 @@ DEFINITION = ToolDefinition(
     name="draft_connector_from_openapi",
     tier=ToolTier.SAFE_WRITE,
     description=(
-        "Draft a new REST connector from an OpenAPI 3.x / Swagger 2 spec (or a public "
-        "URL to one) when the user wants to connect a system F-Pulse doesn't ship a "
-        "connector for. Returns a draft_id and the discovered endpoints. NOTHING GOES "
-        "LIVE and NO CREDENTIALS ARE STORED — the manifest holds only auth templates. "
-        "An admin must approve the draft (a separate human step) to activate it as a "
-        "Beta connector; the API key is added later on the Connection. Use for "
-        "'connect X' / 'build a connector for X' asks where X has an OpenAPI spec."
+        "Draft a new REST connector from an OpenAPI 3.x / Swagger 2 spec when the user "
+        "wants to connect a system F-Pulse doesn't ship a connector for. Give the spec "
+        "one of three ways: openapi_text (paste the JSON/YAML the user provided — the "
+        "usual path for vendors like FactoHR that gate their spec behind a login and "
+        "don't publish it), openapi_spec (an already-parsed dict), or openapi_url (a "
+        "PUBLIC URL the server fetches). Returns a draft_id and the discovered "
+        "endpoints. NOTHING GOES LIVE and NO CREDENTIALS ARE STORED — the manifest "
+        "holds only auth templates. An admin must approve the draft (a separate human "
+        "step) to activate it as a Beta connector; the API key is added later on the "
+        "Connection. If the user has no spec at all, use draft_connector_from_samples "
+        "with a few example API responses instead."
     ),
     input_schema={
         "type": "object",
@@ -145,11 +162,15 @@ DEFINITION = ToolDefinition(
             },
             "openapi_url": {
                 "type": "string",
-                "description": "Public URL to the OpenAPI/Swagger JSON or YAML. Fetched via an SSRF-hardened fetcher.",
+                "description": "PUBLIC URL to the OpenAPI/Swagger JSON or YAML. Fetched via an SSRF-hardened fetcher (private/loopback/metadata hosts blocked).",
+            },
+            "openapi_text": {
+                "type": "string",
+                "description": "Raw OpenAPI/Swagger spec as JSON or YAML text — paste what the user gave you when there's no public URL. Parsed server-side.",
             },
             "openapi_spec": {
                 "type": "object",
-                "description": "Already-parsed OpenAPI spec dict. Provide this OR openapi_url.",
+                "description": "Already-parsed OpenAPI spec dict. Provide one of openapi_text / openapi_spec / openapi_url.",
             },
             "category": {
                 "type": "string",

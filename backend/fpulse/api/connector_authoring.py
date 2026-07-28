@@ -23,6 +23,7 @@ from fpulse.auth.deps import require_auth, require_min_rank
 from fpulse.connectors.ai_authoring import (
     fetch_openapi_spec,
     generate_and_validate,
+    parse_spec_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,9 +38,41 @@ class FromOpenApiRequest(BaseModel):
     connector_id: str = Field(..., min_length=1, max_length=64)
     display_name: str | None = None
     category: str = "saas"
-    # Provide one of:
-    openapi_url: str | None = None
-    openapi_spec: dict | None = None
+    # Provide exactly one of these three (precedence: spec > text > url):
+    openapi_url: str | None = None     # a public URL the server fetches
+    openapi_spec: dict | None = None   # an already-parsed spec dict
+    openapi_text: str | None = None    # raw JSON/YAML pasted or uploaded
+
+
+async def _resolve_spec(req: "FromOpenApiRequest") -> dict:
+    """Turn a FromOpenApiRequest into a parsed spec dict.
+
+    Precedence: an already-parsed ``openapi_spec`` wins; then pasted/uploaded
+    ``openapi_text`` (parsed server-side so JSON *and* YAML work without a
+    frontend YAML dep); then ``openapi_url`` (SSRF-hardened fetch). This is the
+    single choke point both authoring endpoints share, so the paste/upload path
+    and the URL path behave identically. Raises HTTPException(400) on any
+    bad input so the caller can return it verbatim.
+    """
+    if req.openapi_spec is not None:
+        spec = req.openapi_spec
+    elif req.openapi_text:
+        try:
+            spec = parse_spec_text(req.openapi_text)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    elif req.openapi_url:
+        try:
+            spec = await anyio.to_thread.run_sync(fetch_openapi_spec, req.openapi_url)
+        except Exception as exc:  # noqa: BLE001 — SSRF/parse/network all → 400
+            logger.warning("fetch_openapi_spec failed: %s", exc)
+            raise HTTPException(400, "failed to fetch spec") from exc
+    else:
+        raise HTTPException(400, "provide openapi_spec, openapi_text, or openapi_url")
+
+    if not isinstance(spec, dict) or not spec.get("paths"):
+        raise HTTPException(400, "invalid OpenAPI spec — missing 'paths'")
+    return spec
 
 
 class FromSamplesRequest(BaseModel):
@@ -64,24 +97,11 @@ class AuthorResponse(BaseModel):
 async def author_from_openapi(req: FromOpenApiRequest) -> AuthorResponse:
     """Generate a v2 manifest from an OpenAPI 3.x spec.
 
-    Provide either `openapi_url` (we fetch and parse) or `openapi_spec`
-    (an already-parsed dict). If both are present, `openapi_spec` wins.
+    Provide `openapi_spec` (parsed dict), `openapi_text` (raw JSON/YAML you
+    pasted or uploaded), or `openapi_url` (we fetch and parse). Precedence
+    when more than one is present: spec > text > url.
     """
-    if not req.openapi_spec and not req.openapi_url:
-        raise HTTPException(400, "provide openapi_spec or openapi_url")
-
-    spec: dict
-    if req.openapi_spec is not None:
-        spec = req.openapi_spec
-    else:
-        try:
-            spec = await anyio.to_thread.run_sync(fetch_openapi_spec, req.openapi_url)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("fetch_openapi_spec failed: %s", exc)
-            raise HTTPException(400, "failed to fetch spec") from exc
-
-    if not isinstance(spec, dict) or not spec.get("paths"):
-        raise HTTPException(400, "invalid OpenAPI spec — missing 'paths'")
+    spec = await _resolve_spec(req)
 
     try:
         result = generate_and_validate(
@@ -136,22 +156,11 @@ async def author_from_openapi_runtime(req: FromOpenApiRequest) -> RuntimeManifes
     to use it. Returned for review (tier defaults to ``generated``): auth
     params, each stream's ``data_path``, and pagination usually need a human
     pass + a live test before shipping.
+
+    Accepts `openapi_spec`, `openapi_text` (pasted/uploaded JSON or YAML), or
+    `openapi_url` — same precedence as ``/from-openapi``.
     """
-    if not req.openapi_spec and not req.openapi_url:
-        raise HTTPException(400, "provide openapi_spec or openapi_url")
-
-    spec: dict
-    if req.openapi_spec is not None:
-        spec = req.openapi_spec
-    else:
-        try:
-            spec = await anyio.to_thread.run_sync(fetch_openapi_spec, req.openapi_url)
-        except Exception as exc:  # noqa: BLE001 — SSRF/parse/network all → 400
-            logger.warning("fetch_openapi_spec failed: %s", exc)
-            raise HTTPException(400, "failed to fetch spec") from exc
-
-    if not isinstance(spec, dict) or not spec.get("paths"):
-        raise HTTPException(400, "invalid OpenAPI spec — missing 'paths'")
+    spec = await _resolve_spec(req)
 
     try:
         from fpulse.connectors.openapi_import import manifest_from_openapi
