@@ -102,8 +102,34 @@ html, body, #root {
 }
 
 .fpulse-node.running {
-  border-color: #F5A623;
+  /* Rolling gold gradient outline (see ::before) — the node's own border
+     goes transparent so the animated ring IS the visible outer line. The
+     node-pulse box-shadow keeps the soft amber breathing glow underneath. */
+  border-color: transparent;
   animation: node-pulse 2s ease-in-out infinite;
+}
+
+/* The rolling ring itself: a conic gold gradient masked down to a 2px band
+   on the node's outer edge, rotated via --fp-angle so the highlight sweeps
+   around the border continuously. */
+.fpulse-node.running::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;              /* sit on the node's outer edge */
+  border-radius: 11px;        /* node radius (10px) + inset, stays concentric */
+  padding: 2px;               /* ring thickness */
+  background: conic-gradient(
+    from var(--fp-angle, 0deg),
+    #D4880A, #F5A623, #FFE9B0, #FFFFFF, #FFE9B0, #F5A623, #D4880A
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: fpulse-border-roll 2.4s linear infinite;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .fpulse-node.success {
@@ -216,6 +242,12 @@ html, body, #root {
   .logo-flip {
     animation: none;
   }
+  /* Freeze the running-node ring + pulse — the static gold gradient outline
+     still marks the node as running, without motion. */
+  .fpulse-node.running,
+  .fpulse-node.running::before {
+    animation: none;
+  }
 }
 
 .fpulse-node.deactivated {
@@ -292,6 +324,21 @@ html, body, #root {
   50% {
     box-shadow: 0 0 0 6px rgba(245,166,35,0.2), 0 4px 16px rgba(245,166,35,0.15);
   }
+}
+
+/* Rolling gold gradient outline for running nodes. Registering --fp-angle as
+   a typed <angle> property is what lets the conic-gradient rotation animate
+   smoothly (an unregistered custom prop can't be interpolated). Supported in
+   Chromium/Electron + modern browsers; where unsupported the ring degrades
+   to a static gold gradient (still on-brand, just not rolling). */
+@property --fp-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes fpulse-border-roll {
+  to { --fp-angle: 360deg; }
 }
 
 /* Execution animation — green glow pulse on running nodes */

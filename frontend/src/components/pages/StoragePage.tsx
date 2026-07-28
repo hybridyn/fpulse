@@ -40,7 +40,7 @@ import StoragePromoteDialog from './StoragePromoteDialog';
 import StorageUploadDialog from './StorageUploadDialog';
 import StorageTableEditDialog from './StorageTableEditDialog';
 
-type StorageTab = 'files' | 'tables' | 'outputs' | 'query';
+type StorageTab = 'files' | 'tables' | 'outputs';
 type ScopeFilter = 'all' | 'global' | 'project';
 
 interface StorageObject {
@@ -168,18 +168,6 @@ const TABS: Array<{
       </svg>
     ),
   },
-  {
-    key: 'query',
-    label: 'Query',
-    subtitle: 'Run read-only SELECT / WITH queries over your managed tables. Reference them by schema.name.',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m18 16 4-4-4-4" />
-        <path d="m6 8-4 4 4 4" />
-        <path d="m14.5 4-5 16" />
-      </svg>
-    ),
-  },
 ];
 
 // ── Column configs for the canonical TableToolbar (Y14) ─────────────────
@@ -244,14 +232,14 @@ function readInitialTab(): StorageTab {
     const breadcrumb = sessionStorage.getItem('fpulse_storage_initial_tab');
     if (breadcrumb) {
       sessionStorage.removeItem('fpulse_storage_initial_tab');
-      if (breadcrumb === 'files' || breadcrumb === 'tables' || breadcrumb === 'outputs' || breadcrumb === 'query') {
+      if (breadcrumb === 'files' || breadcrumb === 'tables' || breadcrumb === 'outputs') {
         return breadcrumb;
       }
     }
   } catch { /* sessionStorage disabled */ }
   try {
     const sub = (window.location.hash || '').split('/')[1];
-    if (sub === 'files' || sub === 'tables' || sub === 'outputs' || sub === 'query') return sub;
+    if (sub === 'files' || sub === 'tables' || sub === 'outputs') return sub;
   } catch { /* non-DOM context */ }
   return 'files';
 }
@@ -316,7 +304,7 @@ export default function StoragePage({
   useEffect(() => {
     const onHashChange = () => {
       const sub = (window.location.hash || '').split('/')[1];
-      const target: StorageTab = (sub === 'tables' || sub === 'outputs' || sub === 'query') ? sub : 'files';
+      const target: StorageTab = (sub === 'tables' || sub === 'outputs') ? sub : 'files';
       setTabState(target);
     };
     window.addEventListener('hashchange', onHashChange);
@@ -944,7 +932,7 @@ export default function StoragePage({
             onEdit={setEditTable}
             onOpenDataPrep={onOpenTableDataPrep}
           />
-        ) : tab === 'outputs' ? (
+        ) : (
           <OutputsTab
             outputs={visibleOutputs}
             searchValue={outputsSearch}
@@ -962,8 +950,6 @@ export default function StoragePage({
               })
             }
           />
-        ) : (
-          <QueryTab tables={tables} />
         )}
 
         {summary && summary.trash_count > 0 && (
@@ -2127,272 +2113,5 @@ function TrashIcon() {
       <path d="M10 11v6" />
       <path d="M14 11v6" />
     </svg>
-  );
-}
-
-// ── Query tab (read-only SQL over managed tables) ────────────────────────
-//
-// Additive surface wired to the existing POST /api/storage/query endpoint
-// (api.storageQuery). Read-only: the backend only accepts SELECT / WITH
-// over the workspace's managed tables, referenced by schema.name (e.g.
-// `SELECT * FROM default.sales`). The result-table styling mirrors the
-// StoragePreviewDrawer's PreviewTable so it reads as one visual family.
-
-interface QueryResult {
-  columns: Array<{ name: string; type: string }>;
-  rows: Array<Record<string, unknown>>;
-  row_count: number;
-  limit: number;
-  truncated: boolean;
-  tables_available: string[];
-}
-
-// Local copy of the numeric-type check + cell renderer from the preview
-// drawer so numbers line up right-aligned and null/objects render sanely.
-function isNumericQueryType(type: string): boolean {
-  return /INT|DOUBLE|FLOAT|DECIMAL|NUMERIC|REAL|SERIAL/.test((type || '').toUpperCase());
-}
-
-function renderQueryCell(v: unknown): string {
-  if (v === null || v === undefined) return '∅';
-  if (typeof v === 'string') return v.length > 200 ? `${v.slice(0, 200)}…` : v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  if (Array.isArray(v) || typeof v === 'object') {
-    try {
-      const s = JSON.stringify(v);
-      return s.length > 200 ? `${s.slice(0, 200)}…` : s;
-    } catch {
-      return String(v);
-    }
-  }
-  return String(v);
-}
-
-function QueryTab({ tables }: { tables: StorageTable[] }) {
-  const [sql, setSql] = useState('SELECT *\nFROM default.your_table\nLIMIT 50;');
-  const [limit, setLimit] = useState<string>('200');
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<QueryResult | null>(null);
-
-  // Available tables to reference. Prefer the last response's
-  // tables_available (authoritative from the backend); fall back to the
-  // page's managed-tables list so the hint is populated before the first
-  // run. Both are `schema.name` identifiers.
-  const tableHints = useMemo<string[]>(() => {
-    if (result?.tables_available && result.tables_available.length > 0) {
-      return result.tables_available;
-    }
-    return tables.map((t) => `${t.schema_name}.${t.name}`);
-  }, [result, tables]);
-
-  const run = async () => {
-    const trimmed = sql.trim();
-    if (!trimmed) {
-      setError('Enter a SELECT / WITH query to run.');
-      return;
-    }
-    setRunning(true);
-    setError(null);
-    try {
-      const parsedLimit = limit.trim() ? parseInt(limit, 10) : undefined;
-      const res = await api.storageQuery(
-        trimmed,
-        Number.isFinite(parsedLimit as number) ? (parsedLimit as number) : undefined,
-      );
-      setResult(res);
-    } catch (err) {
-      // The backend returns HTTP 400 with a `detail` message for bad /
-      // non-read-only SQL; request() surfaces that as the Error message.
-      setResult(null);
-      setError((err as Error).message || 'Query failed.');
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  // Ctrl/Cmd+Enter runs — matches the "run" affordance users expect in a
-  // SQL editor without needing to reach for the mouse.
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      if (!running) run();
-    }
-  };
-
-  const lastColIdx = result ? result.columns.length - 1 : -1;
-
-  return (
-    <div className="space-y-4">
-      {/* Editor card — dark navy/amber toolbar header to match the other
-          Storage tabs, then a monospace textarea + run controls. */}
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-b border-amber-400/20">
-          <span className="text-xs text-amber-200/90 font-medium flex items-center gap-2">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fcd34d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m18 16 4-4-4-4" />
-              <path d="m6 8-4 4 4 4" />
-              <path d="m14.5 4-5 16" />
-            </svg>
-            Run SQL — read-only SELECT / WITH over your managed tables
-          </span>
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] text-white/70 flex items-center gap-1.5 whitespace-nowrap">
-              Row limit
-              <input
-                type="number"
-                min={1}
-                max={5000}
-                value={limit}
-                onChange={(e) => setLimit(e.target.value)}
-                className="w-20 px-2 py-1 text-xs rounded-md bg-white/10 border border-white/20 text-white placeholder:text-white/40 focus:ring-2 focus:ring-amber-300/40 focus:border-amber-400 outline-none"
-              />
-            </label>
-            <button
-              onClick={run}
-              disabled={running}
-              className="px-4 py-1.5 text-xs font-bold rounded-lg text-slate-900 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5"
-              title="Run query (Ctrl/Cmd+Enter)"
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              {running ? 'Running…' : 'Run'}
-            </button>
-          </div>
-        </div>
-
-        <div className="p-4 space-y-3">
-          <textarea
-            value={sql}
-            onChange={(e) => setSql(e.target.value)}
-            onKeyDown={onKeyDown}
-            spellCheck={false}
-            rows={7}
-            placeholder="SELECT * FROM default.sales LIMIT 50;"
-            className="w-full px-3 py-2.5 text-[13px] font-mono leading-relaxed rounded-lg border border-slate-300 bg-slate-50/60 text-slate-800 focus:ring-2 focus:ring-amber-300/50 focus:border-amber-400 outline-none resize-y"
-          />
-
-          {/* Available-tables hint. Chips are clickable — inserting the
-              identifier at the caret keeps the write-a-query flow fast. */}
-          <div className="text-xs text-slate-500 flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold text-slate-600">
-              Reference tables by <code className="px-1 rounded bg-slate-100 text-slate-700 font-mono">schema.name</code>.
-            </span>
-            {tableHints.length > 0 ? (
-              <>
-                <span className="text-slate-400">Available:</span>
-                {tableHints.slice(0, 12).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setSql((cur) => (cur.trim() ? `${cur} ${t}` : `SELECT * FROM ${t} LIMIT 50;`))}
-                    className="px-1.5 py-0.5 text-[11px] font-mono rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
-                    title={`Insert ${t}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-                {tableHints.length > 12 && (
-                  <span className="text-slate-400">+{tableHints.length - 12} more</span>
-                )}
-              </>
-            ) : (
-              <span className="text-slate-400">
-                No managed tables yet — promote a file to a table first.
-              </span>
-            )}
-            <span className="text-slate-400 ml-auto">Ctrl/Cmd+Enter to run</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Inline error (HTTP 400 detail) — never crashes the page. */}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <div className="min-w-0 break-words font-mono text-[13px]">{error}</div>
-        </div>
-      )}
-
-      {/* Results card — mirrors StoragePreviewDrawer's PreviewTable. */}
-      {result && (
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-4 py-2 border-b border-slate-200 bg-slate-50 text-xs text-slate-600 flex items-center gap-3 flex-wrap">
-            <span className="font-semibold text-slate-700">
-              {result.row_count.toLocaleString()} row{result.row_count === 1 ? '' : 's'}
-            </span>
-            <span className="text-slate-400">·</span>
-            <span>{result.columns.length} column{result.columns.length === 1 ? '' : 's'}</span>
-            {result.truncated && (
-              <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
-                Showing first {result.limit.toLocaleString()} rows
-              </span>
-            )}
-          </div>
-          {result.rows.length === 0 ? (
-            <div className="p-8 text-sm text-slate-500 text-center">Query returned no rows.</div>
-          ) : (
-            <div className="overflow-auto max-h-[520px]">
-              <table className="text-xs w-full border-collapse">
-                <thead className="sticky top-0 z-10 bg-gradient-to-b from-slate-100 to-slate-50 border-b-2 border-slate-200 shadow-[0_2px_4px_-2px_rgba(15,23,42,0.08)]">
-                  <tr>
-                    {result.columns.map((c, idx) => (
-                      <th
-                        key={c.name}
-                        className={`px-4 py-2.5 whitespace-nowrap align-bottom ${
-                          isNumericQueryType(c.type) ? 'text-right w-[1%]' : 'text-left'
-                        } ${idx < lastColIdx ? 'border-r border-slate-300' : ''}`}
-                      >
-                        <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wide">
-                          {c.name}
-                        </div>
-                        <div className="mt-1">
-                          <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded border bg-slate-100 text-slate-600 border-slate-200">
-                            {(c.type || 'UNKNOWN').toUpperCase()}
-                          </span>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white">
-                  {result.rows.map((row, i) => (
-                    <tr
-                      key={i}
-                      className={`border-b border-slate-200 last:border-b-0 hover:bg-amber-50 transition-colors ${
-                        i % 2 === 1 ? 'bg-slate-50' : 'bg-white'
-                      }`}
-                    >
-                      {result.columns.map((c, idx) => (
-                        <td
-                          key={c.name}
-                          className={`px-4 py-2 whitespace-nowrap text-[12px] max-w-[280px] truncate ${
-                            isNumericQueryType(c.type)
-                              ? 'text-right tabular-nums font-mono text-slate-700 w-[1%]'
-                              : 'text-left text-slate-800'
-                          } ${idx < lastColIdx ? 'border-r border-slate-200' : ''}`}
-                          title={
-                            row[c.name] === null || row[c.name] === undefined
-                              ? ''
-                              : String(row[c.name])
-                          }
-                        >
-                          {renderQueryCell(row[c.name])}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }

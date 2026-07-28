@@ -117,6 +117,55 @@ function invalidationScope(seedIds: string[], edges: Edge[]): Set<string> {
   return out;
 }
 
+// ── Dependency-ordered execution reveal ────────────────────────────────
+//
+// The backend runs the whole DAG in one blocking call and returns every
+// step's result at once, so a naive UI marks all nodes "running" together
+// and then "done" together — the user never sees the pipeline progress.
+// Instead we replay the run in the order it actually happened: group nodes
+// into topological levels (Kahn), and light each level up as "running" only
+// after its upstream levels have resolved, then settle each node to its real
+// step_results status. Nodes with no result (upstream failed → they never
+// ran) settle straight to pending without ever flashing "running".
+//
+// A module-level token lets a new run (or a Stop) abort an in-flight reveal
+// so stale timers can't stomp fresh statuses.
+let _revealToken = 0;
+const _sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function topoLevels(nodes: Node[], edges: Edge[]): string[][] {
+  const ids = new Set(nodes.map((n) => n.id));
+  const indeg = new Map<string, number>();
+  const out = new Map<string, string[]>();
+  nodes.forEach((n) => { indeg.set(n.id, 0); out.set(n.id, []); });
+  edges.forEach((e) => {
+    if (ids.has(e.source) && ids.has(e.target)) {
+      out.get(e.source)!.push(e.target);
+      indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+    }
+  });
+  const levels: string[][] = [];
+  const seen = new Set<string>();
+  let frontier = nodes.filter((n) => (indeg.get(n.id) || 0) === 0).map((n) => n.id);
+  while (frontier.length) {
+    levels.push(frontier);
+    frontier.forEach((id) => seen.add(id));
+    const next: string[] = [];
+    frontier.forEach((id) => {
+      (out.get(id) || []).forEach((t) => {
+        indeg.set(t, (indeg.get(t) || 0) - 1);
+        if ((indeg.get(t) || 0) === 0 && !seen.has(t)) next.push(t);
+      });
+    });
+    frontier = next;
+  }
+  // Any nodes left unseen sit in a cycle — reveal them last as one group so
+  // the animation still terminates.
+  const leftover = nodes.filter((n) => !seen.has(n.id)).map((n) => n.id);
+  if (leftover.length) levels.push(leftover);
+  return levels;
+}
+
 /** Returns a copy of `schemas` with the given step IDs removed. */
 function pruneSchemas<T>(
   schemas: Record<string, T>,
@@ -968,13 +1017,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
     set({ isRunning: true });
 
-    // Mark all nodes as running
-    set({
-      nodes: nodes.map((n) => ({
-        ...n,
-        data: { ...n.data, status: 'running' },
-      })),
-    });
+    // Abort any in-flight reveal from a previous run.
+    const revealToken = ++_revealToken;
+
+    // Mark only the ENTRY nodes (no upstream) as running; everything else
+    // pending. The full node-by-node progression is replayed from the real
+    // step_results once the run returns (see the reveal below). This is what
+    // stops the "all nodes light up at once" behaviour.
+    {
+      const hasIncoming = new Set(edges.map((e) => e.target));
+      set({
+        nodes: nodes.map((n) => ({
+          ...n,
+          data: { ...n.data, status: hasIncoming.has(n.id) ? 'pending' : 'running' },
+        })),
+      });
+    }
 
     try {
       // Build the IR from the current canvas — used for ephemeral runs and
@@ -1028,17 +1086,58 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       const stepResults: Record<string, StepResult> = result.step_results || {};
       const errorCount = Object.values(stepResults).filter((r) => r.status === 'error').length;
-      set({
-        stepResults,
-        isRunning: false,
-        nodes: get().nodes.map((n) => ({
-          ...n,
-          data: {
-            ...n.data,
-            status: stepResults[n.id]?.status || 'pending',
-          },
-        })),
-      });
+
+      // Make the results available immediately (config panel / previews),
+      // then replay the run node-by-node in dependency order so the canvas
+      // shows each node complete before the next follows.
+      set({ stepResults });
+
+      const applyStatuses = (statuses: Map<string, string>) => {
+        set({
+          nodes: get().nodes.map((n) => ({
+            ...n,
+            data: { ...n.data, status: statuses.get(n.id) ?? n.data.status },
+          })),
+        });
+      };
+
+      const revealNodes = get().nodes;
+      const revealEdges = get().edges;
+      const levels = topoLevels(revealNodes, revealEdges);
+      // Pace the reveal so a small pipeline feels deliberate and a large one
+      // still finishes fast: total running-phase budget ~2.4s, clamped to a
+      // comfortable per-level range.
+      const levelCount = Math.max(levels.length, 1);
+      const perLevel = Math.max(120, Math.min(450, Math.round(2400 / levelCount)));
+      const applied = new Map<string, string>();
+      revealNodes.forEach((n) => applied.set(n.id, 'pending'));
+
+      let aborted = false;
+      for (const level of levels) {
+        if (revealToken !== _revealToken) { aborted = true; break; }
+        // Only flash "running" on nodes that actually ran (have a result).
+        // Nodes with no result never executed (upstream failed) → straight
+        // to their settled state, no misleading "running".
+        const ran = level.filter((id) => stepResults[id] !== undefined);
+        ran.forEach((id) => applied.set(id, 'running'));
+        applyStatuses(applied);
+        if (ran.length) await _sleep(perLevel);
+        if (revealToken !== _revealToken) { aborted = true; break; }
+        level.forEach((id) => applied.set(id, stepResults[id]?.status || 'pending'));
+        applyStatuses(applied);
+        await _sleep(Math.round(perLevel * 0.4));
+      }
+
+      // If a newer run/Stop took over mid-reveal, leave its statuses alone.
+      if (!aborted && revealToken === _revealToken) {
+        set({
+          isRunning: false,
+          nodes: get().nodes.map((n) => ({
+            ...n,
+            data: { ...n.data, status: stepResults[n.id]?.status || 'pending' },
+          })),
+        });
+      }
 
       // Timeout exceeded alert
       if (result.timeout_exceeded) {

@@ -2326,8 +2326,10 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
             card was rendered unconditionally — the audit flagged
             this as "permanent marketing card in an operational
             dashboard reduces seriousness." */}
-        {/* F-Pulse+ upsell card — hidden in single-operator OSS (only PROD toggle references F-Pulse+). */}
-        {false && !prodCardDismissed && tier !== 'plus' && (
+        {/* F-Pulse+ open-core info card — informational, dismissible, hidden
+            on Plus tier. Restored to the Dashboard by request as the bottom
+            banner; the PROD toggle remains the other F-Pulse+ touchpoint. */}
+        {!prodCardDismissed && tier !== 'plus' && (
         <section className="relative rounded-2xl overflow-hidden border border-amber-200 shadow-sm bg-gradient-to-br from-amber-50 via-white to-orange-50">
           {/* Accent stripe — amber/gold matches the F-Pulse brand mark */}
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
