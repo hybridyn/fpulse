@@ -21,6 +21,7 @@ import { useDarkMode } from '../../hooks/useDarkMode';
 import TierChip from '../shared/TierChip';
 import PageHeader from '../shared/PageHeader';
 import AIProviderForm from '../ai/AIProviderForm';
+import WebAccessCard from '../ai/WebAccessCard';
 import ProviderComparison from '../agent/ProviderComparison';
 import ActivityPage from './ActivityPage';
 import TrustPage from './TrustPage';
@@ -410,6 +411,11 @@ export default function AIPage({
               >
                 <AIProviderForm mode="user" />
               </div>
+
+              {/* Copilot web access — admin-only card (renders nothing for
+                  non-admins). Lets an operator turn on web_fetch / web_search
+                  live, without env vars or a restart. */}
+              <WebAccessCard dark={dark} />
 
               {/* Eval-harness verify CTA — closes the discovery loop.
                   2026-05-19 (P1 #12 of PAGE_BY_PAGE_AUDIT.md): a user

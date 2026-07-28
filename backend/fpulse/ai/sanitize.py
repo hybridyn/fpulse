@@ -86,10 +86,16 @@ class SanitizeResult:
     dropped_fields: list[str] = field(default_factory=list)
 
 
-def _redact_string(text: str, extra_patterns: list[re.Pattern[str]]) -> tuple[str, dict[str, int]]:
+def _redact_string(
+    text: str,
+    extra_patterns: list[re.Pattern[str]],
+    skip: frozenset[str] = frozenset(),
+) -> tuple[str, dict[str, int]]:
     counts: dict[str, int] = {}
     out = text
     for category, pat in REDACTION_PATTERNS:
+        if category in skip:
+            continue
         out, n = pat.subn(f"[REDACTED:{category.upper()}]", out)
         if n:
             counts[category] = counts.get(category, 0) + n
@@ -108,6 +114,7 @@ def _walk(
     allowed_fields: set[str] | None,
     *,
     is_top_level: bool,
+    skip: frozenset[str] = frozenset(),
 ) -> Any:
     if isinstance(value, dict):
         out: dict[str, Any] = {}
@@ -121,12 +128,12 @@ def _walk(
             if DENY_FIELD_PATTERN.search(k):
                 dropped.append(k)
                 continue
-            out[k] = _walk(v, extra_patterns, counts, dropped, allowed_fields, is_top_level=False)
+            out[k] = _walk(v, extra_patterns, counts, dropped, allowed_fields, is_top_level=False, skip=skip)
         return out
     if isinstance(value, list):
-        return [_walk(v, extra_patterns, counts, dropped, allowed_fields, is_top_level=False) for v in value]
+        return [_walk(v, extra_patterns, counts, dropped, allowed_fields, is_top_level=False, skip=skip) for v in value]
     if isinstance(value, str):
-        redacted, sub_counts = _redact_string(value, extra_patterns)
+        redacted, sub_counts = _redact_string(value, extra_patterns, skip)
         for cat, n in sub_counts.items():
             counts[cat] = counts.get(cat, 0) + n
         return redacted
@@ -150,9 +157,18 @@ def sanitize_for_llm(
     counts: dict[str, int] = {}
     dropped: list[str] = []
 
+    # web_search returns PUBLIC search-engine results — titles + public URLs +
+    # snippets, never the operator's own secrets. The 32+ char `api_key`
+    # heuristic false-positives on long URL path slugs (title-slugs, forum
+    # ids), which mangled result links into [REDACTED:API_KEY]. Skip ONLY that
+    # heuristic for web_search; every other pattern (conn creds, key=value
+    # secrets, email, etc.) still runs, and web_fetch — whose page text can
+    # hold real secrets — is untouched.
+    skip: frozenset[str] = frozenset({"api_key"}) if tool_name == "web_search" else frozenset()
+
     cleaned = _walk(
         payload, extra_patterns, counts, dropped, allowed_fields,
-        is_top_level=True,
+        is_top_level=True, skip=skip,
     )
 
     truncated = False

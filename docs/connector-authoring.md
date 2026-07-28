@@ -23,12 +23,25 @@ Two input modes:
 
 | Mode | Use when | Input |
 |---|---|---|
-| **OpenAPI spec** *(recommended)* | The vendor publishes an OpenAPI 3.x spec | Public URL to a JSON or YAML spec |
-| **Sample responses** | No public spec exists | Paste 1–5 raw JSON responses from `curl` |
+| **OpenAPI spec** *(recommended)* | You have an OpenAPI 3.x / Swagger 2 spec | A public URL **or** paste / upload the spec file (JSON or YAML) |
+| **Sample responses** | No spec exists at all | Paste 1–5 raw JSON responses from `curl` |
 
 The OpenAPI path produces dramatically better output because it gets
 free signals: auth scheme, every paginated endpoint, response shapes.
 Use it when you can.
+
+### No public URL? Paste or upload the spec
+
+Many vendors gate their API spec behind a customer login and never publish it
+at a public URL — **FactoHR** is a typical example. In OpenAPI mode, switch the
+toggle from **From URL** to **Paste / upload spec** and drop in the JSON or YAML
+your vendor gave you (or click **Upload file…**). The spec is parsed
+server-side, so both JSON and YAML work and nothing leaves your instance — the
+whole flow is offline. Everything downstream (streams, auth, pagination
+inference, Save as Beta) is identical to the URL path.
+
+If the vendor gave you no spec at all — only example responses — use
+**Sample responses** mode instead.
 
 ### Common starting points (one-click pre-fill)
 
@@ -238,11 +251,86 @@ curl -X POST http://localhost:8001/api/connectors/author/from-openapi-runtime \
   }'
 ```
 
-Pass `openapi_spec` (an already-parsed dict) instead of `openapi_url` to skip
-the fetch. The fetch is SSRF-guarded — internal / private-IP URLs are
-rejected with `400`. Runtime-generated connectors appear at the **Generated**
-tier in the picker until a curated `<id>.v2.json` cert manifest promotes them
-to **Certified**.
+Provide the spec any of three ways (precedence: `openapi_spec` > `openapi_text`
+> `openapi_url`):
+
+- `openapi_url` — a public URL the server fetches (SSRF-guarded — internal /
+  private-IP URLs are rejected with `400`).
+- `openapi_text` — the raw spec as JSON **or** YAML text (what the Author
+  page's Paste / upload box sends). Parsed server-side.
+- `openapi_spec` — an already-parsed dict, to skip parsing entirely.
+
+Runtime-generated connectors appear at the **Generated** tier in the picker
+until a curated `<id>.v2.json` cert manifest promotes them to **Certified**.
+
+---
+
+## Same thing from the Copilot
+
+Ask the Copilot to build a connector and it uses the same engine behind a
+human-approval gate:
+
+- `draft_connector_from_openapi` — give it `openapi_text` (paste the spec the
+  vendor gave you — the usual path for gated APIs like FactoHR), `openapi_spec`,
+  or a public `openapi_url`. It creates an **inert PROPOSED draft** — nothing
+  goes live and no credentials pass through the LLM (the manifest holds auth
+  *templates* only).
+- `draft_connector_from_samples` — when you only have example responses.
+- An **admin approves** the draft (`POST /api/connectors/drafts/{id}/approve`),
+  which activates it as a Beta connector. The API key is entered later, on the
+  Connection.
+
+### Optional: let the Copilot reach the web (default OFF)
+
+F-Pulse is local-first, so the Copilot cannot browse by default. An admin turns
+it on in **Settings → AI Provider → "Copilot web access"** — a live toggle, no
+restart (or set `FPULSE_AI_WEB_ACCESS=1` for headless deploys). This registers
+two READ-tier tools: `web_fetch` (SSRF-hardened, ≤1 MB — **needs no key**) and
+`web_search`.
+
+**`web_fetch` needs no provider** — point the Copilot at a URL you know (the
+common case for building a connector from a vendor's spec). `web_search`
+(discovery) needs a provider. Choose by deployment shape — enterprises should
+**not** have their users sign up for third-party search:
+
+| Provider | What it is | For |
+|---|---|---|
+| **searxng** | Your own [SearXNG](https://docs.searxng.org/) metasearch container — keyless, private, nothing leaves your network | ✅ enterprise / air-gap |
+| **hybridyn** | Hybridyn-hosted search gateway — managed, no per-user signup (Plus/Enterprise) | managed / cloud |
+| **brave** / **tavily** | A hosted search API you bring a personal key for (Tavily has a free, no-card tier; Brave now needs a card) | solo devs |
+
+Configure the provider in the same Settings card. `searxng`/`hybridyn` take a
+**URL** (no key); `brave`/`tavily` take an **API key**.
+
+#### Self-host SearXNG (enterprise, keyless)
+
+Run one container inside your network and point F-Pulse at it:
+
+```yaml
+# docker-compose.yml
+services:
+  searxng:
+    image: searxng/searxng:latest
+    ports: ["8080:8080"]
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    volumes:
+      - ./searxng:/etc/searxng
+```
+
+In `./searxng/settings.yml`, enable the JSON API (F-Pulse calls
+`/search?format=json`):
+
+```yaml
+search:
+  formats: [html, json]
+```
+
+Then in the Settings card: provider **SearXNG**, URL `http://<host>:8080`. Done —
+keyless web search that never leaves your perimeter.
+
+Note: none of this helps for vendors like FactoHR that publish **no** spec
+anywhere — there's nothing on the web to find; paste the spec instead.
 
 ---
 

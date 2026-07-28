@@ -642,6 +642,27 @@ class AgentRunner:
             base_context_text = f"{product_block}\n\n{base_context_text}"
         if rag_block:
             base_context_text = f"{rag_block}\n\n{base_context_text}"
+        # Web-access nudge (2026-07-27). Injected into the substituted region
+        # (not the signed template) only when web access is on. Without it the
+        # model defaults to recall_history for external-API questions and
+        # replies "no info in the workspace" instead of searching the web.
+        try:
+            from fpulse.ai.web import web_access_enabled as _web_on
+            if _web_on():
+                base_context_text = (
+                    "WEB ACCESS IS ENABLED. You can call web_search (find pages on "
+                    "the web) and web_fetch (read a public URL). When the user asks "
+                    "about an EXTERNAL product, vendor, service, or API that is not in "
+                    "the workspace data (e.g. \"get the FactoHR API\", \"integrate "
+                    "Stripe\", \"connect to Salesforce\"), call web_search FIRST to "
+                    "find its documentation. Do NOT reply that you have no information "
+                    "or check only the workspace without searching the web first. After "
+                    "you find a docs/OpenAPI URL you may web_fetch it, then offer to "
+                    "draft a connector from the spec.\n\n"
+                    + base_context_text
+                )
+        except Exception:  # noqa: BLE001 — guidance is best-effort
+            pass
         # str.replace() instead of .format() — the prompt body now contains
         # literal JSON examples for card emission (`[CARD]{"kind":"card",...}[/CARD]`).
         # Python's .format() would interpret every `{...}` in the JSON as a
@@ -798,7 +819,7 @@ class AgentRunner:
                     })
                 else:
                     tool_results.append({"tool": tu.name, "result": result_payload})
-                    sanitized = sanitize_for_llm(result_payload)
+                    sanitized = sanitize_for_llm(result_payload, tool_name=tu.name)
                     user_blocks.append({
                         "type": "tool_result",
                         "tool_use_id": tu.id,
@@ -1092,7 +1113,7 @@ class AgentRunner:
                 None,
             )
 
-        sanitized_output = sanitize_for_llm(normalized)
+        sanitized_output = sanitize_for_llm(normalized, tool_name=tu.name)
         merged_redactions: dict[str, int] = {}
         for d in (sanitized_input.redactions, sanitized_output.redactions):
             for k, v in d.items():

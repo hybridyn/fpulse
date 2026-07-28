@@ -58,14 +58,24 @@ from typing import Tuple
 from urllib.parse import urlparse
 
 
-__all__ = ["SsrfBlockedError", "check_url", "OPENAPI_ALLOW_PRIVATE_ENV", "API_SOURCE_ALLOW_PRIVATE_ENV"]
+__all__ = [
+    "SsrfBlockedError",
+    "check_url",
+    "OPENAPI_ALLOW_PRIVATE_ENV",
+    "API_SOURCE_ALLOW_PRIVATE_ENV",
+    "WEB_TOOLS_ALLOW_PRIVATE_ENV",
+]
 
 
-# Canonical env-var names for the two escape hatches. Imported by both
-# callers so we have one place to grep when an operator asks "what env
-# var lets me allow internal hosts?".
+# Canonical env-var names for the escape hatches. Imported by the callers so
+# we have one place to grep when an operator asks "what env var lets me allow
+# internal hosts?".
 OPENAPI_ALLOW_PRIVATE_ENV = "FPULSE_OPENAPI_FETCH_ALLOW_PRIVATE"
 API_SOURCE_ALLOW_PRIVATE_ENV = "FPULSE_API_SOURCE_ALLOW_PRIVATE"
+# Copilot web tools (web_fetch / web_search). Default OFF — the web tools are
+# for reaching PUBLIC docs/specs; an operator with an internal API catalog can
+# opt in for that one feature without weakening the others.
+WEB_TOOLS_ALLOW_PRIVATE_ENV = "FPULSE_AI_WEB_ALLOW_PRIVATE"
 
 
 class SsrfBlockedError(ValueError):

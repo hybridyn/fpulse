@@ -151,6 +151,7 @@ from fpulse.api import (
     product_knowledge_router,
     connector_authoring_router,
     connector_drafts_router,
+    ai_web_router,
     app_meta_router,
 )
 
@@ -1301,6 +1302,7 @@ app.include_router(expressions_router)
 # invariants — never inline mutate workflows or connections.
 app.include_router(steward_router)
 app.include_router(backup_router)
+app.include_router(ai_web_router)
 app.include_router(ws_router)
 app.include_router(ws_info_router)
 app.include_router(logs_router)
