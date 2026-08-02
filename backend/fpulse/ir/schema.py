@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # PR 3 — IR Governance Split. Plus-tier approval/deploy/PROD-toggle state
 # lives in a separate model so the OSS Workflow IR stays clean. See
@@ -308,6 +308,25 @@ class Workflow(BaseModel):
     # legacy rows. Pairs with Step.proposed_by for per-node detail.
     origin: str | None = None  # "copilot" | "human" | "template" | "imported" | None
 
+    # ── Documentation (self-documenting pipelines) ────────────────────
+    # First-class documentation. All optional + empty-default, so every
+    # workflow persisted before this field existed round-trips unchanged
+    # (backfill-safe — no migration, no forced re-save).
+    #   * business_purpose — the WHY of this pipeline, one line. The
+    #     publish path requires it so nothing goes live without a stated
+    #     purpose (enforced at the publish action, never retroactively —
+    #     already-published rows are untouched).
+    #   * readme           — freeform Markdown shown beside the canvas and
+    #     folded verbatim into the generated Markdown doc export.
+    #   * tags             — promoted from the previously-freeform
+    #     metadata["tags"] blob to a first-class, filterable list (the
+    #     inventory report at reports/inventory.py already reads a top-level
+    #     `tags` key; this makes that field real). Legacy metadata tags are
+    #     hoisted on load by _hoist_legacy_tags below.
+    business_purpose: str = ""
+    readme: str = ""
+    tags: list[str] = Field(default_factory=list)
+
     # ── Governance (PR 3) ─────────────────────────────────────────────
     # F-Pulse+ approval / deploy / PROD-toggle state. Always None on
     # OSS workflows — OSS is a single-user tool with no approval flow.
@@ -338,6 +357,23 @@ class Workflow(BaseModel):
     deploy_evidence_sandbox_run_id: str | None = None
     is_active_dev: bool = True
     is_active_prod: bool = True
+
+    @model_validator(mode="after")
+    def _hoist_legacy_tags(self) -> "Workflow":
+        """Promote a legacy ``metadata['tags']`` list to the first-class
+        ``tags`` field.
+
+        Older workflows (and any hand-edited blob) that stashed tags in
+        the freeform metadata dict surface them as first-class on the
+        next load — no data migration required. Only fires when ``tags``
+        is still empty, so an explicit first-class value always wins.
+        Cheap (a dict lookup); safe on the executor/parse hot path.
+        """
+        if not self.tags and isinstance(self.metadata, dict):
+            legacy = self.metadata.get("tags")
+            if isinstance(legacy, list):
+                self.tags = [str(t).strip() for t in legacy if str(t).strip()]
+        return self
 
     def normalize_governance(self) -> "Workflow":
         """Sync the deprecated inline governance fields with the new

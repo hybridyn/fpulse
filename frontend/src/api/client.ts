@@ -1209,6 +1209,30 @@ export const api = {
   getWorkflowLifecycle: (id: string) =>
     request<any>(`/workflows/${id}/lifecycle`),
 
+  // Pipeline documentation (self-documenting pipelines)
+  getWorkflowDocs: (id: string) =>
+    request<{ workflow_id: string; filename: string; markdown: string }>(
+      `/workflows/${id}/docs?format=json`,
+    ),
+  updateWorkflowDocs: (
+    id: string,
+    data: { business_purpose?: string; readme?: string; tags?: string[] },
+  ) =>
+    request<any>(`/workflows/${id}/docs`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  // Admin publish policy — is a business purpose required before publishing?
+  getPublishPolicy: () =>
+    request<{ require_business_purpose: boolean; setting_value: boolean; env_override: boolean }>(
+      `/admin/publish-policy`,
+    ),
+  setPublishPolicy: (requireBusinessPurpose: boolean) =>
+    request<any>(`/admin/publish-policy`, {
+      method: 'PUT',
+      body: JSON.stringify({ require_business_purpose: requireBusinessPurpose }),
+    }),
+
   // Schema Contracts
   listContracts: (workflowId: string) =>
     request<any[]>(`/contracts/${workflowId}`),

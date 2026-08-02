@@ -6,6 +6,7 @@ import Icon from '../shared/Icon';
 import { askCopilot } from '../../hooks/useAgentChatStore';
 import { usePageContext } from '../../hooks/usePageContext';
 import PageHeader from '../shared/PageHeader';
+import { renderMarkdown } from '../../utils/markdown';
 
 // System Inventory Report page — Apr 2026
 //
@@ -96,6 +97,13 @@ export default function ReportsPage({
   const [format, setFormat] = useState<ReportFormat>('pdf');
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  // Inline preview — "View" fetches the report as JSON and renders it as
+  // real HTML in a modal, so it displays in every browser AND the Electron
+  // desktop app (an embedded PDF frame renders blank there). The user reads
+  // the report — including each pipeline's purpose / README — without
+  // downloading a file; PDF / Word remain as downloads.
+  const [viewing, setViewing] = useState(false);
+  const [viewData, setViewData] = useState<any | null>(null);
   // Scope target — when scope is 'project' / 'pipeline' / 'user', this
   // is the id of the picked entity. For 'user' on non-admins, defaults
   // to self. For 'admin', unused.
@@ -219,6 +227,30 @@ export default function ReportsPage({
       setDownloading(false);
     }
   };
+
+  // Fetch the report as JSON and open the inline HTML preview.
+  const handleView = async () => {
+    setViewing(true);
+    try {
+      const token = localStorage.getItem('fpulse_token');
+      const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+      const params = new URLSearchParams({ format: 'json', scope, env });
+      if ((scope === 'project' || scope === 'pipeline' || scope === 'user') && scopeTargetId) {
+        params.set('scope_id', scopeTargetId);
+      }
+      const res = await fetch(`/api/reports/inventory?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}`, 'X-Workspace-Id': workspaceId },
+      });
+      if (!res.ok) throw new Error(`Preview failed (${res.status})`);
+      setViewData(await res.json());
+    } catch (err: any) {
+      toast.error(err.message || 'Could not open report preview');
+    } finally {
+      setViewing(false);
+    }
+  };
+
+  const closeView = () => setViewData(null);
 
   const healthColor =
     summary && summary.health.score >= 80
@@ -550,6 +582,33 @@ export default function ReportsPage({
                 </button>
                 <button
                   type="button"
+                  onClick={handleView}
+                  disabled={
+                    viewing || !summary ||
+                    ((scope === 'project' || scope === 'pipeline') && !scopeTargetId)
+                  }
+                  title="View the report in the browser without downloading"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {viewing ? (
+                    <>
+                      <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="4" />
+                        <path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                      </svg>
+                      Opening…
+                    </>
+                  ) : (
+                    <>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                      </svg>
+                      View
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={handleDownload}
                   disabled={
                     downloading || !summary ||
@@ -779,6 +838,45 @@ export default function ReportsPage({
         </aside>
         </div>
       </div>
+
+      {/* Inline report preview (View) — real HTML, renders everywhere
+          (browser + Electron desktop), never a blank PDF frame. */}
+      {viewData && (
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={closeView} />
+          <div className="fixed inset-0 z-[65] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto flex h-[90vh] w-[960px] max-w-[96vw] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+              <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3">
+                <div className="text-sm font-bold text-slate-800">Report preview</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    Download {format.toUpperCase()}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeView}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6">
+                <ReportView data={viewData} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Wrapper>
   );
 }
@@ -789,6 +887,133 @@ function MetaRow({ label, value }: { label: string; value: string }) {
       <dt className="min-w-[140px] text-xs uppercase tracking-wide text-slate-500">{label}</dt>
       <dd className="text-slate-900">{value}</dd>
     </div>
+  );
+}
+
+function _fmtTs(s: string): string {
+  if (!s) return '—';
+  if (s.includes('T')) {
+    const [d, r] = s.split('T');
+    return `${d} ${(r || '').slice(0, 5)}`.trim();
+  }
+  return s.slice(0, 16);
+}
+
+// Inline HTML rendering of the inventory report (from the JSON payload). Real
+// DOM — renders in every browser and the Electron desktop app, unlike an
+// embedded PDF frame. Mirrors the key blocks the PDF/Word renderers emit.
+function ReportView({ data }: { data: any }) {
+  const t = data.totals || {};
+  const health = data.health || {};
+  const projects: any[] = data.projects || [];
+  const score = health.score ?? 0;
+  const scoreClass = score >= 80 ? 'text-emerald-600' : score >= 50 ? 'text-amber-600' : 'text-red-600';
+  return (
+    <div className="text-slate-700">
+      <h1 className="text-2xl font-bold text-slate-900">
+        {data.workspace_name || 'Workspace'} — inventory report
+      </h1>
+      <p className="mt-1 text-xs text-slate-500">
+        Generated {_fmtTs(data.generated_at)} · scope {data.scope} · F-Pulse {data.fpulse_version}
+        {data.env_filter ? ` · ${String(data.env_filter).toUpperCase()}` : ''}
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <RvStat label="Health" value={`${score}/100`} valueClass={scoreClass} />
+        <RvStat label="Pipelines" value={t.pipelines ?? 0} />
+        <RvStat label="Connections" value={t.connections ?? 0} />
+        <RvStat label="Projects" value={t.projects ?? 0} />
+      </div>
+
+      {Array.isArray(health.issues) && health.issues.length > 0 && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          <div className="font-semibold">Top issues</div>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {health.issues.slice(0, 6).map((iss: string, i: number) => <li key={i}>{iss}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {projects.length === 0 && (
+        <p className="mt-6 text-sm text-slate-400">No projects or published pipelines in this scope yet.</p>
+      )}
+
+      {projects.map((proj: any) => (
+        <section key={proj.id} className="mt-6">
+          <h2 className="border-b border-slate-100 pb-1.5 text-lg font-semibold text-slate-900">
+            {proj.name}
+            <span className="ml-2 text-xs font-normal text-slate-400">
+              · {(proj.pipelines || []).length} pipeline(s)
+            </span>
+          </h2>
+          {(proj.pipelines || []).length === 0 ? (
+            <p className="mt-2 text-sm text-slate-400">No published pipelines in this project.</p>
+          ) : (
+            (proj.pipelines || []).map((p: any) => (
+              <div key={p.id} className="mt-4 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-base font-semibold text-slate-900">{p.name}</h3>
+                  <span className="shrink-0 text-xs text-slate-500">
+                    {(p.environments || []).join(' + ')} · {p.status}
+                  </span>
+                </div>
+                {p.business_purpose && (
+                  <p className="mt-1.5 text-sm">
+                    <span className="font-semibold text-slate-800">Purpose:</span> {p.business_purpose}
+                  </p>
+                )}
+                <table className="mt-3 w-full text-sm">
+                  <tbody>
+                    <RvRow label="Status" value={p.status} />
+                    <RvRow
+                      label="Version"
+                      value={`v${p.latest_version}${p.deployed_version ? ` (deployed v${p.deployed_version})` : ''}`}
+                    />
+                    <RvRow label="Owner" value={p.owner || '—'} />
+                    {p.description ? <RvRow label="Description" value={p.description} /> : null}
+                    <RvRow
+                      label="Nodes"
+                      value={`${p.step_count} steps${(p.node_types || []).length ? ` — ${(p.node_types).join(', ')}` : ''}`}
+                    />
+                    {(p.tags || []).length > 0 ? <RvRow label="Tags" value={(p.tags).join(', ')} /> : null}
+                    <RvRow
+                      label="Last run"
+                      value={p.last_run_status ? `${p.last_run_status}${p.last_run_at ? ` (${_fmtTs(p.last_run_at)})` : ''}` : 'never run'}
+                    />
+                  </tbody>
+                </table>
+                {p.readme && (
+                  <div className="mt-3">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notes (README)</div>
+                    <div className="mt-1 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2 text-sm">
+                      {renderMarkdown(p.readme)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function RvStat({ label, value, valueClass = 'text-slate-900' }: { label: string; value: any; valueClass?: string }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</div>
+      <div className={`text-lg font-bold ${valueClass}`}>{value}</div>
+    </div>
+  );
+}
+
+function RvRow({ label, value }: { label: string; value: any }) {
+  return (
+    <tr className="border-b border-slate-100 last:border-0">
+      <td className="w-40 py-1.5 pr-3 align-top text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</td>
+      <td className="py-1.5 align-top text-slate-700">{value}</td>
+    </tr>
   );
 }
 

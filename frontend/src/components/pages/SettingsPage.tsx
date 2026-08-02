@@ -10,6 +10,7 @@ import PageHeader from '../shared/PageHeader';
 import AIProviderForm from '../ai/AIProviderForm';
 import ProviderComparison from '../agent/ProviderComparison';
 import AiPricingSection from '../settings/AiPricingSection';
+import PublishPolicyCard from '../settings/PublishPolicyCard';
 
 const APP_VERSION = '1.0.0';
 
@@ -1901,6 +1902,9 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
                 <div className="mt-6">
                   <ProductKnowledgeReindexCard dark={dark} />
                 </div>
+
+                {/* ── Publishing: require a business purpose (admin) ─── */}
+                <PublishPolicyCard dark={dark} />
               </>
             )}
 

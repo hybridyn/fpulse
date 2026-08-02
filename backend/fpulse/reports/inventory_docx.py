@@ -709,6 +709,13 @@ def _add_pipeline_block(doc: Document, p: PipelineInventory, section: str) -> No
         r3.font.size = Pt(9)
         r3.font.color.rgb = BRAND_DARK
 
+    # ── Purpose (the "why") — prominent, right under the name ──────────
+    if p.business_purpose:
+        pp = doc.add_paragraph()
+        pr = pp.add_run("Purpose: ")
+        pr.font.bold = True
+        pp.add_run(p.business_purpose)
+
     # ── Property table ────────────────────────────────────────────────
     tbl = doc.add_table(rows=0, cols=2)
     tbl.style = "Light List Accent 5"
@@ -718,6 +725,10 @@ def _add_pipeline_block(doc: Document, p: PipelineInventory, section: str) -> No
     _kv_row(tbl, "Deployed version",
             f"v{p.deployed_version}" if p.deployed_version else "not deployed")
     _kv_row(tbl, "Owner", p.owner or "—")
+    if p.description:
+        _kv_row(tbl, "Description", p.description)
+    if p.readme:
+        _kv_row(tbl, "Notes (README)", p.readme)
     if p.approval_status:
         _kv_row(tbl, "Approval",
                 f"{p.approval_status}" +

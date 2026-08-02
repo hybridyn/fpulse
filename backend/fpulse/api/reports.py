@@ -476,6 +476,14 @@ _DOC_CATALOG: list[dict] = [
         "plus_only": False,
     },
     {
+        "path": "pipeline-documentation.md",
+        "title": "Self-documenting pipelines",
+        "audience": "All users",
+        "summary": "Business purpose (required to publish), README, tags, and one-click Markdown docs generated from the pipeline itself.",
+        "admin_only": False,
+        "plus_only": False,
+    },
+    {
         "path": "user-guides/connections.md",
         "title": "Connections",
         "audience": "All users",

@@ -54,6 +54,7 @@ from .product_knowledge import router as product_knowledge_router
 from .connector_authoring import router as connector_authoring_router
 from .connector_drafts import router as connector_drafts_router
 from .ai_web import router as ai_web_router
+from .publish_policy import router as publish_policy_router
 from .app_meta import router as app_meta_router
 from .extraction import router as extraction_router
 from .auth_health import router as auth_health_router
@@ -120,6 +121,7 @@ __all__ = [
     "connector_authoring_router",
     "connector_drafts_router",
     "ai_web_router",
+    "publish_policy_router",
     "app_meta_router",
     "extraction_router",
     "auth_health_router",

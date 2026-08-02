@@ -42,7 +42,7 @@ interface TestResultsPayload {
   };
 }
 
-type Phase = 'testing' | 'success' | 'failed' | 'publishing' | 'published';
+type Phase = 'testing' | 'success' | 'failed' | 'documenting' | 'publishing' | 'published';
 
 interface Props {
   open: boolean;
@@ -56,6 +56,14 @@ export default function PublishTestModal({ open, workflowId, workflowName, onClo
   const [phase, setPhase] = useState<Phase>('testing');
   const [result, setResult] = useState<TestResultsPayload | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  // Documentation gate — a pipeline must state its business purpose before
+  // it goes live (unless an admin relaxed the policy org-wide). We capture
+  // it here, right before publish, pre-filled with anything already saved.
+  const [requirePurpose, setRequirePurpose] = useState(true);
+  const [bizPurpose, setBizPurpose] = useState('');
+  const [readme, setReadme] = useState('');
+  const [tagsText, setTagsText] = useState('');
 
   const runTest = useCallback(async () => {
     if (!workflowId) return;
@@ -83,7 +91,23 @@ export default function PublishTestModal({ open, workflowId, workflowName, onClo
     }
   }, [open, workflowId, runTest]);
 
-  const handlePublish = async () => {
+  // Load the pipeline's current documentation + the publish policy so the
+  // doc step is pre-filled and only enforced when the policy requires it.
+  useEffect(() => {
+    if (!open || !workflowId) return;
+    api.getWorkflow(workflowId).then((r: any) => {
+      const wf = r?.workflow || r || {};
+      setBizPurpose(wf.business_purpose || '');
+      setReadme(wf.readme || '');
+      setTagsText(Array.isArray(wf.tags) ? wf.tags.join(', ') : '');
+    }).catch(() => {});
+    api.getPublishPolicy()
+      .then((p: any) => setRequirePurpose(!!p?.require_business_purpose))
+      .catch(() => setRequirePurpose(true));  // fail safe: keep it required
+  }, [open, workflowId]);
+
+  // The actual publish call. Assumes the doc gate is already satisfied.
+  const proceedToPublish = async () => {
     if (!workflowId) return;
     setPhase('publishing');
     try {
@@ -96,6 +120,44 @@ export default function PublishTestModal({ open, workflowId, workflowName, onClo
     } catch (e: any) {
       setPhase('failed');
       setErrorMsg(e?.message || 'Publish request failed');
+    }
+  };
+
+  // "Publish Now" after a passing test. If the pipeline has no business
+  // purpose yet and the policy requires one, capture documentation first;
+  // otherwise publish straight away.
+  const handlePublishClick = () => {
+    if (requirePurpose && !bizPurpose.trim()) {
+      setErrorMsg('');
+      setPhase('documenting');
+    } else {
+      proceedToPublish();
+    }
+  };
+
+  // Save the documentation fields, then publish. Used from the doc step.
+  const handleSaveDocsAndPublish = async () => {
+    if (!workflowId) return;
+    if (requirePurpose && !bizPurpose.trim()) {
+      setErrorMsg('A business purpose is required before publishing.');
+      return;
+    }
+    setPhase('publishing');
+    setErrorMsg('');
+    try {
+      await api.updateWorkflowDocs(workflowId, {
+        business_purpose: bizPurpose.trim(),
+        readme,
+        tags: tagsText.split(',').map((t) => t.trim()).filter(Boolean),
+      });
+      await api.publishWorkflow(workflowId);
+      setPhase('published');
+      toast.success('Pipeline published', `"${workflowName}" is now live`);
+      if (onPublished) onPublished();
+      setTimeout(onClose, 800);
+    } catch (e: any) {
+      setPhase('documenting');
+      setErrorMsg(e?.message || 'Could not save documentation / publish');
     }
   };
 
@@ -202,8 +264,62 @@ export default function PublishTestModal({ open, workflowId, workflowName, onClo
               </div>
             )}
 
+            {/* Documentation step — captures the required business purpose
+                (plus optional README / tags) before the pipeline goes live. */}
+            {phase === 'documenting' && (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-600 shrink-0 mt-0.5">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <div>
+                    <div className="text-sm font-semibold text-indigo-700">Document this pipeline</div>
+                    <div className="text-xs text-indigo-600">
+                      A one-line business purpose is required before it goes live. README &amp; tags are optional.
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Business purpose {requirePurpose && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    value={bizPurpose}
+                    onChange={(e) => setBizPurpose(e.target.value)}
+                    placeholder="e.g. Load daily orders into the warehouse for finance"
+                    autoFocus
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    README <span className="text-slate-400 font-normal">(optional, Markdown)</span>
+                  </label>
+                  <textarea
+                    value={readme}
+                    onChange={(e) => setReadme(e.target.value)}
+                    rows={4}
+                    placeholder={'## Runbook\nHow to operate this pipeline…'}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300 outline-none font-mono resize-y"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Tags <span className="text-slate-400 font-normal">(optional, comma-separated)</span>
+                  </label>
+                  <input
+                    value={tagsText}
+                    onChange={(e) => setTagsText(e.target.value)}
+                    placeholder="orders, nightly, finance"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300 outline-none"
+                  />
+                </div>
+                {errorMsg && <div className="text-xs text-red-600">{errorMsg}</div>}
+              </div>
+            )}
+
             {/* Per-step results */}
-            {stepLogs.length > 0 && (
+            {phase !== 'documenting' && stepLogs.length > 0 && (
               <div className="rounded-xl border border-slate-200 overflow-hidden">
                 <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Step results
@@ -287,12 +403,23 @@ export default function PublishTestModal({ open, workflowId, workflowName, onClo
               )}
               {phase === 'success' && (
                 <button
-                  onClick={handlePublish}
+                  onClick={handlePublishClick}
                   className="px-5 py-2 text-xs text-white font-semibold rounded-xl shadow-sm flex items-center gap-1.5"
                   style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)' }}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                   Publish Now
+                </button>
+              )}
+              {phase === 'documenting' && (
+                <button
+                  onClick={handleSaveDocsAndPublish}
+                  disabled={requirePurpose && !bizPurpose.trim()}
+                  className="px-5 py-2 text-xs text-white font-semibold rounded-xl shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #ea580c)' }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                  Save &amp; publish
                 </button>
               )}
             </div>
