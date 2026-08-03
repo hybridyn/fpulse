@@ -149,6 +149,12 @@ def _write_config(updates: dict[str, Any]) -> dict[str, Any]:
             "INSERT OR REPLACE INTO settings (id, data, created_at) VALUES ('admin_settings', ?, ?)",
             (json.dumps(existing), now_iso),
         )
+        # The db wrapper's generic execute() doesn't commit and the
+        # connection isn't in autocommit mode, so the write would otherwise
+        # linger in an uncommitted transaction — durable only if some later
+        # operation on the same thread-local connection happened to commit
+        # before restart. Commit explicitly so the config actually persists.
+        db.commit()
         return notifications
     except Exception as exc:
         import logging

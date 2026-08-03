@@ -244,6 +244,51 @@ def _get_provider() -> tuple[str, str, str]:
     return (provider, api_key, model)
 
 
+# Providers that speak OpenAI's Chat Completions wire format. Listing a default
+# base here lets a user pick any of them with just provider + api_key + model —
+# no per-provider client, no hardcoded allowlist. This is what makes F-Pulse
+# honor "use whatever model the user chooses" for the long tail of providers.
+# An explicit base_url from config always wins over these (custom / self-hosted
+# endpoints — vLLM, LM Studio, llama.cpp, LocalAI, or a gateway).
+OPENAI_COMPATIBLE_BASES = {
+    "deepseek": "https://api.deepseek.com/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "mistral": "https://api.mistral.ai/v1",
+    "together": "https://api.together.xyz/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "moonshot": "https://api.moonshot.cn/v1",
+    "kimi": "https://api.moonshot.cn/v1",
+    "xai": "https://api.x.ai/v1",
+    "fireworks": "https://api.fireworks.ai/inference/v1",
+    "perplexity": "https://api.perplexity.ai",
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+}
+
+
+def openai_compatible_base(provider: str, base_url: str | None) -> str:
+    """Resolve the API root for an OpenAI-compatible provider.
+
+    An explicit ``base_url`` (a custom or self-hosted OpenAI-compatible server)
+    always wins. Failing that, fall back to the known public default for a
+    named cloud provider. Returns "" when neither is available (caller
+    surfaces a clear error rather than silently doing nothing).
+    """
+    b = (base_url or "").strip()
+    if b:
+        return b
+    return OPENAI_COMPATIBLE_BASES.get((provider or "").lower().strip(), "")
+
+
+def _chat_completions_url(base: str) -> str:
+    """Normalize an API root to a chat/completions URL. Accepts a bare root
+    (``https://host/v1``) or a full endpoint already ending in
+    ``/chat/completions`` and returns the full endpoint either way."""
+    base = base.rstrip("/")
+    if base.endswith("/chat/completions"):
+        return base
+    return base + "/chat/completions"
+
+
 SYSTEM_PROMPT = """You are F-Pulse Pipeline Architect, an AI that converts natural language into data pipeline definitions.
 
 You MUST respond with valid JSON only. No markdown, no explanation, no code fences.
@@ -405,6 +450,21 @@ async def ai_generate_pipeline(
             # Ollama: base_url can live in api_key (legacy env-var path)
             # or base_url (new store-resolved path). Accept either.
             result, usage = await _call_ollama(base_url or api_key, model, messages)
+        else:
+            # Any OTHER provider the user configured — DeepSeek, Groq, Mistral,
+            # Moonshot/Kimi, Together, xAI, or a custom OpenAI-compatible
+            # endpoint. Honor the choice via the OpenAI wire format instead of
+            # silently dropping it (the old behaviour handled only the four
+            # named providers above).
+            api_base = openai_compatible_base(provider, base_url)
+            if api_base:
+                result, usage = await _call_openai_compatible(api_base, api_key, model, messages)
+            else:
+                err = (
+                    f"provider {provider!r} is not OpenAI-compatible by default; "
+                    "set a base_url to point at its OpenAI-compatible endpoint"
+                )
+                print(f"[F-Pulse AI] {err}")
     except Exception as e:
         err = f"{type(e).__name__}: {e}"
         print(f"[F-Pulse AI] {provider} error: {e}")
@@ -555,6 +615,41 @@ async def _call_ollama(base_url: str, model: str, messages: list[dict]) -> tuple
         return _parse_json_response(text), usage
 
 
+async def _call_openai_compatible(base_url: str, api_key: str, model: str, messages: list[dict]) -> tuple[dict | None, dict]:
+    """Call any OpenAI-compatible Chat Completions endpoint (pipeline JSON).
+
+    Same wire format as ``_call_openai`` but the base URL + model are whatever
+    the user configured — DeepSeek, Groq, Mistral, Moonshot/Kimi, Together,
+    xAI, or a self-hosted server (vLLM / LM Studio / llama.cpp / LocalAI).
+    ``api_key`` is optional: local servers often need none.
+    """
+    oai_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for m in messages:
+        oai_messages.append({"role": m["role"], "content": m["content"]})
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            _chat_completions_url(base_url),
+            headers=headers,
+            json={
+                "model": model,
+                "messages": oai_messages,
+                "temperature": 0.3,
+                "max_tokens": 2048,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"]
+        usage_raw = data.get("usage") or {}
+        usage = {"input": usage_raw.get("prompt_tokens", 0), "output": usage_raw.get("completion_tokens", 0)}
+        return _parse_json_response(text), usage
+
+
 def _parse_json_response(text: str) -> dict | None:
     """Extract and parse JSON from LLM response."""
     text = text.strip()
@@ -617,6 +712,12 @@ async def ai_generate_json(
             result, usage = await _call_text_openrouter(api_key, model, system_prompt, messages)
         elif provider == "ollama":
             result, usage = await _call_text_ollama(base_url or api_key, model, system_prompt, messages)
+        else:
+            api_base = openai_compatible_base(provider, base_url)
+            if api_base:
+                result, usage = await _call_text_openai_compatible(api_base, api_key, model, system_prompt, messages)
+            else:
+                err = f"provider {provider!r} needs an OpenAI-compatible base_url"
     except Exception as e:
         err = f"{type(e).__name__}: {e}"
 
@@ -747,6 +848,36 @@ async def _call_text_ollama(base_url, model, system_prompt, messages):
         }
 
 
+async def _call_text_openai_compatible(base_url, api_key, model, system_prompt, messages):
+    """Generic JSON-text call via any OpenAI-compatible endpoint. Mirrors
+    ``_call_text_openai`` with a configurable base + optional api_key."""
+    oai_messages = [{"role": "system", "content": system_prompt}]
+    for m in messages:
+        oai_messages.append({"role": m["role"], "content": m["content"]})
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            _chat_completions_url(base_url),
+            headers=headers,
+            json={
+                "model": model,
+                "messages": oai_messages,
+                "temperature": 0.2,
+                "max_tokens": 1024,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"]
+        usage_raw = data.get("usage") or {}
+        return _parse_json_response(text), {
+            "input": usage_raw.get("prompt_tokens", 0),
+            "output": usage_raw.get("completion_tokens", 0),
+        }
+
+
 def is_ai_available() -> bool:
     """Check if any AI provider is configured."""
     provider, _, _ = _get_provider()
@@ -792,6 +923,12 @@ async def ai_generate_text(
             text, usage = await _call_plain_openrouter(api_key, model, system_prompt, messages, max_tokens)
         elif provider == "ollama":
             text, usage = await _call_plain_ollama(base_url or api_key, model, system_prompt, messages, max_tokens)
+        else:
+            api_base = openai_compatible_base(provider, base_url)
+            if api_base:
+                text, usage = await _call_plain_openai_compatible(api_base, api_key, model, system_prompt, messages, max_tokens)
+            else:
+                err = f"provider {provider!r} needs an OpenAI-compatible base_url"
     except Exception as e:
         err = f"{type(e).__name__}: {e}"
 
@@ -920,4 +1057,34 @@ async def _call_plain_ollama(base_url, model, system_prompt, messages, max_token
         return text, {
             "input": data.get("prompt_eval_count", 0),
             "output": data.get("eval_count", 0),
+        }
+
+
+async def _call_plain_openai_compatible(base_url, api_key, model, system_prompt, messages, max_tokens):
+    """Generic plain-text call via any OpenAI-compatible endpoint. Mirrors
+    ``_call_plain_openai`` with a configurable base + optional api_key."""
+    oai_messages = [{"role": "system", "content": system_prompt}]
+    for m in messages:
+        oai_messages.append({"role": m["role"], "content": m["content"]})
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            _chat_completions_url(base_url),
+            headers=headers,
+            json={
+                "model": model,
+                "messages": oai_messages,
+                "temperature": 0.4,
+                "max_tokens": max_tokens,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["choices"][0]["message"]["content"]
+        usage_raw = data.get("usage") or {}
+        return text, {
+            "input": usage_raw.get("prompt_tokens", 0),
+            "output": usage_raw.get("completion_tokens", 0),
         }

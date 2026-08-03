@@ -104,6 +104,15 @@ async def set_web_access(body: WebAccessUpdate) -> dict[str, Any]:
             "INSERT OR REPLACE INTO settings (id, data, created_at) VALUES ('admin_settings', ?, ?)",
             (json.dumps(existing), now_iso),
         )
+        # The db wrapper's generic execute() does NOT commit, and the
+        # connection runs in the default (deferred) transaction mode — so
+        # without this the INSERT sits in an uncommitted transaction on the
+        # request thread's connection. The same-request read-back in
+        # _current() sees it (read-your-own-writes), which is exactly why
+        # this looked like it worked; but the change was invisible to other
+        # worker threads and rolled back on restart. Commit makes it durable
+        # and visible to register_initial_tools()'s per-request reads.
+        db.commit()
     except HTTPException:
         raise
     except Exception as exc:  # noqa: BLE001

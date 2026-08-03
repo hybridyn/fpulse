@@ -71,6 +71,7 @@ from fpulse.ai.context import PageContext
 from fpulse.ai.foundation import get_provider_info
 from fpulse.ai.ollama_client import OllamaAgentClient
 from fpulse.ai.openai_client import OpenAIAgentClient
+from fpulse.ai.openai_compatible_client import OpenAICompatibleAgentClient
 from fpulse.ai.openrouter_client import OpenRouterAgentClient
 from fpulse.ai.rbac import allowed_tiers_for
 from fpulse.ai.tools import (
@@ -349,9 +350,10 @@ def _build_default_runner(*, user_id: str | None, workspace_id: str | None) -> A
 
     Dispatches by the resolved provider so an Ollama-configured workspace
     gets `OllamaAgentClient`, an Anthropic-configured one gets
-    `AnthropicAgentClient`, etc. OpenAI tool-use client lands in 1.5b-5;
-    today its provider falls through to the Anthropic client which will
-    raise — endpoint guards via provider check before reaching this.
+    `AnthropicAgentClient`, OpenAI gets `OpenAIAgentClient`, OpenRouter gets
+    `OpenRouterAgentClient`, and ANY other provider the user picks (DeepSeek,
+    Mistral, Groq, Moonshot/Kimi, or a custom OpenAI-compatible endpoint)
+    routes through `OpenAICompatibleAgentClient` — no hardcoded allowlist.
 
     Safe to call multiple times — register_initial_tools is idempotent.
     """
@@ -370,10 +372,11 @@ def _build_default_runner(*, user_id: str | None, workspace_id: str | None) -> A
         # llama-3.1+ variants all support it).
         client = OpenRouterAgentClient(user_id=user_id, workspace_id=workspace_id)
     else:
-        # Unsupported provider for tool-use today (gemini / azure / custom).
-        # Fall back to Anthropic so the resulting RuntimeError surfaces in the
-        # trace as `llm_failure` rather than silently doing nothing.
-        client = AnthropicAgentClient(user_id=user_id, workspace_id=workspace_id)
+        # Any other provider the user configured — DeepSeek, Mistral, Groq,
+        # Moonshot/Kimi, Together, xAI, or a custom OpenAI-compatible local
+        # server (vLLM / LM Studio). Honor the choice via the OpenAI wire
+        # format rather than failing. Tool-use quality depends on the model.
+        client = OpenAICompatibleAgentClient(user_id=user_id, workspace_id=workspace_id)
     return AgentRunner(
         registry=default_registry(),
         llm_client=client,
