@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
+import { WORKSPACES_ENABLED, DEFAULT_WORKSPACE_ID } from '../../config/edition';
 
 interface LoginPageProps {
   onLogin: (user: any) => void;
@@ -261,17 +262,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       // user must never have data they can't reach. We never leave
       // fpulse_workspace_id unset because the api client reads it on every
       // request.
+      // OSS is single-operator: always land in the one shared `default`
+      // workspace (the block below only runs when workspaces are enabled in a
+      // Plus build). This is what keeps pipelines from "vanishing" into an
+      // empty Personal scope.
       const workspaces: any[] = Array.isArray(result.workspaces) ? result.workspaces : [];
-      if (workspaces.length > 0) {
+      if (WORKSPACES_ENABLED && workspaces.length > 0) {
         localStorage.setItem('fpulse_workspaces', JSON.stringify(workspaces));
         const wsId = (w: any) => w.workspace_id || w.id;
         const chosen =
           workspaces.find((w) => wsId(w) === 'default') ||
           workspaces.find((w) => w.is_personal) ||
           workspaces[0];
-        localStorage.setItem('fpulse_workspace_id', wsId(chosen) || 'default');
+        localStorage.setItem('fpulse_workspace_id', wsId(chosen) || DEFAULT_WORKSPACE_ID);
       } else {
-        localStorage.setItem('fpulse_workspace_id', 'default');
+        localStorage.setItem('fpulse_workspace_id', DEFAULT_WORKSPACE_ID);
       }
       onLogin(result.user);
     } catch (err: any) {

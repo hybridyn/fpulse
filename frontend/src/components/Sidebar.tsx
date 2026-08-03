@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { WORKSPACES_ENABLED } from '../config/edition';
 import { canAccessAdmin, canAccessAdminInEnv, canAccessProd, hasPermission, roleLabel } from '../auth/permissions';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { notificationHref } from '../lib/notificationHref';
@@ -282,7 +283,9 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
   const wsDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // OSS is single-operator — no workspace switcher, so don't even fetch the
+    // list. Gated on the edition flag so a Plus build restores it.
+    if (!user || !WORKSPACES_ENABLED) return;
     api.listWorkspaces().then(ws => setWorkspaces(ws || [])).catch(() => {});
   }, [user]);
 
@@ -581,19 +584,15 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
           so the full text labels fit at 1536 alongside the right-side
           controls (bell + avatar were clipping at maximized). */}
 
-      {/* Workspace Switcher — shown whenever the user belongs to more than
-          one workspace, in DEV as well as PROD.
-          2026-08-02: was PROD-only on the premise that DEV had no
-          per-workspace scopes. That premise was wrong — workflows (and
-          every workspace-scoped store) ARE filtered by workspace_id in DEV
-          too (api/workflows list_all(workspace_id=...)). Hiding the switcher
-          in DEV meant an operator whose pipelines sit in one workspace but
-          who landed in another (e.g. the empty Personal workspace) had no
-          way to reach them — the pipelines appeared to vanish. Showing it
-          whenever there is more than one workspace guarantees a user can
-          always reach their own data. The dropdown themes for light (DEV)
-          via the isProd checks below, so it looks right in both modes. */}
-      {user && workspaces.length > 1 && (
+      {/* Workspace Switcher — Plus-only (edition-gated).
+          F-Pulse OSS is single-operator: every pipeline/connection lives in
+          the one shared `default` workspace, so a switcher only invited
+          confusion — and landing in an empty Personal workspace made
+          pipelines look like they'd vanished. Multi-workspace switching is a
+          Plus capability; WORKSPACES_ENABLED is false in the OSS build, so
+          this never renders (and OSS pins every scope to `default`, so the
+          "unreachable data" case can't arise). See src/config/edition.ts. */}
+      {user && WORKSPACES_ENABLED && workspaces.length > 1 && (
         <div className="relative hidden sm:block mr-2 shrink-0" ref={wsDropdownRef}>
           <button
             onClick={() => setWsDropdownOpen(!wsDropdownOpen)}

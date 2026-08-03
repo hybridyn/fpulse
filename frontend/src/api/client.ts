@@ -1,3 +1,5 @@
+import { currentWorkspaceId } from '../config/edition';
+
 const BASE = '/api';
 
 // 2026-05-19 (P1 #14 of PAGE_BY_PAGE_AUDIT.md): centralised backend-reach
@@ -27,7 +29,7 @@ function emitBackendReachable(reachable: boolean, reason?: string) {
  */
 export function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const token = localStorage.getItem('fpulse_token');
-  const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+  const workspaceId = currentWorkspaceId();
   const csrf = getCsrfCookie();
   return {
     'Content-Type': 'application/json',
@@ -75,7 +77,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   // ships in Stage 2, the default is `default` — the back-fill workspace
   // every legacy install already has from the v2 migration. Routers that
   // don't care about workspaces simply ignore the header.
-  const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+  const workspaceId = currentWorkspaceId();
   headers['X-Workspace-Id'] = workspaceId;
 
   let res: Response;
@@ -361,7 +363,7 @@ export const api = {
    */
   postRaw: async <T = any>(path: string, body: BodyInit) => {
     const token = localStorage.getItem('fpulse_token') || '';
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const cleanPath = path.startsWith('/api') ? path : `/api${path.startsWith('/') ? '' : '/'}${path}`;
     const res = await fetch(cleanPath, {
       method: 'POST',
@@ -791,7 +793,7 @@ export const api = {
     // have to attach auth + workspace headers manually or the file
     // would land in the wrong tenant bucket on the backend.
     const token = localStorage.getItem('fpulse_token') || '';
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const url = new URL(`${BASE}/upload`, window.location.origin);
     if (options?.replaces) {
       url.searchParams.set('replaces', options.replaces);
@@ -1005,7 +1007,7 @@ export const api = {
     fmt: 'csv' | 'json',
   ): Promise<Blob> => {
     const token = localStorage.getItem('fpulse_token');
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const res = await fetch(
       `${BASE}/execute/execution/${executionId}/step/${stepId}/output/export?fmt=${fmt}`,
       {
