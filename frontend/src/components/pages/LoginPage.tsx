@@ -245,18 +245,31 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       localStorage.setItem('fpulse_token', result.token);
       localStorage.setItem('fpulse_user', JSON.stringify(result.user));
       // Schema v2: persist the user's workspace memberships and pick a
-      // default current workspace. Self-signed-up users prefer their
-      // Personal workspace (so their first project lands in their own
-      // sandbox, not the org-wide Default); admins / legacy users with
-      // no Personal workspace fall through to the first membership
-      // (typically Default). We never leave fpulse_workspace_id unset
-      // because the api client reads it on every request.
+      // current workspace. Landing rules (order matters):
+      //   1. The shared "default" workspace WHEN the user is a member of
+      //      it. For a single-operator OSS install the operator belongs to
+      //      "default", that's where the seeded + existing pipelines live,
+      //      and it's where the backend's no-header fallback stamps new
+      //      ones (auth/deps current_workspace_id → "default"). Landing
+      //      anywhere else made real pipelines look like they'd vanished.
+      //   2. Otherwise the user's Personal workspace — self-signed-up Plus
+      //      users who aren't "default" members still get their own sandbox
+      //      (unchanged behaviour for that path).
+      //   3. Otherwise the first membership.
+      // If the landing is ever wrong, the Sidebar workspace switcher (shown
+      // whenever the user has >1 workspace, DEV or PROD) recovers it — a
+      // user must never have data they can't reach. We never leave
+      // fpulse_workspace_id unset because the api client reads it on every
+      // request.
       const workspaces: any[] = Array.isArray(result.workspaces) ? result.workspaces : [];
       if (workspaces.length > 0) {
         localStorage.setItem('fpulse_workspaces', JSON.stringify(workspaces));
-        const personal = workspaces.find((w) => w.is_personal);
-        const chosen = personal || workspaces[0];
-        localStorage.setItem('fpulse_workspace_id', chosen.workspace_id || chosen.id || 'default');
+        const wsId = (w: any) => w.workspace_id || w.id;
+        const chosen =
+          workspaces.find((w) => wsId(w) === 'default') ||
+          workspaces.find((w) => w.is_personal) ||
+          workspaces[0];
+        localStorage.setItem('fpulse_workspace_id', wsId(chosen) || 'default');
       } else {
         localStorage.setItem('fpulse_workspace_id', 'default');
       }

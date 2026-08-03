@@ -581,18 +581,19 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
           so the full text labels fit at 1536 alongside the right-side
           controls (bell + avatar were clipping at maximized). */}
 
-      {/* Workspace Switcher — PROD-only.
-          2026-05-27: hidden in DEV because workspaces are a
-          multi-tenant production concept. DEV is the local sandbox
-          where the operator iterates on a single set of pipelines;
-          showing a workspace dropdown there created the impression
-          that DEV had per-workspace scopes (it doesn't), and made
-          the same install look different from one DEV session to
-          the next depending on workspace membership. PROD keeps
-          the switcher so multi-workspace operators can flip between
-          tenants in the environment where workspaces actually
-          carry meaning. */}
-      {user && isProd && workspaces.length > 1 && (
+      {/* Workspace Switcher — shown whenever the user belongs to more than
+          one workspace, in DEV as well as PROD.
+          2026-08-02: was PROD-only on the premise that DEV had no
+          per-workspace scopes. That premise was wrong — workflows (and
+          every workspace-scoped store) ARE filtered by workspace_id in DEV
+          too (api/workflows list_all(workspace_id=...)). Hiding the switcher
+          in DEV meant an operator whose pipelines sit in one workspace but
+          who landed in another (e.g. the empty Personal workspace) had no
+          way to reach them — the pipelines appeared to vanish. Showing it
+          whenever there is more than one workspace guarantees a user can
+          always reach their own data. The dropdown themes for light (DEV)
+          via the isProd checks below, so it looks right in both modes. */}
+      {user && workspaces.length > 1 && (
         <div className="relative hidden sm:block mr-2 shrink-0" ref={wsDropdownRef}>
           <button
             onClick={() => setWsDropdownOpen(!wsDropdownOpen)}

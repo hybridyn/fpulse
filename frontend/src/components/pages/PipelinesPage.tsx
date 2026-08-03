@@ -2430,6 +2430,10 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
   const [importProjects, setImportProjects] = useState<any[]>([]);
   const [importCredentials, setImportCredentials] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
+  // dbt project import (compiled manifest.json → pipeline). Separate from the
+  // .fpulse import above — different input shape, different result surface.
+  const [dbtImporting, setDbtImporting] = useState(false);
+  const [dbtResult, setDbtResult] = useState<any>(null);
 
   const handleImportFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2491,6 +2495,35 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
       toast.error('Import failed', err.message);
     }
     setImporting(false);
+  };
+
+  const handleDbtImportSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    let manifest: any;
+    try {
+      manifest = JSON.parse(await file.text());
+    } catch {
+      toast.error('Parse error', 'Could not parse the selected file as JSON');
+      return;
+    }
+    if (!manifest || typeof manifest !== 'object' || !manifest.nodes) {
+      toast.error(
+        'Not a dbt manifest',
+        "Select the compiled manifest.json from your dbt project's target/ folder (run `dbt compile` first).",
+      );
+      return;
+    }
+    setDbtImporting(true);
+    try {
+      const result = await api.importDbt(manifest);
+      setDbtResult(result);
+      fetchPipelines();
+    } catch (err: any) {
+      toast.error('dbt import failed', err.message);
+    }
+    setDbtImporting(false);
   };
 
   // ── Approval Workflow ──
@@ -4142,6 +4175,16 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Import
                 <input type="file" accept=".json,.fpulse" className="hidden" onChange={handleImportFileSelect} />
+              </label>
+              <label
+                className={`px-4 py-2 text-sm font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  dbtImporting ? 'opacity-60 cursor-wait' : 'hover:bg-orange-100 cursor-pointer'
+                }`}
+                title="Import a compiled dbt manifest.json (target/manifest.json)"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/><path d="M9 3v18"/><path d="M4 12h16"/></svg>
+                {dbtImporting ? 'Importing…' : 'Import dbt'}
+                <input type="file" accept=".json,application/json" className="hidden" disabled={dbtImporting} onChange={handleDbtImportSelect} />
               </label>
               <button
                 onClick={handleNewPipeline}
@@ -6195,6 +6238,41 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
               className="w-full py-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── dbt Import Result ── */}
+    {dbtResult && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setDbtResult(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-sm font-bold text-slate-800">dbt project imported</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Created <span className="font-semibold text-slate-900">{dbtResult.name}</span> —{' '}
+              {dbtResult.report?.models ?? 0} model(s), {dbtResult.report?.sources ?? 0} source(s),{' '}
+              {dbtResult.connections_imported ?? 0} edge(s).
+            </p>
+          </div>
+          {Array.isArray(dbtResult.report?.warnings) && dbtResult.report.warnings.length > 0 && (
+            <div className="px-6 py-4 max-h-72 overflow-auto">
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Review before running</div>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-700 list-disc pl-5">
+                {dbtResult.report.warnings.map((w: string, i: number) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+            <button
+              onClick={() => setDbtResult(null)}
+              className="px-4 py-2 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md transition-all"
+              style={{ background: 'linear-gradient(135deg, #3B7DD8, #1E5AAF)' }}
+            >
+              Done
             </button>
           </div>
         </div>

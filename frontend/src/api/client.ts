@@ -492,6 +492,18 @@ export const api = {
         connection_map: connectionMap || {},
       }),
     }),
+  // Import a compiled dbt manifest.json (models → SQL Transform nodes,
+  // ref()/source() → the pipeline DAG). Returns { id, name, steps_imported,
+  // connections_imported, report:{ models, sources, incremental_models, warnings } }.
+  importDbt: (manifest: any, projectId?: string, name?: string) =>
+    request<any>('/workflows/import-dbt', {
+      method: 'POST',
+      body: JSON.stringify({
+        manifest,
+        project_id: projectId || 'default',
+        name: name || null,
+      }),
+    }),
   clonePipeline: (id: string, name?: string) =>
     request<any>(
       `/workflows/${id}/clone${name ? `?name=${encodeURIComponent(name)}` : ''}`,
