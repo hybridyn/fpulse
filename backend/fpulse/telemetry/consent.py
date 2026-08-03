@@ -65,10 +65,19 @@ def set_telemetry_enabled(db: Any, enabled: bool) -> None:
             settings["telemetry_consented_at"] = datetime.now(timezone.utc).isoformat()
         if not enabled:
             settings.pop("telemetry_consented_at", None)
+        # settings.created_at is NOT NULL with no default; INSERT OR REPLACE
+        # deletes+reinserts the row, so a payload that omits created_at aborts
+        # with "NOT NULL constraint failed: settings.created_at" (the same
+        # failure notifications._write_config was already fixed for). Stamp it.
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
         db.execute(
-            "INSERT OR REPLACE INTO settings (id, data) VALUES ('admin_settings', ?)",
-            (json.dumps(settings),),
+            "INSERT OR REPLACE INTO settings (id, data, created_at) VALUES ('admin_settings', ?, ?)",
+            (json.dumps(settings), now_iso),
         )
+        # Generic execute() doesn't commit and the connection isn't in
+        # autocommit mode — commit so the consent flag survives restart.
+        db.commit()
         logger.info("telemetry %s by admin", "enabled" if enabled else "disabled")
     except Exception as exc:
         logger.warning("telemetry consent write failed: %s", exc)

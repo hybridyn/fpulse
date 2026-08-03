@@ -47,6 +47,12 @@ class FakeDB:
         if "settings" in sql and params:
             self._settings = json.loads(params[0])
 
+    def commit(self):
+        # No-op: this fake mutates its dict synchronously in execute().
+        # Present so it mirrors the real Database interface — writers now
+        # call db.commit() to actually flush the SQLite transaction.
+        pass
+
 
 class FakeHttpClient:
     """Captures POSTs. Configurable status code per call."""

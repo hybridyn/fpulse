@@ -75,10 +75,17 @@ def get_installation_id(db: Any) -> str:
         # Generate a fresh ID and persist.
         new_id = uuid4().hex
         settings["telemetry_installation_id"] = new_id
+        # settings.created_at is NOT NULL with no default; INSERT OR REPLACE
+        # reinserts the row, so omitting created_at aborts on the NOT NULL
+        # constraint. Stamp it, then commit — the generic execute() wrapper
+        # neither supplies created_at nor commits.
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
         db.execute(
-            "INSERT OR REPLACE INTO settings (id, data) VALUES ('admin_settings', ?)",
-            (json.dumps(settings),),
+            "INSERT OR REPLACE INTO settings (id, data, created_at) VALUES ('admin_settings', ?, ?)",
+            (json.dumps(settings), now_iso),
         )
+        db.commit()
         return new_id
     except Exception as exc:
         logger.debug("installation_id read failed (using ephemeral): %s", exc)
