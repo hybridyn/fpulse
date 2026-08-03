@@ -73,6 +73,36 @@ def _fail(message: str, error: Exception | str, conn_type: str) -> dict:
     }
 
 
+def _addon_unavailable(connector: str, *, system_requirement: str = "") -> dict:
+    """Failure result for a connector whose optional runtime package isn't
+    available in this F-Pulse install.
+
+    Worded for a non-developer on a packaged desktop build: those users have
+    no shell and the app isn't pip-managed, so "pip install X" is a dead end
+    (and reads as a bug). Point them at whoever set F-Pulse up, and — for
+    connectors like SQL Server — name the system-level driver that also has
+    to be present on the machine.
+    """
+    detail = (
+        f"The {connector} connector needs an add-on that isn't included in "
+        f"this F-Pulse install."
+    )
+    suggestion = f"Ask whoever set up F-Pulse to enable the {connector} connector."
+    if system_requirement:
+        detail += f" It also needs {system_requirement} installed on this computer."
+        suggestion = (
+            f"Ask whoever set up F-Pulse to enable the {connector} connector, "
+            f"and install {system_requirement} on this computer."
+        )
+    return {
+        "success": False,
+        "message": f"The {connector} connector isn't available in this install",
+        "details": {},
+        "error": detail,
+        "suggestion": suggestion,
+    }
+
+
 class ConnectionTester:
     """Real connectivity testing for all connection types."""
 
@@ -157,11 +187,7 @@ class ConnectionTester:
         try:
             import psycopg2  # type: ignore
         except ImportError:
-            return _fail(
-                "psycopg2 driver not installed",
-                "Install with: pip install psycopg2-binary",
-                "postgresql",
-            )
+            return _addon_unavailable("PostgreSQL")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 5432))
@@ -221,11 +247,7 @@ class ConnectionTester:
         try:
             import pymysql  # type: ignore
         except ImportError:
-            return _fail(
-                "pymysql driver not installed",
-                "Install with: pip install pymysql",
-                "mysql",
-            )
+            return _addon_unavailable("MySQL")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 3306))
@@ -278,10 +300,9 @@ class ConnectionTester:
         try:
             import pyodbc  # type: ignore
         except ImportError:
-            return _fail(
-                "pyodbc driver not installed",
-                "Install with: pip install pyodbc (also requires Microsoft ODBC Driver for SQL Server)",
-                "mssql",
+            return _addon_unavailable(
+                "SQL Server",
+                system_requirement="the Microsoft ODBC Driver for SQL Server",
             )
 
         host = config.get("host", "localhost")
@@ -614,11 +635,7 @@ class ConnectionTester:
             import boto3  # type: ignore
             from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError  # type: ignore
         except ImportError:
-            return _fail(
-                "boto3 not installed",
-                "Install with: pip install boto3",
-                "s3",
-            )
+            return _addon_unavailable("S3")
 
         endpoint_url = config.get("endpoint") or config.get("endpoint_url")
         region = config.get("region", "us-east-1")
@@ -738,11 +755,7 @@ class ConnectionTester:
                 topics=topics[:20],
             )
         except ImportError:
-            return _fail(
-                "No Kafka client library installed",
-                "Install with: pip install confluent-kafka   OR   pip install kafka-python",
-                "kafka",
-            )
+            return _addon_unavailable("Kafka")
         except Exception as exc:
             return _fail(f"Kafka connection failed to {brokers}", exc, "kafka")
 
@@ -799,10 +812,7 @@ class ConnectionTester:
         try:
             import paramiko
         except ImportError as exc:
-            return _fail(
-                "SFTP test needs the 'paramiko' package — run: pip install paramiko",
-                exc, "sftp",
-            )
+            return _addon_unavailable("SFTP")
         start = time.time()
         ssh = None
         try:
@@ -1784,11 +1794,7 @@ class ConnectionTester:
         try:
             import redis as redis_lib  # type: ignore
         except ImportError:
-            return _fail(
-                "redis library not installed",
-                "Install with: pip install redis",
-                "redis",
-            )
+            return _addon_unavailable("Redis")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 6379))
@@ -1849,11 +1855,7 @@ class ConnectionTester:
             from pymongo import MongoClient  # type: ignore
             from pymongo.errors import ConnectionFailure, OperationFailure  # type: ignore
         except ImportError:
-            return _fail(
-                "pymongo not installed",
-                "Install with: pip install pymongo",
-                "mongodb",
-            )
+            return _addon_unavailable("MongoDB")
 
         uri = config.get("uri") or config.get("connection_string")
         if uri:

@@ -45,6 +45,42 @@ openpyxl>=3.1.0
 # Linux). If pip install fails on your platform, install the system
 # driver first or skip pyodbc and avoid the SQL Server connector.
 pyodbc>=5.0
+# 2026-08-02: Postgres + MySQL drivers. A data-pipeline tool has to
+# connect to the two most common databases out of the box — shipping
+# without them meant a user testing a Postgres/MySQL connection hit
+# "psycopg2 driver not installed — pip install psycopg2-binary", the
+# exact failure the pyodbc/openpyxl audit above was meant to end. Both
+# are imported unconditionally by nodes/db_source, nodes/sinks,
+# connections/tester, connectors/cdc, engine/bulk_load, etc.
+#   * psycopg2-binary — Postgres. Self-contained wheel (bundles libpq),
+#     no OS deps. LGPL-3.0 (permitted — importable + pip-replaceable).
+#   * pymysql — MySQL / MariaDB. Pure-Python, MIT, no OS deps.
+psycopg2-binary>=2.9
+pymysql>=1.1
+# 2026-08-02: boto3 — AWS S3 / MinIO / any S3-compatible object store. A
+# data-pipeline tool ships S3 read+write out of the box; without boto3 a
+# user testing an S3 connection or running an S3 source/sink hit an
+# add-on-missing error, the same gap the psycopg2/pymysql lines above close.
+# Imported by nodes/sources + nodes/sinks (S3 read/write), connections/tester
+# (Test connection), engine/bulk_load/dialects/redshift (Redshift COPY), and
+# storage/providers (S3-backed backups). Self-contained wheel, no OS deps,
+# Apache-2.0.
+boto3>=1.34
+# 2026-08-03: remaining common connector drivers — close the last of the
+# "driver not installed" gaps so every common connector works out of the box.
+# All pure-Python or self-contained wheels; no OS-level deps:
+#   * snowflake-connector-python — Snowflake warehouse
+#   * oracledb — Oracle (thin mode = pure Python, no Instant Client needed)
+#   * paramiko — SFTP source/sink + Test-connection (nodes/cloud_files, tester)
+#   * redis — Redis connector / Test-connection
+#   * pymongo — MongoDB connector / Test-connection
+# Kafka stays optional (native confluent-kafka) with the friendly "add-on"
+# message in connections/tester.py.
+snowflake-connector-python>=3.0
+oracledb>=2.0
+paramiko>=3.0
+redis>=5.0
+pymongo>=4.0
 # 2026-06-01: Avro file reader (File node, Cloud Files node). ORC reads
 # go through pyarrow.orc (already shipped with pyarrow), but Avro is
 # row-oriented + schema-embedded and needs fastavro to parse — there's
