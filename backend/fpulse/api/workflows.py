@@ -3148,6 +3148,82 @@ async def import_pipeline(
     }
 
 
+class DbtImportRequest(BaseModel):
+    """Body for the dbt-project importer.
+
+    ``manifest`` is a parsed compiled dbt ``manifest.json`` (the artifact dbt
+    writes to ``target/`` after ``dbt compile`` / ``dbt docs generate``). The
+    frontend reads the file and posts its JSON as this dict.
+    """
+    manifest: dict[str, Any]
+    project_id: str = "default"
+    name: str | None = None
+
+
+@router.post("/import-dbt", dependencies=[_AUTHOR])
+async def import_dbt_project(
+    body: DbtImportRequest,
+    workspace_id: str = Depends(_safe_workspace_id),
+):
+    """Import a compiled dbt ``manifest.json`` as an F-Pulse pipeline.
+
+    dbt models become SQL Transform nodes, sources become connection-bound
+    placeholder nodes, and ``ref()``/``source()`` dependencies become the
+    pipeline DAG (each edge aliased so the model SQL resolves its upstreams).
+    Lands in the caller's workspace — imports NEVER cross tenant boundaries.
+    Returns the created pipeline plus a ``report`` of honest caveats
+    (unbound sources, incremental models, DuckDB dialect risk).
+    """
+    from fpulse.importers.dbt import manifest_to_pipeline
+    from fpulse.ir.schema import Step, StepConnection, NodePosition
+
+    try:
+        pipeline, report = manifest_to_pipeline(body.manifest, name=body.name)
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid dbt manifest: {exc}")
+
+    if not pipeline["steps"]:
+        raise HTTPException(
+            400,
+            "No dbt models found in this manifest. Run `dbt compile` and import "
+            "the manifest.json from the project's target/ directory.",
+        )
+
+    store = get_store()
+    wf = Workflow(
+        name=pipeline["name"],
+        description=pipeline.get("description", ""),
+        project_id=body.project_id,
+        workspace_id=workspace_id,
+        metadata=pipeline.get("metadata", {}),
+    )
+    for s in pipeline["steps"]:
+        wf.steps.append(Step(
+            id=s["id"],
+            type=s["type"],
+            label=s.get("label", ""),
+            params=s.get("params", {}),
+            position=NodePosition(**(s.get("position", {}))),
+        ))
+    for c in pipeline["connections"]:
+        wf.connections.append(StepConnection(**c))
+
+    version = store.save(wf, change_summary=f"Imported dbt project: {wf.name}")
+    get_lifecycle_store().add_event(
+        wf.id, "created", f"Imported dbt project: {wf.name}",
+        workspace_id=workspace_id,
+    )
+
+    return {
+        "id": wf.id,
+        "name": wf.name,
+        "version": version.version,
+        "steps_imported": len(wf.steps),
+        "connections_imported": len(wf.connections),
+        "report": report,
+    }
+
+
 @router.post("/{workflow_id}/clone", dependencies=[_AUTHOR])
 async def clone_pipeline(
     workflow_id: str,
