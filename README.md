@@ -91,7 +91,7 @@ Signed installers land once we have an EV certificate + Apple notarization.
 ### Linux package — `.deb` / `.rpm` / `.AppImage`
 
 Bundles a frozen Python runtime and the compiled UI — no Python, no Node,
-no Docker needed on the target machine. After install, F-Pulse registers
+no Docker needed on the target machine. After a .deb / .rpm install (not the AppImage, which runs in place), F-Pulse registers
 itself as a systemd **user** service that starts at login and survives
 reboots.
 
@@ -108,14 +108,14 @@ Download from the [latest GitHub Release](https://github.com/hybridyn/fpulse/rel
 > `SHA256SUMS` on the release: `sha256sum -c SHA256SUMS`. That proves the
 > file arrived intact, not who built it — signing is on the list.
 
-After install, open <http://localhost:8001> — the service is already running.
+After install, open <http://localhost:8001> — the service is already registered and running. (The AppImage runs in place with no install step, so run 'fpulse install-service' if you want a service.)
 
 **Manage the service** (any OS, same commands):
 
 ```bash
 fpulse service-status        # is it running?
 fpulse uninstall-service     # stop + deregister (does NOT delete data)
-fpulse install-service       # re-register after an update
+fpulse install-service       # create/register the always-on service (also re-register after an update)
 ```
 
 Building these installers yourself (CI / private builds): see
