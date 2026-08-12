@@ -36,6 +36,23 @@ fpulse install-service
 fpulse install-service --port 8002 --data-dir /var/lib/fpulse
 ```
 
+> **Windows: run this from an _Administrator_ PowerShell.** Registering
+> the Scheduled Task needs elevation — a normal terminal fails with
+> `REGISTER_FAIL: Access is denied`. Open an elevated shell first:
+> right-click **Windows PowerShell** (or Windows Terminal) → **Run as
+> administrator**, or press **Win+X** and choose **Terminal (Admin)** /
+> **Windows PowerShell (Admin)** — then re-run `fpulse install-service`.
+
+> **The service uses its own data directory.** `fpulse install-service`
+> runs the backend against the fixed per-OS data dir (Windows
+> `%LOCALAPPDATA%\FPulse\data`, macOS `~/Library/Application Support/FPulse`,
+> Linux `~/.local/share/fpulse`) — **not** the `.\data` that a manual
+> `fpulse serve` uses relative to your current folder. So the service and
+> your manual runs are *separate instances* with separate accounts,
+> pipelines, and outputs. To point them at the same data, pass
+> `--data-dir` (e.g. `fpulse install-service --data-dir C:\FPulse\data`)
+> or set `FPULSE_DATA_DIR` the same way for both.
+
 **Manage (any OS):**
 
 ```bash

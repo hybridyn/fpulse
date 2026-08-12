@@ -120,6 +120,23 @@ All three read **the same** `.fpulse/runtime/instance.json` and stop **only** th
 
 The first time F-Pulse starts, it asks you to **create your admin account** (your email + a strong password) — that first account owns the instance. There's no pre-made account and no password file to hunt for. (For a headless/scripted deploy that can't do the interactive first run, set `FPULSE_BOOTSTRAP_ADMIN=1` to auto-create `admin@fpulse.local` with a random password in `INITIAL_ADMIN_PASSWORD.txt` instead; sign in and rotate it.)
 
+### Where your data — and your login — live
+
+Everything F-Pulse stores — the `fpulse.db` database, your admin account, uploaded files, and pipeline outputs — lives in **one data directory**. Where that directory is depends on how you started F-Pulse:
+
+- **`fpulse serve` / `fpulse open`** default it to `<the folder you ran the command from>\data` — a *relative* path. Run the command from a different folder and you get a different, empty instance (a fresh create-account screen), not your existing data.
+- **The installed service** uses a fixed per-OS path instead:
+  - Windows: `%LOCALAPPDATA%\FPulse\data`
+  - macOS: `~/Library/Application Support/FPulse`
+  - Linux: `~/.local/share/fpulse`
+- **Docker** uses the `fpulse_data` volume, mounted at `/data` inside the container.
+
+Pin the location explicitly with the **`FPULSE_DATA_DIR`** environment variable so every launch — manual, service, or container — points at the same data.
+
+**To start fresh** (get the create-account screen back): stop F-Pulse, delete or rename the data directory, then restart.
+
+**Seeing an `admin@fpulse.local` sign-in you didn't set up?** That data directory already has a bootstrap account — its password is in `INITIAL_ADMIN_PASSWORD.txt` in the same directory.
+
 ## Run the first-pipeline demo (60 seconds)
 
 F-Pulse ships with a runnable demo so you can prove it works end-to-end before configuring anything.
