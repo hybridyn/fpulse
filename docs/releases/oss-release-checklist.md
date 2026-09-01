@@ -83,7 +83,7 @@ announcing, not after.
 
 | Promise in the docs | Verify | Enable |
 |---|---|---|
-| `pip install fpulse` (README headline; ~60 refs incl. `fpulse[postgres]` etc.) | `curl -sI https://pypi.org/pypi/fpulse/json` → 200, not 404 | Create the `fpulse` project on pypi.org + add a Trusted Publisher (owner=hybridyn, repo=fpulse, workflow=release.yml), then set repo variable `PUBLISH_PYPI=true`. No API token — OIDC only. |
+| `pip install fpulse` (README headline; extras such as `fpulse[postgres]`) | `python -m pip index versions fpulse` shows the target version, then `python -m pip install --dry-run fpulse==<ver>` resolves | PyPI publishing is configured through Trusted Publishing. Keep repo variable `PUBLISH_PYPI=true`; if a release is missing, check the GitHub `release.yml` run and PyPI project publishing status. |
 | `docker pull hybridyn/fpulse:<ver>` | `curl -sI https://hub.docker.com/v2/repositories/hybridyn/fpulse/` → 200 | Add `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` secrets, then set repo variable `PUBLISH_DOCKER=true`. Remove the README "builds locally on first run" heads-up in the same change. |
 | Repo is reachable at `github.com/hybridyn/fpulse` | open it while signed out | Flip visibility to public. **Do this early, not at announce time** — CodeQL self-skips on private repos, so its first-ever run happens on the flip, in public. |
 

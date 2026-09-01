@@ -16,14 +16,13 @@
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.0-blue" alt="Status: 1.0.0"></a>
 </p>
 
-Single-binary, local-first data pipeline engine. Clone it, `pip install -e .`, `fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
+Single-binary, local-first data pipeline engine. `pip install fpulse`, `fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
 
 > **Status:** 1.0.0 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
 >
-> **Install today: from source or Docker** — both are one command and fully
-> supported ([Quick start](#quick-start)). `pip install fpulse` and the
-> prebuilt desktop installers are not published yet; the sections below say
-> so where it matters rather than pointing you at a 404.
+> **Install today: PyPI, Docker, or source** — all are supported
+> ([Quick start](#quick-start)). `pip install fpulse` is published on PyPI;
+> prebuilt desktop installers are still pending.
 
 ## Why F-Pulse
 
@@ -52,7 +51,7 @@ the *same one command* on Windows, macOS, and Linux. Pick what fits you:
 
 | You are | Recommended path | Time |
 |---|---|---|
-| **On Windows / macOS / Linux — want it to just work** | **Docker Compose** below (needs Docker Desktop or Docker Engine) | 5 min |
+| **On Windows / macOS / Linux — want it to just work** | **PyPI install** below (needs Python 3.11+) or **Docker Compose** | 2-5 min |
 | **On Linux, and you'd rather not run Docker** | **Linux package** below — `.deb` / `.rpm` / `.AppImage` (no Python, no Docker on the box) | 2 min |
 | **A developer / contributor** | **From source** below (Python 3.11+, Node 20+) | 10 min |
 
@@ -66,11 +65,33 @@ Want the native app anyway? Build it yourself in one command — see
 [`installer/readme.md`](installer/readme.md) — and click through the warning.
 Signed installers land once we have an EV certificate + Apple notarization.
 
-**Not on the public registries yet** (we'd rather say so than send you to a 404):
+### PyPI install
+
+```bash
+python -m pip install fpulse
+fpulse open
+```
+
+`fpulse open` defaults to port `8001`, but if that port is already in use it
+prints the alternate URL it selected, for example `http://127.0.0.1:8003`.
+Open the printed URL, not necessarily `http://localhost:8001`.
+
+The health endpoint is `/api/health`:
+
+```bash
+curl http://localhost:8001/api/health
+```
+
+If `fpulse` is not found after install, use the same Python that installed it:
+
+```bash
+python -m fpulse open
+```
+
+**Not on Docker Hub yet** (we'd rather say so than send you to a 404):
 
 | Not yet available | Use this instead |
 |---|---|
-| `pip install fpulse` | Builds and runs, just not on PyPI yet — use **From source** below (one extra command). |
 | `docker pull hybridyn/fpulse` | Not on Docker Hub yet, but **you don't need it** — `docker compose up` builds it locally on first run (see below). |
 
 > **Behind a corporate / office proxy?** If `pip install` — or the first-time
@@ -91,7 +112,7 @@ Signed installers land once we have an EV certificate + Apple notarization.
 ### Linux package — `.deb` / `.rpm` / `.AppImage`
 
 Bundles a frozen Python runtime and the compiled UI — no Python, no Node,
-no Docker needed on the target machine. After a .deb / .rpm install (not the AppImage, which runs in place), F-Pulse registers
+no Docker needed on the target machine. After install, F-Pulse registers
 itself as a systemd **user** service that starts at login and survives
 reboots.
 
@@ -108,14 +129,14 @@ Download from the [latest GitHub Release](https://github.com/hybridyn/fpulse/rel
 > `SHA256SUMS` on the release: `sha256sum -c SHA256SUMS`. That proves the
 > file arrived intact, not who built it — signing is on the list.
 
-After install, open <http://localhost:8001> — the service is already registered and running. (The AppImage runs in place with no install step, so run 'fpulse install-service' if you want a service.)
+After install, open <http://localhost:8001> — the service is already running.
 
 **Manage the service** (any OS, same commands):
 
 ```bash
 fpulse service-status        # is it running?
 fpulse uninstall-service     # stop + deregister (does NOT delete data)
-fpulse install-service       # create/register the always-on service (also re-register after an update)
+fpulse install-service       # re-register after an update
 ```
 
 Building these installers yourself (CI / private builds): see
@@ -217,7 +238,7 @@ fpulse open
 > so loudly at startup (`no frontend build found …`) rather than leaving you
 > to guess.
 
-The `fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. No need to type or remember a URL.
+The `fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. If the output says `port 8001 was in use — using 8003 instead`, open the printed URL (`http://127.0.0.1:8003` in that example). No need to type or remember a URL.
 
 If you prefer the manual flow:
 ```bash
@@ -239,8 +260,7 @@ runbook: [docs/deployment.md](docs/deployment.md).
 `fpulse serve` / `fpulse open` run in the **foreground** — fine while you're
 trying it out, but they stop the moment you close the terminal. For an
 always-on install that survives terminal close, logout, and reboot, register
-F-Pulse with your OS service manager. **One command, every platform, no
-admin/sudo:**
+F-Pulse with your OS service manager. **One command, every platform:**
 
 ```bash
 fpulse install-service     # register + start it supervised in the background
@@ -250,7 +270,7 @@ fpulse uninstall-service   # remove it
 
 | OS | What it registers | Notes |
 |---|---|---|
-| **Windows** | Scheduled Task at logon (`schtasks`) | runs hidden, restarts on crash — no NSSM / pywin32 |
+| **Windows** | Scheduled Task at logon (`schtasks`) | runs hidden, restarts on crash — no NSSM / pywin32. Current 1.0.x builds register with highest privileges, so run PowerShell as Administrator if you see `REGISTER_FAIL: Access is denied`. |
 | **macOS** | launchd LaunchAgent | auto-starts at login, `KeepAlive` restart |
 | **Linux** | user-mode `systemd` unit | `systemctl --user enable --now`; add `loginctl enable-linger $USER` to keep it running after you log out |
 

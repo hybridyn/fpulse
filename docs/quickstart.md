@@ -4,7 +4,27 @@ Run your first F-Pulse pipeline in 5 minutes.
 
 ## Install
 
-### Option 1: Docker (recommended)
+### Option 1: PyPI
+
+Needs Python 3.11+.
+
+```powershell
+python -m pip install fpulse
+fpulse open
+```
+
+`fpulse open` starts on port `8001` when it is free. If another process
+already owns `8001`, F-Pulse prints the alternate URL it selected, for example:
+
+```text
+[note] port 8001 was in use — using 8003 instead
+URL: http://127.0.0.1:8003
+```
+
+Open the printed URL. The health check is `/api/health`, for example
+`http://localhost:8001/api/health`; plain `/health` is not an endpoint.
+
+### Option 2: Docker
 
 ```bash
 git clone https://github.com/hybridyn/fpulse.git
@@ -14,7 +34,7 @@ docker compose up -d
 
 Open [http://localhost:8001](http://localhost:8001).
 
-### Option 2: From source
+### Option 3: From source
 
 **Linux/macOS** (needs Python 3.11+ and Node 20+):
 ```bash
@@ -81,7 +101,7 @@ All three carry the F-Pulse logo and open the app in your browser.
 
 ### Ports already taken? F-Pulse picks a free pair automatically
 
-If something else on your machine already owns `5174` or `8001` (Postman, another project's dev server, an earlier F-Pulse instance you forgot to stop), F-Pulse **just works** — the launcher scans for the next free pair, writes the chosen pair to `.fpulse/runtime/instance.json`, points Vite + the backend at those ports, and prints the single URL it ended up using:
+If something else on your machine already owns `5174` or `8001` (Postman, another project's dev server, an earlier F-Pulse instance you forgot to stop), F-Pulse **just works** — the source/dev launcher scans for the next free pair, writes the chosen pair to `.fpulse/runtime/instance.json`, points Vite + the backend at those ports, and prints the single URL it ended up using:
 
 ```text
 > .\start.bat
@@ -95,6 +115,10 @@ If something else on your machine already owns `5174` or `8001` (Postman, anothe
 ```
 
 No env vars to set, nothing to kill manually.
+
+The packaged `fpulse open` command behaves the same way for the backend port:
+it starts at `8001`, falls back to the next free port if needed, and writes the
+chosen port to `~/.fpulse/runtime/instance.json`.
 
 If you want F-Pulse to **prefer** a specific port (it'll still scan onward from there if busy), set the prefs once:
 
@@ -119,23 +143,6 @@ All three read **the same** `.fpulse/runtime/instance.json` and stop **only** th
 ## First login
 
 The first time F-Pulse starts, it asks you to **create your admin account** (your email + a strong password) — that first account owns the instance. There's no pre-made account and no password file to hunt for. (For a headless/scripted deploy that can't do the interactive first run, set `FPULSE_BOOTSTRAP_ADMIN=1` to auto-create `admin@fpulse.local` with a random password in `INITIAL_ADMIN_PASSWORD.txt` instead; sign in and rotate it.)
-
-### Where your data — and your login — live
-
-Everything F-Pulse stores — the `fpulse.db` database, your admin account, uploaded files, and pipeline outputs — lives in **one data directory**. Where that directory is depends on how you started F-Pulse:
-
-- **`fpulse serve` / `fpulse open`** default it to `<the folder you ran the command from>\data` — a *relative* path. Run the command from a different folder and you get a different, empty instance (a fresh create-account screen), not your existing data.
-- **The installed service** uses a fixed per-OS path instead:
-  - Windows: `%LOCALAPPDATA%\FPulse\data`
-  - macOS: `~/Library/Application Support/FPulse`
-  - Linux: `~/.local/share/fpulse`
-- **Docker** uses the `fpulse_data` volume, mounted at `/data` inside the container.
-
-Pin the location explicitly with the **`FPULSE_DATA_DIR`** environment variable so every launch — manual, service, or container — points at the same data.
-
-**To start fresh** (get the create-account screen back): stop F-Pulse, delete or rename the data directory, then restart.
-
-**Seeing an `admin@fpulse.local` sign-in you didn't set up?** That data directory already has a bootstrap account — its password is in `INITIAL_ADMIN_PASSWORD.txt` in the same directory.
 
 ## Run the first-pipeline demo (60 seconds)
 
