@@ -1,7 +1,11 @@
 # F-Pulse v1.0.0 — API Reference
 
 **Base URL:** `http://localhost:8001/api`
-**Interactive Docs:** `http://localhost:8001/docs` (Swagger UI)
+**Health Check:** `http://localhost:8001/api/health`
+**Interactive Docs:** `http://localhost:8001/docs` (Swagger UI, disabled unless `FPULSE_ENABLE_API_DOCS=1`)
+
+If `fpulse open` reports that port `8001` was already in use and selected
+another port, use that printed port for every URL on this page.
 
 ## Health & Utility
 

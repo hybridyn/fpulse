@@ -102,7 +102,7 @@ Each database connector needs its Python driver installed separately — the bas
 
 Full per-database install commands + OS-driver instructions: **[`install/database-drivers.md`](install/database-drivers.md)**
 
-Quick examples (until F-Pulse is published to PyPI, install from a source checkout — swap `pip install fpulse[x]` for `pip install -e ".[x]"`):
+Quick examples:
 ```bash
 pip install fpulse[postgres]      # PostgreSQL
 pip install fpulse[oracle]        # Oracle (thin mode — no OS install)
@@ -111,6 +111,9 @@ pip install fpulse[snowflake]     # Snowflake
 pip install fpulse[bigquery]      # Google BigQuery
 pip install fpulse[all-databases-no-os-deps]   # All pip-only databases at once
 ```
+
+Developing from a source checkout? Use the editable equivalent from the repo
+root, for example `pip install -e ".[postgres]"`.
 
 ## SaaS — v2 (beta validation in progress)
 

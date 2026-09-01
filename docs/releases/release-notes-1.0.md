@@ -52,8 +52,11 @@ SaaS bill.
   GET-only framework silently dropped POST bodies; this is now
   fixed with 18 contract tests pinning the behaviour.
 - **32 optional dependency extras** in `pyproject.toml` for
-  database drivers. From a source checkout: `pip install -e ".[postgres]"`,
-  `pip install -e ".[oracle]"`, `pip install -e ".[all]"`, etc.
+  database drivers. From PyPI: `pip install "fpulse[postgres]"`,
+  `pip install "fpulse[oracle]"`, `pip install "fpulse[all]"`, etc.
+  From a source checkout, use the editable equivalents:
+  `pip install -e ".[postgres]"`, `pip install -e ".[oracle]"`,
+  `pip install -e ".[all]"`.
   Full per-database install + OS-driver instructions in
   [`docs/install/database-drivers.md`](../install/database-drivers.md).
 - **Embedded AI assistance** — Copilot chat + inline helpers (SQL,
@@ -66,11 +69,14 @@ SaaS bill.
 
 ### How to install
 
-F-Pulse 1.0 ships as source plus a Docker image you build locally. The
-`fpulse` PyPI package and Docker Hub image are reserved but **not published
-yet** — so at launch, install from the repo:
+F-Pulse 1.0 ships on PyPI, as source, and as a Docker image you build
+locally. The Docker Hub image is reserved but **not published yet**:
 
 ```bash
+# PyPI
+python -m pip install fpulse
+fpulse open
+
 # Docker (recommended) — builds locally, serves http://localhost:8001
 git clone https://github.com/hybridyn/fpulse.git
 cd fpulse
@@ -84,17 +90,17 @@ fpulse open
 For database connectors, add the matching extra to the source install:
 
 ```bash
-pip install -e ".[postgres]"
-pip install -e ".[oracle]"      # thin mode, no Instant Client
-pip install -e ".[snowflake]"
-pip install -e ".[all]"          # everything pip-only (no OS drivers)
+pip install "fpulse[postgres]"
+pip install "fpulse[oracle]"      # thin mode, no Instant Client
+pip install "fpulse[snowflake]"
+pip install "fpulse[all]"          # everything pip-only (no OS drivers)
 ```
 
 MS SQL Server, Oracle thick mode, and IBM Db2 also need OS-level
 drivers — see [`docs/install/database-drivers.md`](../install/database-drivers.md).
 
-> Once F-Pulse is published to PyPI, the shorthand `pip install "fpulse[postgres]"`
-> (no `-e .`) and `fpulse open` will work directly.
+When running from a source checkout, use `pip install -e ".[postgres]"`
+from the repo root instead.
 
 ### What 1.0 deliberately does NOT promise
 
