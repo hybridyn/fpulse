@@ -904,10 +904,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         database = app_state["db"]
         worker_pool = app_state["worker_pool"]
 
+        _port = os.environ.get("FPULSE_PORT", "8001")
+        _api_base = f"http://localhost:{_port}"
         _docs_line = (
-            "  API:       http://localhost:8001/docs\n"
+            f"  API:       {_api_base}/docs\n"
             if _api_docs_enabled
-            else "  API:       http://localhost:8001  (Swagger /docs disabled; set FPULSE_ENABLE_API_DOCS=1 to enable)\n"
+            else f"  API:       {_api_base}  (Swagger /docs disabled; set FPULSE_ENABLE_API_DOCS=1 to enable)\n"
         )
         print(
             f"\n"

@@ -43,13 +43,26 @@ docker compose up -d          # F-Pulse only
 docker compose --profile ai up -d   # F-Pulse + Ollama
 ```
 
-Open <http://localhost:5174>.
+Open <http://localhost:8001>.
 
 `.env` is the **only place** you should change image tags. Editing
 `docker-compose.yml` directly works but means your tag overrides walk
 away on the next `git pull`.
 
-### 2.2 From source (development)
+### 2.2 PyPI install
+
+For a local, non-Docker install on a machine with Python 3.11+:
+
+```bash
+python -m pip install fpulse
+fpulse open
+```
+
+`fpulse open` defaults to `8001`, falls back if that port is already in
+use, and prints the exact URL to open. If it says `using 8003 instead`,
+use `http://localhost:8003` and check `http://localhost:8003/api/health`.
+
+### 2.3 From source (development)
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -62,12 +75,11 @@ You are off the tested matrix the moment you run a Python or Node
 version not in the CHANGELOG. Fine for hacking; not recommended for
 production.
 
-### 2.3 Run in the background (as a service)
+### 2.4 Run in the background (as a service)
 
 `fpulse serve` / `fpulse open` run in the foreground — they stop when the
 terminal closes. For an always-on install that survives terminal close,
-logout, and reboot, register the OS-native supervisor (one command, no
-admin/sudo):
+logout, and reboot, register the OS-native supervisor:
 
 ```bash
 fpulse install-service     # Windows Scheduled Task · macOS launchd · Linux user systemd
@@ -75,7 +87,7 @@ fpulse service-status      # is it running?
 fpulse uninstall-service   # remove it (data is left intact)
 ```
 
-- **Windows** — Scheduled Task at logon (`schtasks`); runs hidden, restarts on crash.
+- **Windows** — Scheduled Task at logon (`schtasks`); runs hidden, restarts on crash. Current 1.0.x builds request highest privileges for the task, so run PowerShell as Administrator if registration fails with `REGISTER_FAIL: Access is denied`.
 - **macOS** — launchd LaunchAgent; auto-starts at login, `KeepAlive` restart.
 - **Linux** — user-mode `systemd` unit; add `loginctl enable-linger $USER` to keep it running after logout.
 

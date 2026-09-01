@@ -30,11 +30,22 @@ different machinery underneath.
 **Install (any OS):**
 
 ```bash
-# Prereq: pip install -e . (or you've installed a packaged build)
+# Prereq: pip install fpulse, pip install -e ., or a packaged build
 fpulse install-service
 # Custom port + data dir:
 fpulse install-service --port 8002 --data-dir /var/lib/fpulse
 ```
+
+Windows note: current 1.0.x PyPI builds register the Scheduled Task with
+highest privileges. If registration fails with:
+
+```text
+REGISTER_FAIL: Access is denied.
+```
+
+open PowerShell with **Run as Administrator** and retry `fpulse install-service`.
+You can still run F-Pulse without service registration by using `fpulse open`;
+that foreground command does not require Administrator.
 
 **Manage (any OS):**
 
@@ -63,7 +74,8 @@ journalctl --user -u fpulse -f
 sudo loginctl enable-linger $USER
 ```
 
-Open `http://localhost:8001/` after install.
+Open `http://localhost:8001/` after install, unless you passed a different
+`--port`.
 
 ---
 
@@ -258,3 +270,11 @@ Start-Process http://localhost:5174       # dev-mode (Vite running separately)
 
 If `/api/health` returns 200 but the UI page is empty, see §4 —
 you need to build the frontend.
+
+If you used `fpulse open` instead of service mode and saw a message like
+`port 8001 was in use — using 8003 instead`, verify and open the printed port:
+
+```powershell
+Invoke-RestMethod http://localhost:8003/api/health
+Start-Process http://localhost:8003
+```

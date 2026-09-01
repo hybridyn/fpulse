@@ -189,6 +189,10 @@ def cmd_serve(args):
     if getattr(args, "open", False):
         os.environ["FPULSE_ALLOW_TAB_SHUTDOWN"] = "1"
 
+    # Keep the app startup banner and in-process helpers aligned with the
+    # actual fallback port selected by the launcher.
+    os.environ["FPULSE_PORT"] = str(actual_port)
+
     # Auto-launch browser before uvicorn.run() (which blocks). The
     # browser will retry until the backend is up; modern browsers
     # auto-reconnect within ~1s.
