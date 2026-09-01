@@ -1275,7 +1275,7 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
           : { label: 'View Deployments', onClick: () => onNavigate('pipelines') })
       : { label: 'My Deployments', onClick: () => onNavigate('pipelines') };
     return isAdmin
-      ? { label: 'Team Activity', onClick: () => onNavigate('admin') }
+      ? { label: 'Team Activity', onClick: () => onNavigate('activity') }
       : { label: 'New Pipeline', onClick: () => onNavigate('templates') };
   })();
 

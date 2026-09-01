@@ -8,6 +8,7 @@ import { toast } from './Toast';
 import DynamicConfig from './DynamicConfig';
 import { DataInBand, DataOutBand } from './NodeConfigFrame';
 import { buildDataIn, buildDataOut, deriveOutputColumns } from '../utils/nodeUiContract';
+import { hasSideEffect } from '../utils/nodeArity';
 import ExpressionPreview from './ExpressionPreview';
 // P5 (2026-05-21): cast-safety classifier mirrors the backend taxonomy
 // so the Mapping tab renders ✓ / ⚠ / ✕ glyphs without a network hop.
@@ -73,6 +74,7 @@ const DataWranglerConfig = lazy(() => import('./data-wrangler/DataWranglerConfig
 // and returns null on cancel. See the Test Node handler below.
 import { usePageContext } from '../hooks/usePageContext';
 import { setOpen as setAgentDockOpen, setTurns as setAgentTurns } from '../hooks/useAgentChatStore';
+import { humanizeExecutionError } from '../utils/errorMessages';
 
 // Shared Suspense fallback for lazy-loaded per-step-type configs. Kept
 // minimal so a fast network shows zero flicker; sized to match the
@@ -388,6 +390,7 @@ export default function ConfigPanel() {
   const settings = params?._settings || {};
   const result = stepResults[selectedNodeId!];
   const isSource = category === 'source';
+  const isSideEffectNode = hasSideEffect(stepType);
 
   // NodeConfigFrame (2026-06-16) — Data In / Data Out bands derived from the
   // live upstream schema + the registry, rendered around EVERY node's
@@ -814,9 +817,14 @@ export default function ConfigPanel() {
           disabled={testing}
           className="px-3 py-1.5 text-white text-xs font-bold rounded-lg disabled:opacity-50 transition-all shadow-sm hover:shadow-md flex items-center gap-1.5 shrink-0"
           style={{ background: testing ? '#94a3b8' : 'linear-gradient(135deg, #3B7DD8, #1E5AAF)' }}
+          title={isSideEffectNode
+            ? 'Preview only: checks upstream data and mapping, but skips the actual write/send action'
+            : 'Test this node with its upstream data'}
         >
           {testing ? (
             <><span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />Testing...</>
+          ) : isSideEffectNode ? (
+            <><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>Preview Node</>
           ) : (
             <><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>Test Node</>
           )}
@@ -882,19 +890,56 @@ export default function ConfigPanel() {
           Always visible while result.error exists; the AI Diagnosis
           card below appears on top when the user clicks AI Fix. */}
       {result?.error && (
-        <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-800 shrink-0">
-          <div className="flex items-start gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500 shrink-0 mt-0.5">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="13" />
-              <line x1="12" y1="16" x2="12" y2="16" />
-            </svg>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-red-600 mb-0.5">
-                Last run failed on this node
+        (() => {
+          const friendly = humanizeExecutionError(result.error);
+          return (
+            <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-800 shrink-0">
+              <div className="flex items-start gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500 shrink-0 mt-0.5">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="13" />
+                  <line x1="12" y1="16" x2="12" y2="16" />
+                </svg>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-red-600 mb-0.5">
+                    Last run failed on this node
+                  </div>
+                  <div className="text-sm font-bold text-red-900">{friendly.title}</div>
+                  <div className="text-xs text-red-800 mt-0.5">{friendly.message}</div>
+                  {friendly.actions.length > 0 && (
+                    <ul className="mt-1.5 space-y-0.5 text-xs text-red-800 list-disc pl-4">
+                      {friendly.actions.map((action) => <li key={action}>{action}</li>)}
+                    </ul>
+                  )}
+                  {friendly.technical && friendly.technical !== friendly.message && (
+                    <details className="mt-2">
+                      <summary className="text-[11px] font-semibold text-red-700 cursor-pointer hover:text-red-900">
+                        Show technical details
+                      </summary>
+                      <div className="mt-1 text-[11px] font-mono break-words whitespace-pre-wrap leading-snug text-red-700 bg-white/60 border border-red-100 rounded-md p-2 max-h-28 overflow-auto">
+                        {friendly.technical}
+                      </div>
+                    </details>
+                  )}
+                </div>
               </div>
-              <div className="text-xs font-mono break-words whitespace-pre-wrap leading-snug">
-                {result.error}
+            </div>
+          );
+        })()
+      )}
+
+      {isSideEffectNode && (
+        <div className="mx-4 mt-3 mb-1 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 shrink-0">
+          <div className="flex items-start gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500 shrink-0 mt-0.5">
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+            </svg>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-0.5">Preview only</div>
+              <div className="text-xs leading-snug">
+                Preview Node checks incoming data and configuration, but skips the actual write/send action. Run the pipeline to test the real destination connection.
               </div>
             </div>
           </div>
@@ -4266,6 +4311,13 @@ function SyncModeField({ params, nodeId, onChange }: ConfigProps) {
 }
 
 function DbSourceConfig({ params, nodeId, onChange, hideConnection }: ConfigProps) {
+  const { type: selectedConnectionType } = useConnectionType(params.connection_id);
+  const selectedFamily = getConnectionFamily(selectedConnectionType);
+  const isNoSqlConnection = selectedFamily === 'nosql';
+  const objectKinds = isNoSqlConnection ? ['collection'] : ['table', 'view'];
+  const objectLabel = isNoSqlConnection ? 'Collection' : 'Table';
+  const parentLabel = isNoSqlConnection ? 'Database' : 'Schema';
+  const browseLabel = isNoSqlConnection ? 'Browse collections' : 'Browse tables';
   // The backend (`fpulse/nodes/db_source.py`) reads `params.source_mode`
   // with values `query` / `table` (and `procedure` for call mode), NOT
   // the older `operation` key with `execute_query` / `read_table` etc.
@@ -4329,8 +4381,8 @@ function DbSourceConfig({ params, nodeId, onChange, hideConnection }: ConfigProp
         {params.connection_id && sourceMode === 'table' && (
           <CatalogPicker
             connectionId={params.connection_id}
-            kinds={['table', 'view']}
-            label="Browse tables"
+            kinds={objectKinds}
+            label={browseLabel}
             compact
             onPick={(item) => onChange(nodeId, { schema: item.parent, table: item.name })}
           />
@@ -4357,23 +4409,25 @@ function DbSourceConfig({ params, nodeId, onChange, hideConnection }: ConfigProp
       )}
       {sourceMode === 'table' && (
         <div className="grid grid-cols-2 gap-2">
-          <Field label="Schema">
+          <Field label={parentLabel}>
             <CatalogDatalistInput
               connectionId={params.connection_id}
               field="schema"
+              kinds={objectKinds}
               value={params.schema || ''}
               onChange={(v) => onChange(nodeId, { schema: v })}
-              placeholder="public"
+              placeholder={isNoSqlConnection ? 'sample_mflix' : 'public'}
             />
           </Field>
-          <Field label="Table *">
+          <Field label={`${objectLabel} *`}>
             <CatalogDatalistInput
               connectionId={params.connection_id}
               field="table"
+              kinds={objectKinds}
               schema={params.schema || ''}
               value={params.table || ''}
               onChange={(v) => onChange(nodeId, { table: v })}
-              placeholder="orders"
+              placeholder={isNoSqlConnection ? 'movies' : 'orders'}
             />
           </Field>
         </div>
