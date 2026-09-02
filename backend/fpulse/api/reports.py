@@ -870,14 +870,6 @@ _DOC_CATALOG: list[dict] = [
         "admin_only": True,
         "plus_only": True,
     },
-    {
-        "path": "admin/runbook.md",
-        "title": "Administrator Runbook",
-        "audience": "Operators, SREs",
-        "summary": "Install, backup, retention, drift, observability, upgrade.",
-        "admin_only": True,
-        "plus_only": True,
-    },
 ]
 
 
@@ -888,10 +880,14 @@ def _is_admin_like(user) -> bool:
 
 
 def _docs_root() -> Path:
-    """Resolve the docs/ directory next to the running backend."""
-    # backend/fpulse/api/reports.py → backend/fpulse/api
-    # → ../../.. = repo root; repo_root/docs.
+    """Resolve docs/ for source checkouts and PyPI wheel installs."""
     here = Path(__file__).resolve()
+    packaged_docs = here.parents[1] / "docs"
+    if packaged_docs.is_dir():
+        return packaged_docs
+
+    # backend/fpulse/api/reports.py -> backend/fpulse/api
+    # -> ../../.. = repo root; repo_root/docs.
     repo_root = here.parents[3]   # fpulse-f-pulse/
     return repo_root / "docs"
 

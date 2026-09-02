@@ -369,6 +369,11 @@ jobs:
         # reach PyPI. Do not soften this to a warning.
         run: python scripts/stage_frontend.py
 
+      - name: Stage docs into the package
+        # Fails hard if docs/ is missing, so Help -> Documentation and product
+        # knowledge cannot disappear from pip installs.
+        run: python scripts/stage_docs.py
+
       - name: Build sdist + wheel
         run: |
           pip install build
@@ -388,6 +393,8 @@ jobs:
               "frontend assets":     any("/frontend_dist/assets/" in n for n in names),
               "connector manifests": len([n for n in names if "/connectors/manifests/" in n and n.endswith(".json")]) >= 40,
               "swagger-ui assets":   any("/static/swagger-ui/" in n for n in names),
+              "help docs":           any(n.endswith("fpulse/docs/quickstart.md") for n in names),
+              "product facts":       any("/docs/product_facts/" in n for n in names),
           }
           for label, ok in checks.items():
               print(f"  {'OK  ' if ok else 'FAIL'}  {label}")

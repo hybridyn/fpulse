@@ -86,6 +86,34 @@ def test_connector_manifests_are_covered():
     ), "connector manifests are not packaged — a pip install would ship zero connectors"
 
 
+def test_docs_are_covered():
+    """Help -> Documentation needs packaged markdown, not repo-root files."""
+    import fnmatch
+
+    patterns = _package_data()
+    assert any(fnmatch.fnmatch("docs/quickstart.md", p) for p in patterns), (
+        "docs are not packaged — Help -> Documentation will be empty in pip installs"
+    )
+    assert any(fnmatch.fnmatch("CHANGELOG.md", p) for p in patterns), (
+        "CHANGELOG.md is not packaged — release notes link breaks in pip installs"
+    )
+
+
+def test_docs_catalog_entries_exist_in_source_tree():
+    """Every advertised Help doc must exist before staging."""
+    from fpulse.api import reports
+
+    docs_root = REPO / "docs"
+    missing = []
+    for entry in reports._DOC_CATALOG:
+        root = REPO if entry.get("repo_root") else docs_root
+        target = root / entry["path"]
+        if not target.is_file():
+            missing.append(entry["path"])
+
+    assert not missing, f"Help catalog points at missing docs: {missing}"
+
+
 def test_frontend_dist_resolution_prefers_packaged_copy():
     """main.py must look inside the package first, then the repo tree.
 
@@ -140,3 +168,12 @@ def test_built_wheel_contains_ui_and_connectors(tmp_path):
     manifests = [n for n in names if "/connectors/manifests/" in n and n.endswith(".json")]
     assert len(manifests) >= 40, f"wheel carries only {len(manifests)} connector manifests"
     assert any("/static/swagger-ui/" in n for n in names), "wheel has no Swagger assets — /docs breaks"
+    assert any(n.endswith("fpulse/docs/quickstart.md") for n in names), (
+        "wheel has no bundled docs — Help -> Documentation breaks in pip installs"
+    )
+    assert any(n.endswith("fpulse/CHANGELOG.md") for n in names), (
+        "wheel has no CHANGELOG.md — release notes link breaks in pip installs"
+    )
+    assert any("/docs/product_facts/" in n for n in names), (
+        "wheel has no product facts — AI product knowledge is disabled in pip installs"
+    )
