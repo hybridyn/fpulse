@@ -88,6 +88,49 @@ If `fpulse` is not found after install, use the same Python that installed it:
 python -m fpulse open
 ```
 
+**Windows: `fpulse` is not recognized after install**
+
+If `pip install fpulse` succeeds but PowerShell says:
+
+```text
+The term 'fpulse' is not recognized
+```
+
+F-Pulse is usually installed correctly. Windows just cannot find the generated
+`fpulse.exe` command because Python's `Scripts` folder is not on `PATH`.
+
+Use the Python launcher form first:
+
+```powershell
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+If `py` is unavailable:
+
+```powershell
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
+
+To confirm where it installed:
+
+```powershell
+py -m pip show fpulse
+py -m site --user-base
+```
+
+The direct command works only when the matching Python `Scripts` folder is on
+your user `PATH`, for example:
+
+```text
+<user-base>\Scripts
+```
+
+After changing `PATH`, close and reopen PowerShell or Visual Studio Code. You
+can always keep using `py -m fpulse open`; it avoids the shortcut-path issue
+entirely.
+
 **Not on Docker Hub yet** (we'd rather say so than send you to a 404):
 
 | Not yet available | Use this instead |

@@ -13,6 +13,20 @@ python -m pip install fpulse
 fpulse open
 ```
 
+On Windows, this form avoids command-shortcut issues:
+
+```powershell
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+If `py` is unavailable, use:
+
+```powershell
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
+
 `fpulse open` starts on port `8001` when it is free. If another process
 already owns `8001`, F-Pulse prints the alternate URL it selected, for example:
 
@@ -23,6 +37,50 @@ URL: http://127.0.0.1:8003
 
 Open the printed URL. The health check is `/api/health`, for example
 `http://localhost:8001/api/health`; plain `/health` is not an endpoint.
+
+### Windows: `fpulse` is not recognized
+
+If installation finishes but this fails:
+
+```powershell
+fpulse open
+```
+
+with:
+
+```text
+The term 'fpulse' is not recognized
+```
+
+then Python installed F-Pulse, but PowerShell cannot find the `fpulse.exe`
+shortcut. Run it through Python instead:
+
+```powershell
+py -m fpulse open
+```
+
+or:
+
+```powershell
+python -m fpulse open
+```
+
+To diagnose the install:
+
+```powershell
+py -m pip show fpulse
+py -m site --user-base
+```
+
+The command shortcut is normally in:
+
+```text
+<user-base>\Scripts
+```
+
+Add that folder to your user `PATH` only if you want the shorter `fpulse open`
+command. After changing `PATH`, close and reopen PowerShell or Visual Studio
+Code. The `py -m fpulse open` command works without changing `PATH`.
 
 ### Option 2: Docker
 
