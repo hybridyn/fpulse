@@ -434,6 +434,7 @@ _DOC_CATALOG: list[dict] = [
         "summary": "Entry point — map of every available document.",
         "admin_only": False,
         "plus_only": False,
+        "repo_root": True,
     },
     {
         "path": "quickstart.md",
