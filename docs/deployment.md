@@ -54,13 +54,23 @@ away on the next `git pull`.
 For a local, non-Docker install on a machine with Python 3.11+:
 
 ```bash
-python -m pip install fpulse
-fpulse open
+# Windows
+py -m pip install --upgrade fpulse
+py -m fpulse open
+
+# macOS / Linux
+python -m pip install --upgrade fpulse
+python -m fpulse open
 ```
 
-`fpulse open` defaults to `8001`, falls back if that port is already in
+`python -m fpulse open` defaults to `8001`, falls back if that port is already in
 use, and prints the exact URL to open. If it says `using 8003 instead`,
 use `http://localhost:8003` and check `http://localhost:8003/api/health`.
+
+On Windows, `fpulse open` is only shorthand for the generated
+`Scripts\fpulse.exe` command. If PowerShell says `fpulse` is not recognized,
+keep using `py -m fpulse open`; it runs the installed package without needing a
+PATH change.
 
 ### 2.3 From source (development)
 
@@ -68,7 +78,7 @@ use `http://localhost:8003` and check `http://localhost:8003/api/health`.
 python -m venv .venv && source .venv/bin/activate
 pip install -e .[dev]
 cd frontend && npm ci && npm run build && cd ..
-python -m fpulse serve            # serves on :8001 (or: fpulse serve)
+python -m fpulse serve            # serves on :8001
 ```
 
 You are off the tested matrix the moment you run a Python or Node
@@ -77,14 +87,14 @@ production.
 
 ### 2.4 Run in the background (as a service)
 
-`fpulse serve` / `fpulse open` run in the foreground — they stop when the
+`python -m fpulse serve` / `python -m fpulse open` run in the foreground — they stop when the
 terminal closes. For an always-on install that survives terminal close,
 logout, and reboot, register the OS-native supervisor:
 
 ```bash
-fpulse install-service     # Windows Scheduled Task · macOS launchd · Linux user systemd
-fpulse service-status      # is it running?
-fpulse uninstall-service   # remove it (data is left intact)
+python -m fpulse install-service     # Windows Scheduled Task · macOS launchd · Linux user systemd
+python -m fpulse service-status      # is it running?
+python -m fpulse uninstall-service   # remove it (data is left intact)
 ```
 
 - **Windows** — Scheduled Task at logon (`schtasks`); runs hidden, restarts on crash. Current 1.0.x builds request highest privileges for the task, so run PowerShell as Administrator if registration fails with `REGISTER_FAIL: Access is denied`.

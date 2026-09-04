@@ -16,7 +16,7 @@
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.0-blue" alt="Status: 1.0.0"></a>
 </p>
 
-Single-binary, local-first data pipeline engine. `pip install fpulse`, `fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
+Single-binary, local-first data pipeline engine. `pip install fpulse`, `python -m fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
 
 > **Status:** 1.0.0 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
 >
@@ -67,12 +67,19 @@ Signed installers land once we have an EV certificate + Apple notarization.
 
 ### PyPI install
 
-```bash
-python -m pip install fpulse
-fpulse open
+```powershell
+# Windows: avoids Python Scripts/PATH shortcut issues
+py -m pip install --upgrade fpulse
+py -m fpulse open
 ```
 
-`fpulse open` defaults to port `8001`, but if that port is already in use it
+```bash
+# macOS / Linux
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
+
+`python -m fpulse open` defaults to port `8001`, but if that port is already in use it
 prints the alternate URL it selected, for example `http://127.0.0.1:8003`.
 Open the printed URL, not necessarily `http://localhost:8001`.
 
@@ -82,7 +89,8 @@ The health endpoint is `/api/health`:
 curl http://localhost:8001/api/health
 ```
 
-If `fpulse` is not found after install, use the same Python that installed it:
+`fpulse open` is optional shorthand. If `fpulse` is not found after install,
+use the same Python that installed it:
 
 ```bash
 python -m fpulse open
@@ -98,6 +106,7 @@ The term 'fpulse' is not recognized
 
 F-Pulse is usually installed correctly. Windows just cannot find the generated
 `fpulse.exe` command because Python's `Scripts` folder is not on `PATH`.
+This is a Windows/Python PATH setting, not an F-Pulse server failure.
 
 Use the Python launcher form first:
 
@@ -129,7 +138,8 @@ your user `PATH`, for example:
 
 After changing `PATH`, close and reopen PowerShell or Visual Studio Code. You
 can always keep using `py -m fpulse open`; it avoids the shortcut-path issue
-entirely.
+entirely. Running `C:\...\Scripts\fpulse.exe open` proves the package installed,
+but `py -m fpulse open` is the cleaner command to give new Windows users.
 
 **Not on Docker Hub yet** (we'd rather say so than send you to a 404):
 
@@ -177,9 +187,9 @@ After install, open <http://localhost:8001> — the service is already running.
 **Manage the service** (any OS, same commands):
 
 ```bash
-fpulse service-status        # is it running?
-fpulse uninstall-service     # stop + deregister (does NOT delete data)
-fpulse install-service       # re-register after an update
+python -m fpulse service-status        # is it running?
+python -m fpulse uninstall-service     # stop + deregister (does NOT delete data)
+python -m fpulse install-service       # re-register after an update
 ```
 
 Building these installers yourself (CI / private builds): see
@@ -232,10 +242,10 @@ Then open <http://localhost:8001>.
 
 ### From source (Python 3.11+ and Node 20+)
 
-`pip install -e .` and `fpulse open` are **two separate commands** — install first,
+`pip install -e .` and `python -m fpulse open` are **two separate commands** — install first,
 then run. The `.` means "the project in the current folder", so you must be
 **inside the cloned repo** when you run it. `fpulse` only exists *after* the
-install succeeds (it's the command that install creates).
+install succeeds (it's the optional command shortcut that install creates).
 
 **macOS / Linux:**
 
@@ -250,7 +260,7 @@ cd frontend && npm ci && npm run build && cd ..
 # 2. Install into a venv, then run.
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
 **Windows (PowerShell)** — run these **one line at a time**; `&&` chaining and
@@ -270,27 +280,27 @@ cd ..
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
 > **Windows tip:** if `Activate.ps1` is blocked by execution policy, don't fight
 > it — just call the venv's executables directly instead:
-> `.\.venv\Scripts\pip.exe install -e .` then `.\.venv\Scripts\fpulse.exe open`.
+> `.\.venv\Scripts\pip.exe install -e .` then `.\.venv\Scripts\python.exe -m fpulse open`.
 
 > Skipping step 1 gets you a working API and a blank page. F-Pulse will say
 > so loudly at startup (`no frontend build found …`) rather than leaving you
 > to guess.
 
-The `fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. If the output says `port 8001 was in use — using 8003 instead`, open the printed URL (`http://127.0.0.1:8003` in that example). No need to type or remember a URL.
+The `python -m fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. If the output says `port 8001 was in use — using 8003 instead`, open the printed URL (`http://127.0.0.1:8003` in that example). No need to type or remember a URL.
 
 If you prefer the manual flow:
 ```bash
-fpulse serve        # starts on http://127.0.0.1:8001, you open the browser yourself
-fpulse serve --open # same as `fpulse open`
-fpulse serve --port 9000
+python -m fpulse serve        # starts on http://127.0.0.1:8001, you open the browser yourself
+python -m fpulse serve --open # same as `python -m fpulse open`
+python -m fpulse serve --port 9000
 ```
 
-Headless / WSL2 / Docker / DevContainer / remote-SSH users: `fpulse open` detects these automatically, skips the browser auto-launch, and prints the URL prominently so you can paste it into a browser on your host machine. You can also pass `--no-open` to force-skip the auto-launch while keeping the friendly port-fallback behaviour.
+Headless / WSL2 / Docker / DevContainer / remote-SSH users: `python -m fpulse open` detects these automatically, skips the browser auto-launch, and prints the URL prominently so you can paste it into a browser on your host machine. You can also pass `--no-open` to force-skip the auto-launch while keeping the friendly port-fallback behaviour.
 
 > **Bind defaults to loopback (127.0.0.1)** — invisible to your LAN, no port exposure to coworkers / hotel WiFi / conference networks. If you genuinely need LAN-visible binding for an on-prem multi-user install, set `FPULSE_ALLOW_LAN=1` or pass `--host 0.0.0.0` explicitly. Full rationale: [docs/install/security-hardening.md](docs/install/security-hardening.md).
 
@@ -300,15 +310,15 @@ runbook: [docs/deployment.md](docs/deployment.md).
 
 ### Run it in the background (as a service)
 
-`fpulse serve` / `fpulse open` run in the **foreground** — fine while you're
+`python -m fpulse serve` / `python -m fpulse open` run in the **foreground** — fine while you're
 trying it out, but they stop the moment you close the terminal. For an
 always-on install that survives terminal close, logout, and reboot, register
 F-Pulse with your OS service manager. **One command, every platform:**
 
 ```bash
-fpulse install-service     # register + start it supervised in the background
-fpulse service-status      # check whether it's running
-fpulse uninstall-service   # remove it
+python -m fpulse install-service     # register + start it supervised in the background
+python -m fpulse service-status      # check whether it's running
+python -m fpulse uninstall-service   # remove it
 ```
 
 | OS | What it registers | Notes |

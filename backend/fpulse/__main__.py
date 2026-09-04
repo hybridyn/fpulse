@@ -1,8 +1,11 @@
 """F-Pulse package entry point.
 
 Enables ``python -m fpulse <command>`` so operators can invoke the CLI
-without a separate console_scripts shim. In particular this is the
-canonical way to run the dev-seed:
+without relying on the console_scripts shim being discoverable on PATH.
+On Windows this is the canonical way to avoid "fpulse is not recognized"
+when Python's Scripts directory was not added to PATH.
+
+In particular this is the canonical way to run the dev-seed:
 
     python -m fpulse seed-admin
 

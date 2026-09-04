@@ -99,6 +99,16 @@ def test_docs_are_covered():
     )
 
 
+def test_windows_install_docs_lead_with_module_entrypoint():
+    """Windows install docs must not depend on Scripts/fpulse.exe being on PATH."""
+    quickstart = (REPO / "docs" / "quickstart.md").read_text(encoding="utf-8")
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+
+    assert "py -m fpulse open" in quickstart
+    assert "py -m fpulse open" in readme
+    assert quickstart.index("py -m fpulse open") < quickstart.index("fpulse open")
+
+
 def test_docs_catalog_entries_exist_in_source_tree():
     """Every advertised Help doc must exist before staging."""
     from fpulse.api import reports

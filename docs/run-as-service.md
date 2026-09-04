@@ -13,7 +13,7 @@ place: F-Pulse registered as an OS-native service.
 
 ---
 
-## Option 1 — `fpulse install-service` (recommended, all OSes)
+## Option 1 — `python -m fpulse install-service` (recommended, all OSes)
 
 The new built-in CLI registers F-Pulse as a proper OS service in
 **one command on Windows, macOS, and Linux**. Same UX everywhere,
@@ -31,10 +31,14 @@ different machinery underneath.
 
 ```bash
 # Prereq: pip install fpulse, pip install -e ., or a packaged build
-fpulse install-service
+python -m fpulse install-service
 # Custom port + data dir:
-fpulse install-service --port 8002 --data-dir /var/lib/fpulse
+python -m fpulse install-service --port 8002 --data-dir /var/lib/fpulse
 ```
+
+On Windows, prefer `py -m fpulse install-service` if you installed with
+`py -m pip install fpulse`. It does not depend on the generated
+`Scripts\fpulse.exe` shortcut being discoverable on `PATH`.
 
 Windows note: current 1.0.x PyPI builds register the Scheduled Task with
 highest privileges. If registration fails with:
@@ -43,15 +47,15 @@ highest privileges. If registration fails with:
 REGISTER_FAIL: Access is denied.
 ```
 
-open PowerShell with **Run as Administrator** and retry `fpulse install-service`.
-You can still run F-Pulse without service registration by using `fpulse open`;
+open PowerShell with **Run as Administrator** and retry `py -m fpulse install-service`.
+You can still run F-Pulse without service registration by using `py -m fpulse open`;
 that foreground command does not require Administrator.
 
 **Manage (any OS):**
 
 ```bash
-fpulse service-status        # is it running?
-fpulse uninstall-service     # stop + deregister
+python -m fpulse service-status        # is it running?
+python -m fpulse uninstall-service     # stop + deregister
 ```
 
 **OS-native fall-throughs** (use these for deep inspection):
@@ -243,7 +247,7 @@ fix is `npm run build` and restart the service.
 
 | You installed via | You update by |
 |---|---|
-| `pip install fpulse` | `pip install -U fpulse && fpulse install-service` (re-registers against the new binary) |
+| `pip install fpulse` | `python -m pip install -U fpulse && python -m fpulse install-service` (re-registers against the new binary) |
 | Packaged installer | Download new installer + run it. Stops service, swaps files, restarts. |
 | Docker | `docker compose pull && docker compose up -d` |
 | NSSM / system systemd | Update binary in place, then `sc.exe stop FPulse; sc.exe start FPulse` (Win) or `sudo systemctl restart fpulse` (Linux). |
@@ -271,7 +275,7 @@ Start-Process http://localhost:5174       # dev-mode (Vite running separately)
 If `/api/health` returns 200 but the UI page is empty, see §4 —
 you need to build the frontend.
 
-If you used `fpulse open` instead of service mode and saw a message like
+If you used `python -m fpulse open` instead of service mode and saw a message like
 `port 8001 was in use — using 8003 instead`, verify and open the printed port:
 
 ```powershell

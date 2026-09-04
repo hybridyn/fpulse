@@ -74,8 +74,8 @@ locally. The Docker Hub image is reserved but **not published yet**:
 
 ```bash
 # PyPI
-python -m pip install fpulse
-fpulse open
+python -m pip install --upgrade fpulse
+python -m fpulse open
 
 # Docker (recommended) — builds locally, serves http://localhost:8001
 git clone https://github.com/hybridyn/fpulse.git
@@ -84,7 +84,7 @@ docker compose up -d
 
 # or from a source checkout
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
 For database connectors, add the matching extra to the source install:
