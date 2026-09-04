@@ -646,6 +646,7 @@ async def run_workflow(
         # `metadata.peak_memory_mb` / `metadata.cpu_seconds`.
         try:
             md = dict(getattr(exe, "metadata", {}) or {})
+            md["engine_duration_ms"] = round(duration, 1)
             md["peak_memory_mb"] = round(_resmon.peak_memory_mb, 2)
             md["cpu_seconds"] = round(_resmon.cpu_seconds, 2)
             md["sample_count"] = _resmon.sample.sample_count
@@ -792,6 +793,24 @@ async def run_workflow(
             steps_total=exe.steps_total,
             owner_email=_alert_owner_email,
         )
+
+        # The Executions page should reflect what the user experiences:
+        # click Run -> terminal response. The engine finished above, but
+        # in-app notifications, alert rule evaluation, and response prep
+        # still happen before the run is actually done from the UI's point
+        # of view. Keep the engine-only number in metadata for diagnostics.
+        duration = (time.time() - start) * 1000
+        exe.completed_at = datetime.now(timezone.utc)
+        exe.duration_ms = round(duration, 1)
+        try:
+            md = dict(getattr(exe, "metadata", {}) or {})
+            md.setdefault("engine_duration_ms", response.get("duration_ms"))
+            exe.metadata = md
+        except Exception:
+            pass
+        exe_store.record(exe)
+        response["duration_ms"] = round(duration, 1)
+        response["execution_id"] = exe.id
 
         return response
 

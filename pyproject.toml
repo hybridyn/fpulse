@@ -293,7 +293,12 @@ include = ["fpulse*"]
 # than guessed. Verified by installing the built wheel into a clean target
 # and asserting each is present — see backend/tests/test_packaging.py.
 fpulse = [
+    "CHANGELOG.md",                 # repo-root release notes, staged for Help
     "frontend_dist/**/*",           # built SPA — served at / by main.py
+    "docs/*.md",                    # bundled Help -> Documentation markdown
+    "docs/**/*.md",
+    "docs/**/*.txt",
+    "docs/**/*.jsonl",
     "static/**/*",                  # bundled Swagger UI for /docs
     "connectors/manifests/*.json",  # the shipped connectors themselves
     "connectors/ci/*.yml",

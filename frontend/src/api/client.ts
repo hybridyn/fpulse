@@ -1157,10 +1157,10 @@ export const api = {
   },
   getConnectionMetadata: () =>
     request<{ types: string[]; categories: Record<string, string[]>; storage_types: string[]; file_formats: string[] }>('/connections/metadata'),
-  createConnection: (data: { name: string; type: string; description?: string; config?: Record<string, any>; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
+  createConnection: (data: { name: string; type: string; description?: string; config?: Record<string, any>; credential_id?: string | null; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
     request<any>('/connections/', { method: 'POST', body: JSON.stringify(data) }),
   getConnection: (id: string) => request<any>(`/connections/${id}`),
-  updateConnection: (id: string, data: { name?: string; description?: string; config?: Record<string, any>; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
+  updateConnection: (id: string, data: { name?: string; description?: string; config?: Record<string, any>; credential_id?: string | null; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
     request<any>(`/connections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteConnection: (id: string) => request<any>(`/connections/${id}`, { method: 'DELETE' }),
   testConnection: (id: string, signal?: AbortSignal) => request<any>(`/connections/${id}/test`, { method: 'POST', signal }),

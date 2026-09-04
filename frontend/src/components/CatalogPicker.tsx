@@ -50,6 +50,15 @@ const KIND_COLOR: Record<string, string> = {
   key: 'text-rose-600 bg-rose-50 border-rose-200',
 };
 
+function CatalogKindBadge({ kind }: { kind: string }) {
+  return (
+    <span className={`inline-flex h-6 w-[96px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[10px] font-bold uppercase tracking-wide whitespace-nowrap ${KIND_COLOR[kind] || 'text-slate-500 bg-slate-50 border-slate-200'}`}>
+      <span className="text-[11px] leading-none">{KIND_ICONS[kind] || '·'}</span>
+      <span className="leading-none">{kind}</span>
+    </span>
+  );
+}
+
 // Capped page-size per schema group — production DBs can hold many
 // thousand tables in a single schema, and rendering them all blows
 // the render budget. Users hit "Show all" if they need the long tail
@@ -489,12 +498,10 @@ export default function CatalogPicker({ connectionId, kinds, onPick, label = 'Br
                             <button
                               key={`${parent}-${item.kind}-${item.name}-${i}`}
                               onClick={() => handlePick(item)}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-blue-50 group border-b border-slate-50 last:border-b-0"
+                              className="grid w-full grid-cols-[96px_minmax(0,1fr)] items-center gap-3 px-3 py-1.5 text-left hover:bg-blue-50 group border-b border-slate-50 last:border-b-0"
                             >
-                              <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border w-[68px] text-center shrink-0 ${KIND_COLOR[item.kind] || 'text-slate-500 bg-slate-50 border-slate-200'}`}>
-                                {KIND_ICONS[item.kind] || '·'} {item.kind}
-                              </span>
-                              <span className="text-sm text-slate-700 group-hover:text-blue-700 truncate">
+                              <CatalogKindBadge kind={item.kind} />
+                              <span className="min-w-0 truncate text-sm text-slate-700 group-hover:text-blue-700">
                                 {item.name}
                               </span>
                             </button>
@@ -555,16 +562,14 @@ function RecentSection({ items, onPick }: RecentSectionProps) {
         <button
           key={`recent-${item.kind}-${item.parent}-${item.name}-${i}`}
           onClick={() => onPick(item)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-amber-50/40 group border-b border-slate-50 last:border-b-0"
+          className="grid w-full grid-cols-[96px_minmax(0,1fr)_minmax(0,100px)] items-center gap-3 px-3 py-1.5 text-left hover:bg-amber-50/40 group border-b border-slate-50 last:border-b-0"
         >
-          <span className={`text-xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border w-[68px] text-center shrink-0 ${KIND_COLOR[item.kind] || 'text-slate-500 bg-slate-50 border-slate-200'}`}>
-            {KIND_ICONS[item.kind] || '·'} {item.kind}
-          </span>
-          <span className="text-sm text-slate-700 group-hover:text-blue-700 truncate flex-1">
+          <CatalogKindBadge kind={item.kind} />
+          <span className="min-w-0 truncate text-sm text-slate-700 group-hover:text-blue-700">
             {item.name}
           </span>
           {item.parent && (
-            <span className="text-xs text-slate-400 truncate max-w-[100px]">{item.parent}</span>
+            <span className="min-w-0 truncate text-xs text-slate-400">{item.parent}</span>
           )}
         </button>
       ))}

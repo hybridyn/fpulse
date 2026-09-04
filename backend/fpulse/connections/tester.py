@@ -39,6 +39,8 @@ def _suggestion_for(error: Exception, conn_type: str) -> str:
         return "Hostname could not be resolved. Verify the hostname/IP address is correct."
     if "no such file" in msg or "does not exist" in msg:
         return "The specified file or path does not exist. Check the path and permissions."
+    if conn_type == "mongodb" and ("ssl" in msg or "certificate" in msg or "tls" in msg):
+        return "MongoDB TLS handshake failed. For MongoDB Atlas, first check Network Access and add this machine's public IP address to the IP access list. Also check whether a corporate proxy/firewall is intercepting TLS."
     if "ssl" in msg or "certificate" in msg or "tls" in msg:
         return "SSL/TLS handshake failed. Check certificate configuration or try disabling SSL verification if appropriate."
     if "permission" in msg or "forbidden" in msg:
@@ -315,17 +317,9 @@ class ConnectionTester:
         windows_auth = bool(config.get("windows_auth")) or (not raw_user and not password)
         user = raw_user or "sa"
 
-        # Pick the best ODBC driver actually installed on this machine.
-        # Order of preference: 18 → 17 → SQL Server Native Client → 13 → SQL Server.
-        installed = [d for d in pyodbc.drivers() if "SQL Server" in d]
-        preferred_order = [
-            "ODBC Driver 18 for SQL Server",
-            "ODBC Driver 17 for SQL Server",
-            "ODBC Driver 13 for SQL Server",
-            "SQL Server Native Client 11.0",
-            "SQL Server",
-        ]
-        driver = next((d for d in preferred_order if d in installed), None) or (installed[0] if installed else None)
+        from fpulse.connections.mssql_odbc import build_mssql_odbc_conn_str, select_mssql_odbc_driver
+
+        driver = select_mssql_odbc_driver(pyodbc, config.get("driver"))
         if not driver:
             return _fail(
                 "No SQL Server ODBC driver installed",
@@ -333,20 +327,16 @@ class ConnectionTester:
                 "mssql",
             )
 
-        # Driver 18 enforces TLS by default — for local dev on a self-signed
-        # SQL Server, allow opting out via TrustServerCertificate.
-        trust_cert = "yes" if (config.get("trust_server_certificate") or "18" in driver) else "no"
-        encrypt = "yes" if config.get("encrypt") else ("optional" if "18" in driver else "no")
-
-        auth_clause = "Trusted_Connection=yes;" if windows_auth else f"UID={user};PWD={password};"
-        conn_str = (
-            f"DRIVER={{{driver}}};"
-            f"SERVER={host},{port};"
-            f"DATABASE={database};"
-            f"{auth_clause}"
-            f"Encrypt={encrypt};TrustServerCertificate={trust_cert};"
-            f"Connection Timeout={DEFAULT_TIMEOUT};"
-        )
+        conn_str = build_mssql_odbc_conn_str({
+            **config,
+            "host": host,
+            "port": port,
+            "database": database,
+            "user": user,
+            "password": password,
+            "windows_auth": windows_auth,
+            "driver": driver,
+        }, pyodbc, timeout=DEFAULT_TIMEOUT)
 
         start = time.time()
         try:
@@ -1857,7 +1847,12 @@ class ConnectionTester:
         except ImportError:
             return _addon_unavailable("MongoDB")
 
-        uri = config.get("uri") or config.get("connection_string")
+        uri = (
+            config.get("uri")
+            or config.get("mongodb_uri")
+            or config.get("connection_string")
+            or config.get("connection_uri")
+        )
         if uri:
             host = uri
         else:
@@ -1865,7 +1860,7 @@ class ConnectionTester:
             p = int(config.get("port", 27017))
             user = config.get("user") or config.get("username")
             password = config.get("password")
-            database = config.get("database", "admin")
+            database = config.get("database") or config.get("db") or "admin"
 
             if user and password:
                 host = f"mongodb://{user}:{password}@{h}:{p}/{database}"

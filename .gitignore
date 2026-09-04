@@ -163,3 +163,9 @@ backend/_regress.txt
 # scripts/stage_frontend.py so the wheel can carry the UI.
 # Build artifact, never source: it is rewritten on every stage.
 backend/fpulse/frontend_dist/
+
+# Staged in-package docs copied from repo-root docs/ by
+# scripts/stage_docs.py so the wheel can carry Help -> Documentation
+# content. Build artifact, never source.
+backend/fpulse/docs/
+backend/fpulse/CHANGELOG.md

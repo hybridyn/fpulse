@@ -774,8 +774,16 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
   const formatDuration = (ms?: number) => {
     if (!ms) return '\u2014';
     if (ms < 1000) return `${ms}ms`;
+    if (ms < 10000) return `${(ms / 1000).toFixed(2)}s`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
     return `${(ms / 60000).toFixed(1)}m`;
+  };
+
+  const durationTitle = (exec: Execution) => {
+    const parts = [`${Math.round(exec.duration_ms || 0)}ms`];
+    if (exec.started_at) parts.push(`Started ${formatTime(exec.started_at)}`);
+    if (exec.completed_at) parts.push(`Completed ${formatTime(exec.completed_at)}`);
+    return parts.join(' · ');
   };
 
   const formatTime = (ts?: string) => {
@@ -1451,7 +1459,11 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                         </td>
                       )}
                       {isVisible('started') && <td className="px-4 py-3"><TimeAgo value={exec.started_at} className="text-xs !text-slate-500" /></td>}
-                      {isVisible('duration') && <td className="px-4 py-3 text-slate-500 text-xs font-mono">{formatDuration(exec.duration_ms)}</td>}
+                      {isVisible('duration') && (
+                        <td className="px-4 py-3 text-slate-500 text-xs font-mono" title={durationTitle(exec)}>
+                          {formatDuration(exec.duration_ms)}
+                        </td>
+                      )}
                       {isVisible('steps') && (
                         <td className="px-4 py-3 text-slate-500 text-xs">
                           <span className={exec.steps_failed ? 'text-red-500' : ''}>

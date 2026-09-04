@@ -1015,7 +1015,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return;
     }
 
-    set({ isRunning: true });
+    // Clear previous run/test badges immediately. Otherwise the canvas shows
+    // old row counts and durations on downstream nodes while a fresh run has
+    // only started at the entry node, which reads as "these nodes already ran".
+    set({ isRunning: true, stepResults: {} });
 
     // Abort any in-flight reveal from a previous run.
     const revealToken = ++_revealToken;
@@ -1087,10 +1090,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const stepResults: Record<string, StepResult> = result.step_results || {};
       const errorCount = Object.values(stepResults).filter((r) => r.status === 'error').length;
 
-      // Make the results available immediately (config panel / previews),
-      // then replay the run node-by-node in dependency order so the canvas
-      // shows each node complete before the next follows.
-      set({ stepResults });
+      // Reveal results progressively with the status animation. The backend
+      // returns all step_results at once, but publishing them immediately made
+      // downstream nodes show row counts/durations while the canvas still said
+      // "Running 4/10". Keep them local until each level completes.
+      set({ stepResults: {} });
 
       const applyStatuses = (statuses: Map<string, string>) => {
         set({
@@ -1110,6 +1114,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const levelCount = Math.max(levels.length, 1);
       const perLevel = Math.max(120, Math.min(450, Math.round(2400 / levelCount)));
       const applied = new Map<string, string>();
+      const visibleResults: Record<string, StepResult> = {};
       revealNodes.forEach((n) => applied.set(n.id, 'pending'));
 
       let aborted = false;
@@ -1123,7 +1128,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         applyStatuses(applied);
         if (ran.length) await _sleep(perLevel);
         if (revealToken !== _revealToken) { aborted = true; break; }
-        level.forEach((id) => applied.set(id, stepResults[id]?.status || 'pending'));
+        level.forEach((id) => {
+          applied.set(id, stepResults[id]?.status || 'pending');
+          if (stepResults[id]) visibleResults[id] = stepResults[id];
+        });
+        set({ stepResults: { ...visibleResults } });
         applyStatuses(applied);
         await _sleep(Math.round(perLevel * 0.4));
       }
@@ -1132,6 +1141,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       if (!aborted && revealToken === _revealToken) {
         set({
           isRunning: false,
+          stepResults,
           nodes: get().nodes.map((n) => ({
             ...n,
             data: { ...n.data, status: stepResults[n.id]?.status || 'pending' },

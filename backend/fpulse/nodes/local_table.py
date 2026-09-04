@@ -297,6 +297,17 @@ class LocalTableSinkNode(BaseNode):
     category = "destination"
     description = "Write to a managed Parquet table in the workspace datastore"
 
+    @staticmethod
+    def preview_message(params: dict[str, Any], input_row_count: int) -> str:
+        schema_name = safe_schema_or_table_name(params.get("schema_name") or "default")
+        table_name = safe_schema_or_table_name(params.get("table_name") or "")
+        mode = (params.get("mode") or SINK_MODE_REPLACE).lower()
+        target = f"{schema_name}.{table_name}" if table_name else f"{schema_name}.<table>"
+        return (
+            f"would {mode} {input_row_count} row"
+            f"{'' if input_row_count == 1 else 's'} into managed table {target}"
+        )
+
     def execute(self, ctx: ExecutionContext) -> "duckdb.DuckDBPyRelation":
         schema_name = safe_schema_or_table_name(self.params.get("schema_name") or "default")
         table_name = safe_schema_or_table_name(self.params.get("table_name") or "")

@@ -10,6 +10,18 @@ F-Pulse OSS is built around **three connector tiers** — a first-party catalog 
 
 **No connector is Plus-gated.** Every manifest, every authoring path, every extension point is open in OSS. The first-party catalog is the starter pack; the framework is the product.
 
+## Airbyte connector scope
+
+F-Pulse includes an `airbyte` connection type for **integration metadata browsing**. It calls an existing Airbyte instance and lists configured Airbyte sources and connections so operators can inventory or reference what Airbyte already manages.
+
+It does **not** bundle or re-host Airbyte's full connector catalog, and it does not execute Airbyte replication jobs inside F-Pulse. If a team wants Airbyte's hundreds of ready-made replication connectors, Airbyte should remain the replication layer; F-Pulse can sit beside it for local ETL workflows, orchestration, reporting pipelines, and workspace-level reliability checks.
+
+Required Airbyte fields:
+
+- `base_url`: Airbyte API base URL, for example `http://airbyte:8001`
+- `workspace_id`: Airbyte workspace ID
+- `api_key`, `token`, or `access_token`: optional bearer token when the Airbyte API requires it
+
 > Don't see your tool in the first-party list below? Three options, in increasing order of effort:
 >
 > 1. **Build it yourself in 90 seconds** — `Insights → Author Connector → From OpenAPI`. Works for any vendor with a public OpenAPI spec ([tutorial](extend/build-a-connector.md)).

@@ -20,6 +20,12 @@ A frank, side-by-side comparison for teams evaluating F-Pulse OSS against Airbyt
 >
 > If you're moving large volumes from many SaaS sources into a warehouse and have a team to run a stack, Airbyte is the better fit. If you want one tool that handles the whole pipeline on one machine without operating a four-component stack, F-Pulse is the better fit. They serve different buyers.
 
+## Airbyte support inside F-Pulse
+
+F-Pulse has an `airbyte` connection type, but it is **not connector parity with Airbyte**. It is an integration-metadata catalog provider that calls an existing Airbyte API and lists configured Airbyte sources and connections. It does not bundle Airbyte's hundreds of connectors, and it does not execute Airbyte sync jobs inside F-Pulse.
+
+Use Airbyte when you need Airbyte's connector breadth and replication runtime. Use F-Pulse beside it when you need local ETL workflows, transformations, scheduling, alerting, reporting pipelines, or Steward checks around the broader workspace.
+
 ## Side-by-side
 
 | Dimension | Airbyte | F-Pulse OSS |
@@ -88,5 +94,6 @@ There's nothing exclusive about either choice — pipelines in both products can
 ## See also
 
 - [vs-talend.md](vs-talend.md) — companion comparison for teams evaluating against Talend Open Studio
+- [vs-visual-etl.md](vs-visual-etl.md) — broader comparison against n8n, SSIS, Talend, Airbyte, NiFi, Matillion, Informatica, Hop, and Azure Data Factory
 - [extend/build-a-connector.md](extend/build-a-connector.md) — when F-Pulse doesn't ship the connector you need
 - [connectors.md](connectors.md) — current first-party catalog + cert matrix
