@@ -26,20 +26,53 @@ Single-binary, local-first data pipeline engine. `pip install fpulse`, `python -
 
 ## Why F-Pulse
 
-- **Fast engine.** DuckDB-powered, vectorised execution. Joins, group-bys, pivots and aggregates run column-at-a-time, not row-by-row. Streams to disk on bigger-than-RAM datasets so you don't blow a heap.
-- **Operational layer built in.** Scheduler (runs pipelines automatically at fixed times), alerts (email / Slack / Teams / webhook), run history with per-step row counts + duration, a basic run/column lineage view (Marquez-compatible lineage export is an **F-Pulse+** upgrade), and version control with deploy / rollback. Ships in the box — nothing to bolt on. OSS runs as a solo / single-workspace install; multi-user team workspaces with per-workspace RBAC are an **F-Pulse+** upgrade.
-- **Local-first.** Run it on your laptop or a VM — no cloud lock-in, telemetry off by default (opt-in only). Single binary, no IDE install, no runtime tuning required.
-- **Visual + code.** Drag-and-drop canvas, a real expression engine (`$json`, `$now`, `$('Node').output`), and a DuckDB SQL transform when you need to escape the canvas.
-- **Open connector framework — extend in minutes, not weeks.** 6 connectors ship with native drivers and real query paths (4 database dialects + 2 bulk-load dialects); 27 SaaS connectors ship as REST manifests run through the generic adapter — not yet smoke-tested against the live vendor. 33 visible by default, tier-labeled honestly (currently 0 Production + 0 Verified + 19 Beta + 8 Experimental). 10 additional consumer-marketing / SMB-CRM manifests ship Hidden — out of enterprise-data-engineering scope. See [docs/connectors.md](docs/connectors.md) for the per-connector matrix and live `GET /api/connectors/cert-matrix`. When you need one we don't ship, you have **four** first-class paths — none of them require a vendor build cycle:
-  1. **Paste an OpenAPI URL → get a working connector in 90 seconds.** `Insights → Author Connector → from OpenAPI`. See [docs/extend/build-a-connector.md](docs/extend/build-a-connector.md) for the 30-minute end-to-end tutorial.
-  2. **Paste 1–5 sample API responses → get a draft connector.** Same UI, "from samples" mode — for vendors without a public OpenAPI spec.
-  3. **Hand-author the manifest.** Full control when the vendor's API doesn't fit a generated shape — ~30 minutes. Same tutorial as above.
-  4. **Suggest or contribute.** [Request a connector or node](https://github.com/hybridyn/fpulse/issues/new/choose), or open a PR. Templates pre-fill what we need to act on it.
+F-Pulse is built for teams who want a local, visual ETL engine without dragging
+in a warehouse-first platform or a heavyweight IDE.
 
-  This is the OSS bet: we ship the framework, the community ships the long tail. **No connector is Plus-gated** — every manifest, every node, every extension path is open.
-- **Honest status badges.** Every connector carries a user-facing tier — Production / Verified / Beta / Experimental / Hidden — derived from the cert matrix. Today: 0 Production, 0 Verified, 19 Beta, 8 Experimental visible (10 Hidden). The default picker shows Production + Verified + Beta; Experimental sits behind a toggle. The bar for Verified is a live-vendor smoke test on every PR plus a stored fixture; Production adds a 30-day green streak and a named owner. Treat the matrix output as ground truth — we'd rather show "0 Verified" than soft-label everything "Certified."
-- **Embedded AI (optional).** Pluggable providers (Claude / OpenAI / Gemini / Ollama / OpenRouter) for ghost nodes, autoconfig, error diagnosis — works fully without an LLM via deterministic fallbacks. Local Ollama on `qwen2.5:7b` is the 2026-05-19 tool-use floor; see [docs/supported-models.md](docs/supported-models.md).
-- **F-Pulse Steward — read-only workspace observer with a gated Memory Layer.** Most pipeline tools observe execution; Steward adds a workspace-level observation surface above it. **Actively detected today:** duplicate-source + duplicate-pipeline (Archeologist); connector health (auth-failure / unreachable / rate-limit / credential-near-expiry); schema drift; automatic volume anomaly (baseline-variance) plus threshold data-quality checks (null-rate / freshness / row-count / partition); node-level empty-output; warehouse-waste (cost); governance (env-crossing / unapproved-destination / PII-leak); and user-defined YAML rules. All carry persistent-occurrence counts, time-clamped severity escalation, rebound detection on previously-resolved findings, dismiss-with-reason (sanitized for AWS keys / bearer tokens / passwords / URI creds / private IPs before journal write), and notification de-dup at the (user, finding, severity, rebound-state) tuple. **Still contract-ready (enum + storage + UI present, detector deferred):** pipeline-level SLA-breach / partial-output / retry-storm, structural join-explosion / join-collapse, credential-sprawl, and cost-drift / cost-recommendation — future specialists plug in without contract changes. Detection is plain code — no LLM in the decision path, no hallucinated findings. Read-only by architectural rule: never mutates a workflow. **The F-Pulse Memory Layer** ([docs/steward/memory-layer.md](docs/steward/memory-layer.md)) is a separate, explicit lesson store — `POST /api/steward/lessons` creates a `PROPOSED` entry, which stays inert until a human `approve`s it. Dismiss and Resolve are separate flows (suppression / closure), neither auto-creates a lesson; that prevents the lesson store from being polluted with exception text. Auto-invocation of lesson search on failure ships with Incident Analyst in 1.2. **Ships in OSS, not paywalled.** See [docs/steward/overview.md](docs/steward/overview.md), [docs/steward/positioning.md](docs/steward/positioning.md), [docs/steward/architecture.md](docs/steward/architecture.md).
+| What you get | Why it matters |
+|---|---|
+| **DuckDB execution** | Joins, group-bys, pivots and aggregates run in a vectorised engine, with disk spill for larger local workloads. |
+| **Operations in the box** | Scheduler, alerts, run history, per-step row counts, lineage view, versioning, deploy and rollback are included. |
+| **Local-first install** | Runs on a laptop or VM. No cloud lock-in. Telemetry is off by default and opt-in only. |
+| **Visual + code workflow** | Drag nodes on the canvas, use expressions for light logic, and drop into DuckDB SQL when the canvas is not enough. |
+| **Optional AI assistance** | Claude, OpenAI, Gemini, Ollama and OpenRouter can help with node setup, SQL and error diagnosis; deterministic fallbacks keep the app useful without an LLM. |
+
+**Connector model.** F-Pulse ships an open connector framework, not a closed
+vendor queue. Current OSS includes native database/bulk-load connectors plus
+REST-manifest SaaS connectors, each labeled by maturity: Production, Verified,
+Beta, Experimental or Hidden. The picker shows stable tiers first; Experimental
+connectors sit behind a toggle. See [docs/connectors.md](docs/connectors.md)
+or `GET /api/connectors/cert-matrix` for the live matrix.
+
+Need a connector that is not shipped yet?
+
+| Path | Best when |
+|---|---|
+| Paste an OpenAPI URL | The vendor publishes an OpenAPI spec. |
+| Paste sample API responses | The API has no public spec, but you have example payloads. |
+| Hand-author a manifest | The API needs custom paging, auth or field mapping. |
+| Request or contribute | The connector should become part of the OSS catalog. |
+
+No connector is Plus-gated. Every OSS manifest, node and extension path remains
+open. See [docs/extend/build-a-connector.md](docs/extend/build-a-connector.md)
+for the connector authoring tutorial.
+
+**Steward reliability layer.** F-Pulse Steward is a read-only observer for
+pipeline health. It detects duplicate sources/pipelines, connector health,
+schema drift, volume anomalies, data-quality threshold failures, empty node
+outputs, warehouse waste, governance issues and user-defined YAML rules. Findings
+carry occurrence counts, severity escalation, rebound detection, sanitized
+dismiss reasons and notification de-duplication.
+
+Steward does not mutate workflows and does not use an LLM to decide findings.
+Its Memory Layer is gated: lessons are proposed first and stay inert until a
+human approves them. See [docs/steward/overview.md](docs/steward/overview.md),
+[docs/steward/positioning.md](docs/steward/positioning.md) and
+[docs/steward/architecture.md](docs/steward/architecture.md).
+
+**OSS vs Plus.** OSS is a solo / single-workspace install. F-Pulse+ adds the
+team layer: multi-user workspaces, RBAC, approval flows, enterprise deployment,
+monitoring and advanced governance surfaces.
 
 > **Evaluating against another orchestrator?** See [docs/vs-talend.md](docs/vs-talend.md) for the side-by-side comparison.
 
