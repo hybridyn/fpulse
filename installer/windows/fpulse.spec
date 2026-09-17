@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""F-Pulse OSS — PyInstaller spec (Windows onedir freeze).
+"""F-Pulse OSS — PyInstaller spec (Windows directory or single-file freeze).
 
 Produces ``dist/fpulse/fpulse.exe`` — a self-contained CLI + server that the
 Inno Setup script (fpulse.iss) packages into the installer.
+Set FPULSE_ONEFILE=1 for a single executable, or use build-portable.ps1.
 
 Run from the repo root:
     .venv\\Scripts\\python -m PyInstaller installer\\windows\\fpulse.spec --noconfirm --clean
@@ -21,6 +22,9 @@ import os
 HERE = SPECPATH
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 BACKEND = os.path.join(REPO, "backend")
+import sys
+sys.path.insert(0, BACKEND)
+ONEFILE = os.environ.get("FPULSE_ONEFILE") == "1"
 ENTRY = os.path.join(BACKEND, "fpulse", "__main__.py")
 ICON = os.path.join(HERE, "icons", "fpulse.ico")
 
@@ -102,8 +106,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    [],
-    exclude_binaries=True,      # onedir: keep libs beside the exe (COLLECT below)
+    a.binaries if ONEFILE else [],
+    a.datas if ONEFILE else [],
+    exclude_binaries=not ONEFILE,
     name="fpulse",
     debug=False,
     bootloader_ignore_signals=False,
@@ -114,11 +119,5 @@ exe = EXE(
     icon=(ICON if os.path.exists(ICON) else None),
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    name="fpulse",
-)
+if not ONEFILE:
+    coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="fpulse")

@@ -12,6 +12,7 @@ import PanelErrorBoundary from './components/PanelErrorBoundary';
 // saves one round-trip on first paint. Sidebar, Toolbar, EditorContextBar,
 // and the error boundaries are app-shell — they render on every page.
 import Sidebar from './components/Sidebar';
+import { useCompactEditorPanels } from './hooks/useCompactEditorPanels';
 import DashboardPage from './components/pages/DashboardPage';
 import LoginPage from './components/pages/LoginPage';
 // ─── Lazy imports — every other page + the editor's heavy panels ──────
@@ -118,6 +119,7 @@ function shouldShowCopilotWidget(_tier: Tier): boolean {
 
 export default function App() {
   const [page, setPage] = useState<Page>(DEFAULT_PAGE);
+  useCompactEditorPanels(page === 'editor');
   const [user, setUser] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -1126,7 +1128,7 @@ export default function App() {
                 F-Pulse Copilot button's bottom-right position on every
                 other page — one consistent "AI lives on the right"
                 mental model across the app. */}
-            <div className={`flex-1 flex overflow-hidden ${environment === 'prod' ? 'pointer-events-none opacity-75' : ''}`}>
+            <div className={`editor-workspace flex-1 flex overflow-hidden relative min-h-0 ${environment === 'prod' ? 'pointer-events-none opacity-75' : ''}`}>
               {/* 2026-05-19 (P1 #13 of PAGE_BY_PAGE_AUDIT.md): each editor
                   panel is wrapped in its own <PanelErrorBoundary> so a
                   render bug in one (e.g. ModulesPanel palette failing to
@@ -1142,7 +1144,7 @@ export default function App() {
                   the top of this column so its width tracks the canvas,
                   not the full window — resizing either side panel
                   resizes the bar with them. */}
-              <div className="flex-1 flex flex-col overflow-hidden min-w-0 isolate relative">
+              <div data-testid="editor-canvas-column" className="flex-1 flex flex-col overflow-hidden min-w-0 isolate relative">
                 <EditorContextBar />
                 <div className="flex-1 flex overflow-hidden relative">
                   <Canvas />

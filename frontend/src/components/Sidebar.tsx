@@ -524,7 +524,7 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
   });
 
   return (
-    <div className={`h-16 flex items-center px-4 gap-1 shrink-0 shadow-sm relative transition-colors ${
+    <div className={`fpulse-global-nav min-h-16 flex flex-wrap items-center px-2 sm:px-4 gap-1 shrink-0 relative transition-colors ${
       isProd
         ? dark
           ? 'bg-[#1e3a5f] border-b-2 border-blue-400'

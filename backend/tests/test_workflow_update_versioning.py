@@ -1,175 +1,58 @@
-"""
-Regression test for A8 — update-workflow doesn't persist changes.
-
-Before Week 2 Day 2: PUT /api/workflows/{id} returns 422 or returns stale data.
-After Week 2 Day 2: update persists, creates v2, diff shows changes.
-"""
-from __future__ import annotations
-
+"""Updates, immutable historical versions, and structured plan differences."""
 import pytest
 from tests.conftest_fixtures_v2 import (  # noqa: F401
     data_dir, db_fixture, app_v2, client, admin_token, authed_client,
 )
+from tests.test_workflow_steps_persist import create_workflow, read_workflow
 
 
-@pytest.fixture
-def initial_workflow(authed_client):
-    r = authed_client.post("/api/workflows", json={
-        "name": "update-regression-test",
-        "steps": [
-            {"id": "src", "type": "csv_source",
-             "config": {"file_path": "orders.csv"}},
-            {"id": "flt", "type": "filter",
-             "config": {"condition": "amount > 100"},
-             "depends_on": ["src"]},
-        ],
-    })
-    if r.status_code not in (200, 201):
-        pytest.skip(f"workflow create failed: {r.status_code}")
-    body = r.json()
-    return body.get("id") or body.get("workflow_id")
+@pytest.mark.parametrize("mutation", ["rename", "add", "remove", "params"])
+def test_update_persists_and_preserves_old_version(authed_client, mutation):
+    wid = create_workflow(authed_client)
+    original = read_workflow(authed_client, wid)
+    changed = read_workflow(authed_client, wid)
+    if mutation == "rename":
+        changed["name"] = "Renamed workflow"
+    elif mutation == "add":
+        changed["steps"].append({"id": "sort", "type": "sort", "params": {"columns": ["region"]}})
+        changed["connections"].append({"from_step": "agg", "to_step": "sort"})
+    elif mutation == "remove":
+        changed["steps"] = changed["steps"][:1]
+        changed["connections"] = []
+    else:
+        changed["steps"][1]["params"]["condition"] = "amount > 500"
+    response = authed_client.put(f"/api/workflows/{wid}", json={
+        "workflow": changed, "change_summary": mutation})
+    assert response.status_code == 200, response.text
+    assert response.json()["version"] == 2
+    actual = read_workflow(authed_client, wid)
+    for field in ("name", "steps", "connections"):
+        # Newly inserted steps and edges acquire model defaults.
+        if field == "name" or mutation != "add":
+            assert actual[field] == changed[field]
+    if mutation == "add":
+        assert actual["steps"][-1]["id"] == "sort"
+        assert actual["steps"][-1]["params"] == {"columns": ["region"]}
+        assert actual["connections"][-1]["to_step"] == "sort"
+    assert read_workflow(authed_client, wid, version=1) == original
+    versions = authed_client.get(f"/api/workflows/{wid}/versions")
+    assert versions.status_code == 200, versions.text
+    assert {v["version"] for v in versions.json()} == {1, 2}
 
 
-class TestUpdatePersistence:
-
-    def test_rename_persists(self, authed_client, initial_workflow):
-        ur = authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "renamed-workflow",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-                {"id": "flt", "type": "filter",
-                 "config": {"condition": "amount > 100"},
-                 "depends_on": ["src"]},
-            ],
-        })
-        assert ur.status_code in (200, 201), (
-            f"A8 REGRESSION — update returned {ur.status_code}: {ur.text[:200]}"
-        )
-
-        got = authed_client.get(f"/api/workflows/{initial_workflow}").json()
-        assert got["name"] == "renamed-workflow", (
-            f"Update did not persist rename. Got name={got.get('name')!r}"
-        )
-
-    def test_add_step_persists(self, authed_client, initial_workflow):
-        new_steps = [
-            {"id": "src", "type": "csv_source",
-             "config": {"file_path": "orders.csv"}},
-            {"id": "flt", "type": "filter",
-             "config": {"condition": "amount > 100"},
-             "depends_on": ["src"]},
-            {"id": "sort", "type": "sort",
-             "config": {"columns": ["amount"]},
-             "depends_on": ["flt"]},
-        ]
-        ur = authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "update-regression-test",
-            "steps": new_steps,
-        })
-        assert ur.status_code in (200, 201)
-
-        got = authed_client.get(f"/api/workflows/{initial_workflow}").json()
-        assert len(got["steps"]) == 3, (
-            f"Added step not persisted. len(steps)={len(got['steps'])}"
-        )
-        step_ids = {s["id"] for s in got["steps"]}
-        assert step_ids == {"src", "flt", "sort"}
-
-    def test_remove_step_persists(self, authed_client, initial_workflow):
-        ur = authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "update-regression-test",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-            ],  # dropped the filter
-        })
-        assert ur.status_code in (200, 201)
-
-        got = authed_client.get(f"/api/workflows/{initial_workflow}").json()
-        assert len(got["steps"]) == 1
-        assert got["steps"][0]["id"] == "src"
-
-    def test_modify_step_config_persists(self, authed_client, initial_workflow):
-        ur = authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "update-regression-test",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-                {"id": "flt", "type": "filter",
-                 "config": {"condition": "amount > 500"},   # changed
-                 "depends_on": ["src"]},
-            ],
-        })
-        assert ur.status_code in (200, 201)
-
-        got = authed_client.get(f"/api/workflows/{initial_workflow}").json()
-        flt = next(s for s in got["steps"] if s["id"] == "flt")
-        assert "500" in flt["config"]["condition"], (
-            f"Filter condition not updated: {flt['config']}"
-        )
+def test_diff_shows_removed_step(authed_client):
+    wid = create_workflow(authed_client)
+    changed = read_workflow(authed_client, wid)
+    changed["steps"] = changed["steps"][:1]
+    changed["connections"] = []
+    saved = authed_client.put(f"/api/workflows/{wid}", json={"workflow": changed})
+    assert saved.status_code == 200, saved.text
+    diff = authed_client.get(f"/api/workflows/{wid}/diff", params={"v1": 1, "v2": 2})
+    assert diff.status_code == 200, diff.text
+    assert set(diff.json()["removed_steps"]) == {"flt", "agg"}
 
 
-class TestVersioning:
-
-    def test_update_creates_new_version(self, authed_client, initial_workflow):
-        authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "v2-name",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-                {"id": "flt", "type": "filter",
-                 "config": {"condition": "amount > 200"},
-                 "depends_on": ["src"]},
-            ],
-        })
-
-        versions = authed_client.get(f"/api/workflows/{initial_workflow}/versions")
-        if versions.status_code != 200:
-            pytest.skip("versions endpoint not available")
-
-        v_list = versions.json()
-        if isinstance(v_list, dict):
-            v_list = v_list.get("versions", [])
-        assert len(v_list) >= 2, f"expected ≥2 versions, got {len(v_list)}"
-
-
-class TestDiffEndpoint:
-
-    def test_diff_endpoint_returns_200(self, authed_client, initial_workflow):
-        """A10 regression — /api/workflows/{id}/diff was returning 404."""
-        # Create v2
-        authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "update-regression-test",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-            ],
-        })
-
-        diff = authed_client.get(f"/api/workflows/{initial_workflow}/diff?v1=1&v2=2")
-        if diff.status_code == 404:
-            pytest.fail(
-                "A10 REGRESSION — /api/workflows/{id}/diff returns 404. "
-                "Endpoint must exist after Week 2 Day 2."
-            )
-        assert diff.status_code == 200
-
-    def test_diff_shows_removed_step(self, authed_client, initial_workflow):
-        authed_client.put(f"/api/workflows/{initial_workflow}", json={
-            "name": "update-regression-test",
-            "steps": [
-                {"id": "src", "type": "csv_source",
-                 "config": {"file_path": "orders.csv"}},
-            ],  # removed filter
-        })
-
-        diff = authed_client.get(f"/api/workflows/{initial_workflow}/diff?v1=1&v2=2")
-        if diff.status_code != 200:
-            pytest.skip("diff endpoint not returning 200")
-
-        body = diff.json()
-        text = str(body).lower()
-        assert "flt" in text or "filter" in text or "removed" in text, (
-            f"Diff doesn't mention the removed step: {body}"
-        )
+def test_missing_historical_version_returns_404(authed_client):
+    wid = create_workflow(authed_client)
+    response = authed_client.get(f"/api/workflows/{wid}", params={"version": 999})
+    assert response.status_code == 404, response.text

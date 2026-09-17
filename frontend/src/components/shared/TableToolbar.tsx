@@ -227,11 +227,11 @@ export default function TableToolbar<T>({
   //   DEV  → pale lavender, slate-ish text. Softer than the thead lavender so the thead remains the loud element.
   //   PROD → solid navy + white text. Same navy as the thead; visually unified as one "production table" container.
   return (
-    <div className={`flex items-center justify-between px-4 py-2 ${chrome.bar}`}>
+    <div className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2 ${chrome.bar}`}>
       <span className={`text-xs ${chrome.summary} font-medium`}>
         {data.length} {recordLabel}{data.length !== 1 ? 's' : ''} · {activeColumnCount}/{columns.length} columns
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
         {children}
 
         {/* Search */}

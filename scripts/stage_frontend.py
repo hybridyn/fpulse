@@ -54,6 +54,8 @@ def main() -> int:
 
     # Rebuild from scratch: a partial overlay could leave stale asset bundles
     # next to a fresh index.html, which the browser resolves to 404s.
+    if DEST.is_symlink() or DEST.resolve() != REPO.resolve() / "backend" / "fpulse" / "frontend_dist":
+        raise SystemExit("Refusing to replace an unexpected staging path")
     if DEST.exists():
         shutil.rmtree(DEST)
     shutil.copytree(SRC, DEST)

@@ -268,6 +268,13 @@ export default function ConfigPanel() {
   // imperatively (getState) so the effect depends only on `open` and
   // doesn't re-fire when it flips the panels itself.
   const prevPanelsRef = useRef<{ nodes: boolean; chat: boolean } | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    surfaceRef.current?.focus();
+    return () => { if (previous?.isConnected) previous.focus(); };
+  }, [open]);
   useEffect(() => {
     const store = useWorkflowStore.getState();
     if (open) {
@@ -595,7 +602,7 @@ export default function ConfigPanel() {
         In full-bleed mode (Wrangler) the side panels are hidden, so the
         backdrop extends edge-to-edge (`left-0 right-0`). */}
     <div
-      className={`fixed top-[145px] z-40 transition-opacity ${
+      className={`config-overlay fixed top-[145px] z-40 transition-opacity ${
         dockedPanel ? 'bg-slate-900/10' : 'bg-slate-900/40 backdrop-blur-sm'
       } ${
         fullBleed
@@ -612,7 +619,7 @@ export default function ConfigPanel() {
         panel publishes on every drag tick. Default 240px matches the
         legacy fixed height (h-60) so pre-Z8 sessions are unchanged. */}
     <div
-      className={`fixed top-[145px] z-50 flex pointer-events-none ${
+      className={`config-overlay fixed top-[145px] z-50 flex pointer-events-none ${
         dockedPanel ? 'items-stretch justify-end' : 'items-center justify-center'
       } ${
         fullBleed
@@ -685,16 +692,26 @@ export default function ConfigPanel() {
         short windows where the bounded region is < 400px tall.
       */}
       <div
-        className={`pointer-events-auto relative max-w-[95vw] p-[3px] shadow-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 overflow-auto ${
+        ref={surfaceRef}
+        role="dialog"
+        aria-label="Node configuration"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !event.defaultPrevented) {
+            event.stopPropagation();
+            setSelectedNode(null);
+          }
+        }}
+        className={`config-surface pointer-events-auto relative max-w-full p-[3px] shadow-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 overflow-auto ${
           dockedPanel
-            ? 'h-full max-h-full min-w-[360px] rounded-l-2xl'   // right-docked: full height, rounded left edge only
+            ? 'h-full max-h-full min-w-0 rounded-l-2xl'   // right-docked: full height
             // 2026-06-15 — no forced min-height for normal nodes: the modal now
             // HUGS its content (the white panel is h-full of this box), so short
             // tabs like an empty Mapping no longer leave a big gradient-border
             // gap below, and switching nodes re-sizes to each node's content.
             // Data Wrangler keeps a min-height because its 3-pane workspace
             // needs a definite height to lay out.
-            : `resize-y min-w-[520px] max-h-full rounded-2xl ${fullBleed ? 'min-h-[420px]' : ''}`
+            : `resize-y min-w-0 max-h-full rounded-2xl ${fullBleed ? 'min-h-[420px]' : ''}`
         }`}
         style={{ width: modalWidth }}
       >

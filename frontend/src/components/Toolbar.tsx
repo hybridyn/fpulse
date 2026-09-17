@@ -597,6 +597,22 @@ export default function Toolbar({ tier = 'free', environment = 'dev' }: { tier?:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDirty]);
 
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = toolbarRef.current;
+    if (!element) return;
+    const update = () => document.documentElement.style.setProperty('--editor-top', `${element.getBoundingClientRect().bottom}px`);
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+      document.documentElement.style.removeProperty('--editor-top');
+    };
+  }, []);
+
   // Browser tab close / reload protection — only when dirty.
   // beforeunload can't show our custom modal, but it forces the
   // browser's native "Reload site? Changes you made may not be saved"
@@ -613,21 +629,18 @@ export default function Toolbar({ tier = 'free', environment = 'dev' }: { tier?:
   }, [isDirty]);
 
   return (
-    // 78px banner — matches the canonical <PageHeader> chrome the sibling
-    // Workflows pages (Pipelines / Executions / Templates) render, so the
-    // Editor doesn't read as a different page: same [1fr_auto_1fr] grid,
-    // items-center, gap-4, px-8, DEV gradient / dark #0F172A, no shadow.
-    // The Project + Pipeline-name ribbon is rendered separately by
-    // <EditorContextBar /> mounted inside the canvas column (so its width
-    // tracks the canvas, not the full window).
-    // 2026-07-03: reverted the 2026-06-10 responsive asymmetric grid back
-    // to the symmetric [1fr_auto_1fr] so the HubTabs strip sits at the
-    // TRUE page centre at every width, exactly like the sibling pages (it
-    // drifted off-centre below xl before). The overflow that workaround
-    // guarded against was caused by the "Variables" button, since removed
-    // (see note below), and the action labels now collapse to icons below
-    // xl — so the right cluster fits its track.
-    <div className={`h-[78px] grid grid-cols-[1fr_auto_1fr] items-center px-8 gap-4 shrink-0 relative z-40 border-b ${dark ? 'bg-[#0F172A] border-white/[0.06]' : 'bg-gradient-to-b from-slate-200 to-slate-300 border-slate-400/70'}`}>
+    // 78px banner — same canonical chrome as Insights / Settings /
+    // Pipelines etc. The Project + Pipeline-name ribbon is rendered
+    // separately by <EditorContextBar /> mounted inside the canvas
+    // column (so its width tracks the canvas, not the full window).
+    // 2026-06-10: column template is responsive now. The fixed
+    // [1fr_auto_1fr] forced the right action cluster into a track too
+    // narrow for it below ~1280px, and the overflow painted over the
+    // centered HubTabs (Variables sat on top of the Executions tab at
+    // 1024px). Below xl the side tracks size to content (minmax(0,…)
+    // keeps the title truncatable) and the tabs center in the leftover
+    // middle; at xl+ the original page-centered layout returns.
+    <div ref={toolbarRef} data-testid="editor-toolbar" className={`editor-toolbar min-h-[78px] flex flex-wrap items-center px-4 py-3 gap-x-4 gap-y-2 shrink-0 shadow-sm relative z-40 border-b ${dark ? 'bg-[#0f1726] border-white/[0.06]' : 'bg-gradient-to-b from-slate-200 to-slate-300 border-slate-400/70'}`}>
       {/* LEFT group — page title + subtitle (vertically stacked, same
           pattern Insights / Settings use). Inner flex is `items-center`
           to match <PageHeader>'s title cluster so the title + subtitle
@@ -672,7 +685,7 @@ export default function Toolbar({ tier = 'free', environment = 'dev' }: { tier?:
 
       {/* Workflows submenu — sibling tabs centered at the true page
           midpoint via the auto-width middle grid column. */}
-      <div className="flex justify-center items-center">
+      <div className="editor-toolbar-tabs flex flex-wrap items-center min-w-0">
         <HubTabs
           tabs={WORKFLOWS_TABS}
           active="editor"
@@ -686,7 +699,7 @@ export default function Toolbar({ tier = 'free', environment = 'dev' }: { tier?:
           Variables / Parameters / Close / Save / Run / Publish
           actions. Wrapped in a 1fr grid column matching the LEFT
           width so the centre column stays page-centered. */}
-      <div className="flex justify-end items-center gap-2 min-w-0">
+      <div className="editor-toolbar-actions flex flex-wrap justify-end items-center gap-2 min-w-0 ml-auto">
 
       {/* Save indicator was here — moved to <EditorContextBar /> so it
           sits next to the Pipeline Name where users look for save
