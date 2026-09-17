@@ -22,6 +22,8 @@ INCLUDE_SUFFIXES = {".md", ".txt", ".jsonl"}
 EXCLUDE_NAMES = {
     "connector-validation-report.md",
     "connector-validation-live-report.md",
+    "frontend-design-audit.md",
+    "functional-test-requirements.md",
 }
 
 
@@ -35,6 +37,8 @@ def main() -> int:
     if not SRC.is_dir():
         raise SystemExit(f"Missing docs source directory: {SRC}")
 
+    if DEST.is_symlink() or DEST.resolve() != REPO.resolve() / "backend" / "fpulse" / "docs":
+        raise SystemExit("Refusing to replace an unexpected staging path")
     if DEST.exists():
         shutil.rmtree(DEST)
     DEST.mkdir(parents=True, exist_ok=True)

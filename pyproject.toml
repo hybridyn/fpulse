@@ -278,34 +278,14 @@ where = ["backend"]
 include = ["fpulse*"]
 
 [tool.setuptools.package-data]
-# Non-.py files that MUST ship inside the wheel. Without this section
-# setuptools packages ONLY .py files — which is how the wheel came to
-# contain no UI and no Swagger assets while every source checkout and the
-# Docker image worked fine. `pip install fpulse && fpulse open` opened a
-# browser onto a 404.
-#
-# frontend_dist/ is a BUILD ARTIFACT, not source: it is gitignored and
-# staged by scripts/stage_frontend.py (which the release workflow runs
-# before `python -m build`). Building a wheel without staging first
-# produces a UI-less package, so stage_frontend.py fails loudly rather
-# than letting that ship quietly.
-# Enumerated from the tracked non-.py files under backend/fpulse rather
-# than guessed. Verified by installing the built wheel into a clean target
-# and asserting each is present — see backend/tests/test_packaging.py.
 fpulse = [
-    "CHANGELOG.md",                 # repo-root release notes, staged for Help
-    "frontend_dist/**/*",           # built SPA — served at / by main.py
-    "docs/*.md",                    # bundled Help -> Documentation markdown
-    "docs/**/*.md",
-    "docs/**/*.txt",
-    "docs/**/*.jsonl",
-    "static/**/*",                  # bundled Swagger UI for /docs
-    "connectors/manifests/*.json",  # the shipped connectors themselves
-    "connectors/ci/*.yml",
-    "connections/*.json",
-    "seed_data/*.csv",              # first-run sample dataset
-    "eval/*.csv",
-    "eval/*.md",
+    "CHANGELOG.md",
+    "frontend_dist/*", "frontend_dist/**/*",
+    "docs/*.md", "docs/**/*.md", "docs/**/*.txt", "docs/**/*.jsonl",
+    "static/**/*",
+    "connectors/manifests/*.json", "connectors/manifests/**/*.json",
+    "connectors/ci/*.yml", "connections/*.json",
+    "seed_data/*.csv", "eval/*.csv", "eval/*.md",
 ]
 
 [tool.ruff]

@@ -14,7 +14,7 @@ on:
   # reservation goes through the SAME build → stage → verify → publish path a
   # real release does. A separate workflow would drift from it.
   #
-  # Only the `pypi` job runs on dispatch: no git tag exists, so there is no
+  # The package gate and `pypi` job run on dispatch: no git tag exists, so there is no
   # GitHub release to cut and no image tag to derive.
   workflow_dispatch:
     inputs:
@@ -28,7 +28,52 @@ permissions:
   packages: write
 
 jobs:
+  package:
+    name: Validate distribution
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Stage and validate assets
+        run: |
+          python scripts/stage_frontend.py
+          python scripts/stage_docs.py
+          python tools/package_preflight.py --strict
+      - name: Check release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python -c "import os,tomllib; assert os.environ['GITHUB_REF_NAME'] == 'v' + tomllib.load(open('pyproject.toml','rb'))['project']['version']"
+      - name: Build and inspect distribution
+        run: |
+          python -m pip install build
+          python -m build
+          python tools/verify_wheel.py dist/*.whl
+      - name: Install and boot wheel outside checkout
+        run: |
+          python -m venv /tmp/fpulse-release
+          /tmp/fpulse-release/bin/python -m pip install dist/*.whl psutil
+          /tmp/fpulse-release/bin/python tools/smoke_distribution.py --python /tmp/fpulse-release/bin/python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-distribution
+          path: dist/*
+          if-no-files-found: error
+
   docker:
+    needs: package
     name: Publish Docker image
     runs-on: ubuntu-latest
     # 2026-07-15: gated off. Repository SECRETS do not travel with code, so
@@ -218,7 +263,7 @@ jobs:
     # Tag pushes only: there is no release to cut for a .devN reservation, and
     # the version is read from GITHUB_REF_NAME which would be a branch here.
     if: ${{ github.event_name == 'push' }}
-    needs: [linux-installers]
+    needs: [package, linux-installers]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -272,6 +317,7 @@ jobs:
             dist-installers/SHA256SUMS
 
   pypi:
+    needs: package
     name: Publish to PyPI
     runs-on: ubuntu-latest
     # 2026-07-16: wired up and ready — the job is correct, it just needs the

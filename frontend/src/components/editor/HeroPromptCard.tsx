@@ -51,7 +51,12 @@ export default function HeroPromptCard() {
     const measure = () => {
       const r = tplRef.current?.getBoundingClientRect();
       if (!r) return;
-      setTplAnchor({ left: r.right, bottom: window.innerHeight - r.top, width: r.width });
+      const width = Math.min(420, window.innerWidth - 16);
+      setTplAnchor({
+        left: Math.max(8, Math.min(r.right - width, window.innerWidth - width - 8)),
+        bottom: Math.max(8, Math.min(window.innerHeight - r.top + 6, window.innerHeight - 80)),
+        width,
+      });
     };
     measure();
     window.addEventListener('resize', measure);
@@ -106,8 +111,8 @@ export default function HeroPromptCard() {
   };
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-2xl mx-6">
+    <div data-testid="empty-editor-prompt" className="absolute inset-x-0 top-0 bottom-16 overflow-y-auto flex flex-col items-center px-4 py-2 pointer-events-auto">
+      <div className="w-full max-w-2xl my-auto shrink-0">
         {/* Header */}
         <div className="text-center mb-5">
           <div className="inline-flex items-center gap-2 mb-3 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 ring-1 ring-indigo-200">
@@ -133,6 +138,7 @@ export default function HeroPromptCard() {
             (see `tplOpen && createPortal(...)` below). */}
         <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
           <textarea
+            aria-label="Pipeline description"
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
             onKeyDown={onKey}
@@ -141,7 +147,7 @@ export default function HeroPromptCard() {
             className="w-full px-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none resize-none border-0"
             autoFocus
           />
-          <div className="flex items-center justify-between gap-3 px-3 py-2 bg-slate-50 border-t border-slate-200">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-slate-50 border-t border-slate-200">
             <span className="text-xs text-slate-500">
               Cmd / Ctrl + Enter to submit
             </span>
@@ -153,6 +159,10 @@ export default function HeroPromptCard() {
               <div className="relative" ref={tplRef}>
                 <button
                   type="button"
+                  aria-expanded={tplOpen}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setTplOpen(false);
+                  }}
                   onClick={() => setTplOpen((o) => !o)}
                   className="px-3 py-1.5 text-[12px] font-semibold text-slate-700 bg-white hover:bg-slate-100 rounded-lg ring-1 ring-slate-200 transition-colors flex items-center gap-1.5"
                 >
@@ -164,13 +174,19 @@ export default function HeroPromptCard() {
                 {tplOpen && tplAnchor && createPortal(
                   <div
                     data-template-popover="true"
-                    className="fixed z-[100] w-[420px] max-h-[420px] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg"
+                    className="fixed z-[100] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        event.stopPropagation();
+                        setTplOpen(false);
+                        tplRef.current?.querySelector('button')?.focus();
+                      }
+                    }}
                     style={{
-                      // Pin the popover above the button: align its right
-                      // edge to the button's right edge, sit it 6px above
-                      // the button's top.
-                      left: tplAnchor.left - 420,
-                      bottom: tplAnchor.bottom + 6,
+                      left: tplAnchor.left,
+                      bottom: tplAnchor.bottom,
+                      width: tplAnchor.width,
+                      maxHeight: `min(420px, calc(100vh - ${tplAnchor.bottom + 8}px))`,
                     }}
                   >
                     <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 bg-slate-50">

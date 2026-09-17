@@ -26,10 +26,12 @@ fires `.github/workflows/release.yml`, which publishes:
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-5. **Watch the Actions tab.** The `Release` workflow has three jobs:
-   `github-release` (always runs), plus `docker` and `pypi` — both
-   gated off until configured, so a tag push publishes a GitHub release
-   only. See "One-time setup" below to enable them.
+5. **Watch the Actions tab.** The `package` gate builds and stages the UI
+   and docs, runs strict preflight, inspects the wheel, and boots it outside
+   the checkout. Docker, PyPI and GitHub release jobs depend on this gate;
+   the GitHub release also waits for Linux installers. Publishing retains
+   the existing `PUBLISH_DOCKER` and `PUBLISH_PYPI` gates. Manual dispatch
+   retains the suffixed PyPI publishing flow described below.
 6. **Verify** (once the `docker` job is enabled — until then the image
    is built locally on first `docker compose up`):
    ```bash
@@ -127,6 +129,48 @@ python scripts/stage_frontend.py     # exits 1 if the frontend isn't built
 python -m build
 pytest backend/tests/test_packaging.py -m slow   # asserts the wheel's contents
 ```
+
+The publish job downloads the exact artifacts that passed validation;
+it does not rebuild them. Account configuration and an actual publish
+must still be completed by an authorized maintainer. No credentials are
+needed for manual validation runs.
+
+## Windows single-file build
+
+From a Windows Python 3.12 build environment with Node/npm installed:
+
+```powershell
+python -m pip install . pyinstaller pywebview
+./installer/windows/build-portable.ps1 -Python python
+```
+
+The script builds and stages the frontend/docs, runs strict preflight,
+freezes `dist/portable/fpulse.exe`, and verifies HTTP startup and local
+assets from a disposable directory. It prints the executable's SHA256.
+The manual `Windows portable validation` workflow runs the same steps
+and uploads the executable only after the smoke test passes.
+
+This executable needs no separately installed Python. PyInstaller extracts
+its runtime to a temporary directory at startup; it is not a zero-extraction
+binary. Optional database connectors may still need vendor drivers. The
+artifact is unsigned unless separately signed, so Windows may warn about it.
+Cross-platform binaries require native builds and equivalent smoke tests.
+
+### Local validation (2026-09-17)
+
+- Windows 11, Python 3.12.14, PyInstaller 6.22.3.
+- Built sdist and wheel; actual wheel assets verified.
+- Installed the wheel into a separate target directory and booted outside
+  the checkout using existing environment dependencies. This is not a clean
+  dependency-resolution test; the release job uses a fresh virtual environment.
+- Built a 158,136,280-byte single executable and passed the same HTTP smoke
+  test: root HTML, referenced scripts/styles, health, and offline Swagger.
+- 14 packaging regression tests passed with a workspace-local pytest temp
+  directory; the default Windows pytest temp directory was permission-blocked.
+- Startup logged existing Atlas source-doc discovery and audit-index migration
+  warnings. HTTP checks passed; this is not full connector/pipeline certification.
+- CI workflows have not yet run on GitHub. PyPI publication, signing, clean-host
+  Windows validation, and native macOS/Linux binary builds remain unverified.
 
 ## Hotfix flow
 

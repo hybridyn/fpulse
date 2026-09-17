@@ -37,7 +37,7 @@ Write-Host ""
 Write-Host "  [1/4] Building frontend (npm run build)..." -ForegroundColor Yellow
 Push-Location "$repoRoot\frontend"
 try {
-    npm install --silent
+    npm ci --silent
     if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
     npm run build
     if ($LASTEXITCODE -ne 0) { throw "npm run build failed" }
@@ -54,6 +54,13 @@ if (-not (Test-Path $python)) {
 }
 Push-Location $repoRoot
 try {
+    foreach ($script in @("scripts/stage_frontend.py", "scripts/stage_docs.py")) {
+        & $python $script
+        if ($LASTEXITCODE -ne 0) { throw "Staging failed: $script" }
+    }
+    & $python tools/package_preflight.py --strict
+    if ($LASTEXITCODE -ne 0) { throw "Packaging preflight failed" }
+    if ($env:FPULSE_ONEFILE -eq "1") { throw "Use build-portable.ps1 for single-file builds" }
     # Use the spec (installer\windows\fpulse.spec) — it collects the data
     # files + dynamically-imported submodules that the old inline
     # --collect-all command missed (pandas/pyarrow/tzdata/reportlab/etc.).

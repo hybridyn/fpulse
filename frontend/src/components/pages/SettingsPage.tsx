@@ -38,16 +38,20 @@ interface ToggleProps {
   dark?: boolean;
 }
 
-function Toggle({ enabled, onChange, label, description, dark }: ToggleProps) {
+export function Toggle({ enabled, onChange, label, description, dark }: ToggleProps) {
   return (
-    <div className="flex items-center justify-between py-3">
-      <div>
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
         <div className={`text-sm font-medium ${dark ? 'text-slate-200' : 'text-slate-700'}`}>{label}</div>
         {description && <div className="text-xs text-slate-400 mt-0.5">{description}</div>}
       </div>
       <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={label}
         onClick={() => onChange(!enabled)}
-        className={`relative w-10 h-5 rounded-full transition-colors ${enabled ? 'bg-pipe-500' : 'bg-slate-300'}`}
+        className={`relative w-10 h-5 shrink-0 rounded-full transition-colors ${enabled ? 'bg-pipe-500' : 'bg-slate-300'}`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled ? 'left-5' : 'left-0.5'}`} />
       </button>

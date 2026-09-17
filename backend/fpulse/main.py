@@ -38,6 +38,7 @@ import asyncio
 import logging
 import os
 import sys
+import tempfile
 import traceback as _tb
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
@@ -195,6 +196,23 @@ if _role == "worker" and os.environ.get("FPULSE_WORKER_PLACEHOLDER_ACK") != "1":
 app_state: dict = {}
 
 
+def _assert_writable_data_dir(data_dir: str) -> None:
+    """Fail early with actionable diagnostics for an unusable data directory."""
+    try:
+        os.makedirs(data_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix=".fpulse-startup-", dir=data_dir, delete=True):
+            pass
+    except Exception as exc:
+        raise RuntimeError(
+            "F-Pulse cannot use FPULSE_DATA_DIR.\n"
+            f"  data_dir: {os.path.abspath(data_dir)}\n"
+            f"  error: {exc}\n"
+            "Fix: choose a writable directory, then restart. For example:\n"
+            "  set FPULSE_DATA_DIR=C:\\fpulse-data\n"
+            "  python -m fpulse doctor"
+        ) from exc
+
+
 # ── Resolve data directory once, deterministically ───────────────────────
 def _resolve_data_dir() -> str:
     """Resolution priority (highest first):
@@ -228,7 +246,7 @@ def _resolve_data_dir() -> str:
         "FPULSE_DATA_DIR",
         os.path.join(os.getcwd(), "data"),
     )
-    os.makedirs(data_dir, exist_ok=True)
+    _assert_writable_data_dir(data_dir)
     return data_dir
 
 

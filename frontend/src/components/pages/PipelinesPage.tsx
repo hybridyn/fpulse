@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import RowActionsPopover from '../shared/RowActionsPopover';
 import { useTableColumns, type TColumn, type TColumnGroup } from '../shared/TableToolbar';
 // xyflow's `Node` type shadows the global DOM `Node`, which silently
 // breaks every `e.target as Node` cast in this file's event handlers.
@@ -5270,80 +5271,6 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                   REJECTED
                                 </span>
                               )}
-                              {/* Publish — for draft/failed pipelines */}
-                              {canEdit && (ns === 'draft' || ns === 'failed') && !approval && (
-                                <button
-                                  onClick={() => handleLifecycleAction(p.id, 'publish')}
-                                  disabled={!!lifecycleLoading[p.id]}
-                                  className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                  title="Publish pipeline"
-                                >
-                                  {lifecycleLoading[p.id] === 'publish' ? 'Publishing...' : 'Publish'}
-                                </button>
-                              )}
-                              {/* Revoke — pull a published pipeline back to draft.
-                                  Inverse of Publish. Schedules + triggers stop
-                                  firing once status flips. */}
-                              {canEdit && ns === 'published' && !approval && (
-                                <button
-                                  onClick={() => handleLifecycleAction(p.id, 'revoke')}
-                                  disabled={!!lifecycleLoading[p.id]}
-                                  className="px-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-                                  title="Revoke — move back to draft (stops schedules and triggers)"
-                                >
-                                  {lifecycleLoading[p.id] === 'revoke' ? 'Revoking...' : 'Revoke'}
-                                </button>
-                              )}
-                              {/* Submit for Deploy — Plus only. PROD promotion via
-                                  approvals is a Plus-tier feature; Free has no PROD
-                                  environment, so the button is hidden entirely. */}
-                              {tier === 'plus' && !approval && canSubmitForReview && ns === 'published' && (
-                                <button
-                                  onClick={() => handleSubmitForReview(p.id, p.name)}
-                                  className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
-                                  title="Submit for deploy review"
-                                >
-                                  Submit for Deploy
-                                </button>
-                              )}
-
-                              <div className="w-px h-5 bg-slate-200 mx-0.5" />
-
-                              {/* Activate/Deactivate.
-                                  This block lives in the DEV branch (PROD has its own
-                                  early-return UI at ~line 2832), so we hard-bind to
-                                  the DEV flag + direct-toggle labels. The PROD-request
-                                  variant lives in the PROD render block above. */}
-                              {(() => {
-                                const flagKey = 'is_active_dev';
-                                const isActive = (p as any)[flagKey] !== false;
-                                const loadingTag = lifecycleLoading[p.id];
-                                const busy = loadingTag === 'activate' || loadingTag === 'deactivate';
-                                const onClick = () => handleToggleActive(p, !isActive);
-                                if (isActive) {
-                                  return (
-                                    <button
-                                      onClick={onClick}
-                                      disabled={busy}
-                                      className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
-                                      title="Deactivate this pipeline (DEV — direct)"
-                                    >
-                                      {busy ? '…' : 'Deactivate'}
-                                    </button>
-                                  );
-                                }
-                                return (
-                                  <button
-                                    onClick={onClick}
-                                    disabled={busy}
-                                    className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                    title="Activate this pipeline (DEV — direct)"
-                                  >
-                                    {busy ? '…' : 'Activate'}
-                                  </button>
-                                );
-                              })()}
-
                               {/* Edit */}
                               {canEdit && ns !== 'running' && (
                                 <button
@@ -5383,31 +5310,87 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                 const canCopy = ns !== 'archived' && ns !== 'running';
                                 const canTemplate = ns !== 'archived' && ns !== 'running';
                                 const canDeleteHere = canDelete && (ns === 'draft' || ns === 'failed' || ns === 'archived');
-                                const anyMenuItem = canCopy || canTemplate || canDeleteHere;
+                                const anyMenuItem = canCopy || canTemplate || canDeleteHere || ns === 'running';
                                 if (!anyMenuItem) return null;
                                 return (
-                                  <div className="relative" data-row-more-menu>
+                                  <RowActionsPopover open={moreMenuFor === p.id} onOpenChange={open => setMoreMenuFor(open ? p.id : null)}>
+                                    <div className="flex flex-col items-stretch gap-1 px-2 py-1">
+                              {/* Publish — for draft/failed pipelines */}
+                              {canEdit && (ns === 'draft' || ns === 'failed') && !approval && (
+                                <button
+                                  onClick={() => handleLifecycleAction(p.id, 'publish')}
+                                  disabled={!!lifecycleLoading[p.id]}
+                                  className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                  title="Publish pipeline"
+                                >
+                                  {lifecycleLoading[p.id] === 'publish' ? 'Publishing...' : 'Publish'}
+                                </button>
+                              )}
+                              {/* Revoke — pull a published pipeline back to draft.
+                                  Inverse of Publish. Schedules + triggers stop
+                                  firing once status flips. */}
+                              {canEdit && ns === 'published' && !approval && (
+                                <button
+                                  onClick={() => handleLifecycleAction(p.id, 'revoke')}
+                                  disabled={!!lifecycleLoading[p.id]}
+                                  className="px-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                  title="Revoke — move back to draft (stops schedules and triggers)"
+                                >
+                                  {lifecycleLoading[p.id] === 'revoke' ? 'Revoking...' : 'Revoke'}
+                                </button>
+                              )}
+                              {/* Submit for Deploy — Plus only. PROD promotion via
+                                  approvals is a Plus-tier feature; Free has no PROD
+                                  environment, so the button is hidden entirely. */}
+                              {tier === 'plus' && !approval && canSubmitForReview && ns === 'published' && (
+                                <button
+                                  onClick={() => handleSubmitForReview(p.id, p.name)}
+                                  className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                                  title="Submit for deploy review"
+                                >
+                                  Submit for Deploy
+                                </button>
+                              )}
+
+
+
+                              {/* Activate/Deactivate.
+                                  This block lives in the DEV branch (PROD has its own
+                                  early-return UI at ~line 2832), so we hard-bind to
+                                  the DEV flag + direct-toggle labels. The PROD-request
+                                  variant lives in the PROD render block above. */}
+                              {(() => {
+                                const flagKey = 'is_active_dev';
+                                const isActive = (p as any)[flagKey] !== false;
+                                const loadingTag = lifecycleLoading[p.id];
+                                const busy = loadingTag === 'activate' || loadingTag === 'deactivate';
+                                const onClick = () => handleToggleActive(p, !isActive);
+                                if (isActive) {
+                                  return (
                                     <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMoreMenuFor(moreMenuFor === p.id ? null : p.id);
-                                      }}
-                                      className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                      title="More actions"
-                                      aria-label="More actions"
-                                      aria-expanded={moreMenuFor === p.id}
+                                      onClick={onClick}
+                                      disabled={busy}
+                                      className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+                                      title="Deactivate this pipeline (DEV — direct)"
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                        <circle cx="5" cy="12" r="2" />
-                                        <circle cx="12" cy="12" r="2" />
-                                        <circle cx="19" cy="12" r="2" />
-                                      </svg>
+                                      {busy ? '…' : 'Deactivate'}
                                     </button>
-                                    {moreMenuFor === p.id && (
-                                      <div
-                                        className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-30 py-1"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
+                                  );
+                                }
+                                return (
+                                  <button
+                                    onClick={onClick}
+                                    disabled={busy}
+                                    className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                    title="Activate this pipeline (DEV — direct)"
+                                  >
+                                    {busy ? '…' : 'Activate'}
+                                  </button>
+                                );
+                              })()}
+
+                                    </div>
+                                    <div className="my-1 border-t border-slate-100" />
                                         {canCopy && (
                                           <button
                                             onClick={() => { setMoreMenuFor(null); handleDuplicate(p); }}
@@ -5467,9 +5450,7 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                             </button>
                                           </>
                                         )}
-                                      </div>
-                                    )}
-                                  </div>
+                                  </RowActionsPopover>
                                 );
                               })()}
                             </div>

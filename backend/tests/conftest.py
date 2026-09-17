@@ -24,14 +24,16 @@ Design choices:
     constructor path is what fpulse.main uses in production startup,
     so tests exercise the same code path as prod.
 
-conftest_fixtures_v2.py remains untouched; tests that imported its
-db_fixture / app_v2 / authed_client continue to work.
+Tests needing the API lifespan use conftest_fixtures_v2.py explicitly.
 """
 
 import os
 import sys
 import tempfile
 import pytest
+
+# TestClient shutdown must not terminate the pytest host 15 seconds later.
+os.environ["FPULSE_SHUTDOWN_GRACE_S"] = "0"
 
 # Ensure backend is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

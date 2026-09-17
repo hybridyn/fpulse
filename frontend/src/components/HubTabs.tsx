@@ -49,7 +49,7 @@ export default function HubTabs<P extends string>({
   if (visibleTabs.length <= 1) return null;
 
   return (
-    <div className="flex justify-center items-center gap-0.5">
+    <div className="flex flex-wrap items-center gap-0.5" aria-label="Section navigation">
       {visibleTabs.map((t) => {
         const isActive = t.page === active;
         return (
@@ -58,6 +58,7 @@ export default function HubTabs<P extends string>({
             type="button"
             onClick={() => onNavigate(t.page)}
             title={t.label}
+            aria-current={isActive ? 'page' : undefined}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all capitalize ${
               isActive
                 ? dark
@@ -72,7 +73,7 @@ export default function HubTabs<P extends string>({
             {/* 2026-06-10: label hides below xl so the strip shrinks to
                 icon chips instead of colliding with the page-header
                 action cluster at laptop / half-snapped widths. */}
-            <span className="hidden xl:inline">{t.label}</span>
+            <span className="hidden sm:inline">{t.label}</span>
           </button>
         );
       })}

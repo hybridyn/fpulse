@@ -229,7 +229,7 @@ export default function PreviewPanel() {
         className="absolute top-0 left-0 right-0 -mt-1 z-20"
       />
       {/* Header */}
-      <div className="flex items-center px-4 py-2 border-b border-amber-200/30 gap-2 shrink-0">
+      <div className="flex flex-wrap items-center px-3 py-2 border-b border-amber-200/30 gap-2 shrink-0">
         <span className="text-sm font-semibold text-slate-700">{String((node.data as any)?.label ?? '')}</span>
 
         {/* Step ▾ selector — Data Wrangler nodes only. Lets the user inspect
@@ -271,7 +271,7 @@ export default function PreviewPanel() {
         )}
 
         {/* Tabs: Input | Output | Schema | JSON */}
-        <div className="flex gap-0.5 ml-3">
+        <div className="flex flex-wrap gap-0.5">
           {(!isSource ? ['input', 'output', 'schema', 'json'] as Tab[] : ['output', 'schema', 'json'] as Tab[]).map((t) => (
             <button
               key={t}

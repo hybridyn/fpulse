@@ -1,0 +1,20 @@
+id: hybridyn-f-pulse-oss
+name: F-Pulse (OSS edition)
+version: 1.0.0
+status: ga
+owner: ''
+repo: hybridyn-f-pulse-oss
+language: python
+deployment:
+- on-prem
+- desktop
+- air-gap
+interfaces:
+  rest: true
+  mcp: true
+  webhooks: true
+docs: {}
+declared:
+- deployment
+- interfaces
+- owner

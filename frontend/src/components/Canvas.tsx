@@ -798,7 +798,7 @@ export default function Canvas() {
         snapGrid={[20, 20]}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color={dark ? 'rgba(148,163,184,0.1)' : 'rgba(148,163,184,0.15)'} />
-        {editorPrefs.showMinimap && (
+        {editorPrefs.showMinimap && nodes.length > 0 && (
           <MiniMap
             nodeColor={miniMapNodeColor}
             maskColor={dark ? 'rgba(11,18,32,0.8)' : 'rgba(240,244,248,0.8)'}
@@ -833,7 +833,7 @@ export default function Canvas() {
           density tames per-edge label noise on fan-in joins, outline
           gives a scannable top-down view for 30+ step pipelines. See
           CanvasLabelDensity in useEditorPreferences for the rationale. */}
-      <CanvasDensityToggle />
+      {nodes.length > 0 && <CanvasDensityToggle />}
       {editorPrefs.showPipelineOutline && nodes.length > 0 && (
         <PipelineOutline rfInstance={rfInstance} />
       )}
@@ -919,7 +919,7 @@ function BottomToolbar({ rfInstance }: { rfInstance: ReactFlowInstance | null })
 
   return (
     <>
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white rounded-xl shadow-lg border border-slate-200/80 px-2 py-1.5 z-20">
+      <div className="canvas-tools absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white rounded-xl shadow-lg border border-slate-200/80 px-2 py-1.5 z-20">
         {/* Zoom controls */}
         <ToolbarBtn onClick={handleZoomOut} title="Zoom Out" disabled={false}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
