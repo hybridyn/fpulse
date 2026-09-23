@@ -536,6 +536,10 @@ class DbSourceNode(BaseNode):
         else:
             config, conn_type = {}, "duckdb"
 
+        if conn_type == "mongodb":
+            rows, columns = self._execute_mongodb(config)
+            return self._relation_from_rows(ctx, rows, columns)
+
         # Dev sample limit — dialect-aware.
         if not ctx.full_run:
             limit = int(self.params.get("sample_rows", DEV_SAMPLE_ROWS))
@@ -560,29 +564,7 @@ class DbSourceNode(BaseNode):
             ctx=ctx, connection_id=connection_id,
         )
 
-        if not rows:
-            col_defs = ", ".join(f"NULL AS \"{c}\"" for c in columns) if columns else "NULL AS empty"
-            return ctx.conn.sql(f"SELECT {col_defs} WHERE false")
-
-        # Load rows into DuckDB as a relation. We name the columns
-        # explicitly via the `AS __vals (col_a, col_b, …)` clause so we
-        # don't rely on DuckDB's auto-naming, which has shifted between
-        # versions (`column0` in old releases, `col0` in newer ones).
-        # The previous two-step approach (auto-named CREATE TABLE +
-        # `column{i} AS "real_name"` rename) broke on every install
-        # whose DuckDB had moved to the `col0` convention — the rename
-        # referenced columns that didn't exist, raising
-        # `Binder Error: Referenced column "column0" not found`.
-        quoted_cols = ", ".join(f'"{c}"' for c in columns)
-        values_sql = self._rows_to_values(rows, columns)
-        # Per-step temp-table name: the returned relation reads this table
-        # lazily, so two DB-source nodes in one pipeline must not share it.
-        db_src = ctx.scoped_name("__db_source")
-        ctx.conn.execute(
-            f"CREATE OR REPLACE TEMP TABLE {db_src} AS "
-            f"SELECT * FROM (VALUES {values_sql}) AS __vals ({quoted_cols})"
-        )
-        relation = ctx.conn.sql(f"SELECT * FROM {db_src}")
+        relation = self._relation_from_rows(ctx, rows, columns)
 
         # 2026-05-30 (P2): persist the new watermark for incremental mode.
         # The next run reads it back at the top of execute() above.
@@ -590,6 +572,41 @@ class DbSourceNode(BaseNode):
             self._save_sync_cursor(ctx, watermark_col, len(rows))
 
         return relation
+
+    def _execute_mongodb(self, config: dict) -> tuple[list[tuple], list[str]]:
+        source_mode = self.params.get("source_mode", "query")
+        if source_mode != "table":
+            raise ValueError("MongoDB Source: use Table mode and choose a collection.")
+        table = (self.params.get("table") or self.params.get("collection") or "").strip()
+        if not table:
+            raise ValueError("MongoDB Source: collection is required")
+        database = (self.params.get("schema") or self.params.get("database") or config.get("database") or "").strip()
+        cfg = dict(config)
+        if database:
+            cfg["database"] = database
+        sample_rows = int(self.params.get("sample_rows", DEV_SAMPLE_ROWS) or 0)
+        limit = sample_rows if sample_rows > 0 else None
+        from fpulse.connectors.jdbc_dialects import get_dialect
+        dialect = get_dialect("mongodb")
+        columns, rows = dialect.reader(cfg, None, table, limit)
+        return rows, columns
+
+    def _relation_from_rows(self, ctx: ExecutionContext, rows: list[tuple], columns: list[str]) -> duckdb.DuckDBPyRelation:
+        if not rows:
+            col_defs = ", ".join(f"NULL AS \"{c}\"" for c in columns) if columns else "NULL AS empty"
+            return ctx.conn.sql(f"SELECT {col_defs} WHERE false")
+
+        # Load rows into DuckDB as a relation. We name the columns explicitly via
+        # the `AS __vals (col_a, col_b, ...)` clause so we don't rely on
+        # DuckDB's auto-naming, which has shifted between versions.
+        quoted_cols = ", ".join(f'"{c}"' for c in columns)
+        values_sql = self._rows_to_values(rows, columns)
+        db_src = ctx.scoped_name("__db_source")
+        ctx.conn.execute(
+            f"CREATE OR REPLACE TEMP TABLE {db_src} AS "
+            f"SELECT * FROM (VALUES {values_sql}) AS __vals ({quoted_cols})"
+        )
+        return ctx.conn.sql(f"SELECT * FROM {db_src}")
 
     def _apply_cursor_lookback(self, stored_cursor: str) -> str:
         """B1.1 (2026-06-08) - apply the configured lookback window to
@@ -727,7 +744,7 @@ class DbSourceNode(BaseNode):
             return self._query_mysql(host, port, database, user, password, query,
                                      ctx=ctx, connection_id=connection_id)
         elif conn_type == "mssql":
-            return self._query_mssql(host, port, database, user, password, query,
+            return self._query_mssql(config, host, port, database, user, password, query,
                                      ctx=ctx, connection_id=connection_id)
         else:
             raise ValueError(f"DB Source: unsupported connection type '{conn_type}'. "
@@ -896,20 +913,26 @@ class DbSourceNode(BaseNode):
             finally:
                 conn.close()
 
-    def _query_mssql(self, host, port, database, user, password, query,
+    def _query_mssql(self, config, host, port, database, user, password, query,
                      ctx=None, connection_id=None):
         """MSSQL query path. Uses connection pool when available — same
         pattern as Postgres / MySQL. ODBC connection setup is the most
         expensive of the four dialects (driver init + auth handshake),
         so the pool benefit is largest here for multi-step workflows."""
         import pyodbc  # type: ignore
-        conn_str = (
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={host},{port or 1433};"
-            f"DATABASE={database};"
-            f"UID={user};PWD={password};"
-            f"Connection Timeout=10;"
-        )
+        from fpulse.connections.mssql_odbc import build_mssql_odbc_conn_str
+
+        conn_str = build_mssql_odbc_conn_str({
+            "host": host,
+            "port": port or 1433,
+            "database": database,
+            "user": user,
+            "password": password,
+            "windows_auth": config.get("windows_auth"),
+            "encrypt": config.get("encrypt"),
+            "trust_server_certificate": config.get("trust_server_certificate"),
+            "driver": config.get("driver"),
+        }, pyodbc, timeout=10)
 
         def factory(_ct: str, _c: dict):
             c = pyodbc.connect(conn_str)

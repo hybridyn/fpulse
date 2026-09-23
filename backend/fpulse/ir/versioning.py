@@ -370,6 +370,14 @@ class WorkflowStore:
                 "id": wf.get("id", ""),
                 "name": wf.get("name", ""),
                 "description": wf.get("description", ""),
+                # Documentation fields (self-documenting pipelines). Surfaced
+                # here so listing consumers — the inventory report's "what &
+                # why", the Pipelines page — get them without a per-row fetch.
+                # `tags` was already read by the report but never emitted here,
+                # so it was silently empty; fixed alongside.
+                "business_purpose": wf.get("business_purpose", "") or "",
+                "readme": wf.get("readme", "") or "",
+                "tags": wf.get("tags", []) or [],
                 "project_id": wf.get("project_id", "default"),
                 "folder_id": wf.get("folder_id"),
                 "version": data.get("version", 1),

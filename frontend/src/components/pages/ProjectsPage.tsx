@@ -1069,9 +1069,12 @@ export default function ProjectsPage({ onSelectProject, environment = 'dev', tie
                 </div>
               </div>
 
-              {/* ── Divider: Team ── */}
+              {/* Per-project access control is a multi-user (F-Pulse+) capability.
+                  Single-operator OSS has no team, so this is hidden unless more
+                  than one account exists. */}
+              {allUsers.length > 1 && (
               <div className="border-t border-slate-200 pt-3">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Team Members <span className="text-slate-300 font-normal normal-case">(controls who can see this project)</span></h3>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Project access</h3>
 
                 {/* Current members */}
                 {form.members.length > 0 && (
@@ -1109,9 +1112,10 @@ export default function ProjectsPage({ onSelectProject, environment = 'dev', tie
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">No users found. Empty = all workspace members can access.</p>
+                  <p className="text-xs text-slate-400">No other users.</p>
                 )}
               </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">

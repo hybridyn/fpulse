@@ -910,6 +910,12 @@ def _add_pipeline_block(story: list, p: PipelineInventory, section: str, s: dict
         s["Body"],
     ))
 
+    # ── Purpose (the "why") — prominent, right under the name ──────────
+    if p.business_purpose:
+        story.append(Paragraph(
+            f"<b>Purpose:</b> {_esc(p.business_purpose)}", s["Body"],
+        ))
+
     rows = [
         ["Environment", " + ".join(p.environments)],
         ["Status", _status_label(p.status, p.deployed_version)],
@@ -918,6 +924,10 @@ def _add_pipeline_block(story: list, p: PipelineInventory, section: str, s: dict
          f"v{p.deployed_version}" if p.deployed_version else "not deployed"],
         ["Owner", p.owner or "—"],
     ]
+    if p.description:
+        rows.append(["Description", _esc(p.description)])
+    if p.readme:
+        rows.append(["Notes (README)", _esc(p.readme).replace("\n", "<br/>")])
     if p.approval_status:
         approval = p.approval_status
         if p.approved_by:

@@ -101,4 +101,12 @@ KNOWN_UNGATED = frozenset({
     'PUT /api/notifications/telemetry/consent',
     'PUT /api/projects/{project_id}',
     'PUT /api/published/{path:path}',
+    # 2026-08-02: the self-documenting-pipelines publish policy. This route
+    # IS gated — `dependencies=[Depends(require_min_rank("admin"))]`, admin
+    # only — but the detector recognizes gates by the dependency callable's
+    # __name__, and require_min_rank returns an inner `_dep` that doesn't
+    # match _AUTH_RE, so require_min_rank-gated routes register as "ungated"
+    # until reviewed and listed here — the conscious-addition step this
+    # baseline is for.
+    'PUT /api/admin/publish-policy',
 })

@@ -227,9 +227,9 @@ Checkpoints have a 7-day TTL by default — older runs can only be re-run from s
 2. `cd fpulse`
 3. Pick one:
    - **Docker (recommended)**: `docker compose up`
-   - **From source — one command**: `pip install -e . && fpulse open` (starts the backend on a free port + opens your default browser; falls back to a printed URL in WSL/Docker/SSH)
+   - **From source — one command**: `pip install -e . && python -m fpulse open` (starts the backend on a free port + opens your default browser; falls back to a printed URL in WSL/Docker/SSH)
    - **From source — manual**: see `docs/quickstart.md` for the backend (uvicorn) + frontend (vite) startup
-4. Docker mode: open `http://127.0.0.1:8001` in a browser. Source mode (`fpulse open`): your browser opens automatically.
+4. Docker mode: open `http://127.0.0.1:8001` in a browser. Source mode (`python -m fpulse open`): your browser opens automatically. On Windows, use `py -m fpulse open` to avoid depending on the generated `fpulse.exe` shortcut being on `PATH`.
 5. First-run wizard sets the admin password and creates the master encryption key at `~/.fpulse/secret.key`.
 
 Backend binds to `127.0.0.1` (loopback) by default — the API is **invisible to your LAN**, so coworkers / hotel WiFi / conference networks cannot reach it. If you need LAN-visible binding for on-prem multi-user installs, set `FPULSE_ALLOW_LAN=1` or pass `--host 0.0.0.0`. See [`install/security-hardening.md`](../install/security-hardening.md).

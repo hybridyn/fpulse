@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import RowActionsPopover from '../shared/RowActionsPopover';
 import { useTableColumns, type TColumn, type TColumnGroup } from '../shared/TableToolbar';
 // xyflow's `Node` type shadows the global DOM `Node`, which silently
 // breaks every `e.target as Node` cast in this file's event handlers.
@@ -2430,6 +2431,10 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
   const [importProjects, setImportProjects] = useState<any[]>([]);
   const [importCredentials, setImportCredentials] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
+  // dbt project import (compiled manifest.json → pipeline). Separate from the
+  // .fpulse import above — different input shape, different result surface.
+  const [dbtImporting, setDbtImporting] = useState(false);
+  const [dbtResult, setDbtResult] = useState<any>(null);
 
   const handleImportFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2491,6 +2496,35 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
       toast.error('Import failed', err.message);
     }
     setImporting(false);
+  };
+
+  const handleDbtImportSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    let manifest: any;
+    try {
+      manifest = JSON.parse(await file.text());
+    } catch {
+      toast.error('Parse error', 'Could not parse the selected file as JSON');
+      return;
+    }
+    if (!manifest || typeof manifest !== 'object' || !manifest.nodes) {
+      toast.error(
+        'Not a dbt manifest',
+        "Select the compiled manifest.json from your dbt project's target/ folder (run `dbt compile` first).",
+      );
+      return;
+    }
+    setDbtImporting(true);
+    try {
+      const result = await api.importDbt(manifest);
+      setDbtResult(result);
+      fetchPipelines();
+    } catch (err: any) {
+      toast.error('dbt import failed', err.message);
+    }
+    setDbtImporting(false);
   };
 
   // ── Approval Workflow ──
@@ -4143,6 +4177,16 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                 Import
                 <input type="file" accept=".json,.fpulse" className="hidden" onChange={handleImportFileSelect} />
               </label>
+              <label
+                className={`px-4 py-2 text-sm font-semibold text-orange-700 bg-orange-50 border border-orange-200 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  dbtImporting ? 'opacity-60 cursor-wait' : 'hover:bg-orange-100 cursor-pointer'
+                }`}
+                title="Import a compiled dbt manifest.json (target/manifest.json)"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/><path d="M9 3v18"/><path d="M4 12h16"/></svg>
+                {dbtImporting ? 'Importing…' : 'Import dbt'}
+                <input type="file" accept=".json,application/json" className="hidden" disabled={dbtImporting} onChange={handleDbtImportSelect} />
+              </label>
               <button
                 onClick={handleNewPipeline}
                 className="px-4 py-2 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md transition-all flex items-center gap-2"
@@ -5227,80 +5271,6 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                   REJECTED
                                 </span>
                               )}
-                              {/* Publish — for draft/failed pipelines */}
-                              {canEdit && (ns === 'draft' || ns === 'failed') && !approval && (
-                                <button
-                                  onClick={() => handleLifecycleAction(p.id, 'publish')}
-                                  disabled={!!lifecycleLoading[p.id]}
-                                  className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                  title="Publish pipeline"
-                                >
-                                  {lifecycleLoading[p.id] === 'publish' ? 'Publishing...' : 'Publish'}
-                                </button>
-                              )}
-                              {/* Revoke — pull a published pipeline back to draft.
-                                  Inverse of Publish. Schedules + triggers stop
-                                  firing once status flips. */}
-                              {canEdit && ns === 'published' && !approval && (
-                                <button
-                                  onClick={() => handleLifecycleAction(p.id, 'revoke')}
-                                  disabled={!!lifecycleLoading[p.id]}
-                                  className="px-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-                                  title="Revoke — move back to draft (stops schedules and triggers)"
-                                >
-                                  {lifecycleLoading[p.id] === 'revoke' ? 'Revoking...' : 'Revoke'}
-                                </button>
-                              )}
-                              {/* Submit for Deploy — Plus only. PROD promotion via
-                                  approvals is a Plus-tier feature; Free has no PROD
-                                  environment, so the button is hidden entirely. */}
-                              {tier === 'plus' && !approval && canSubmitForReview && ns === 'published' && (
-                                <button
-                                  onClick={() => handleSubmitForReview(p.id, p.name)}
-                                  className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
-                                  title="Submit for deploy review"
-                                >
-                                  Submit for Deploy
-                                </button>
-                              )}
-
-                              <div className="w-px h-5 bg-slate-200 mx-0.5" />
-
-                              {/* Activate/Deactivate.
-                                  This block lives in the DEV branch (PROD has its own
-                                  early-return UI at ~line 2832), so we hard-bind to
-                                  the DEV flag + direct-toggle labels. The PROD-request
-                                  variant lives in the PROD render block above. */}
-                              {(() => {
-                                const flagKey = 'is_active_dev';
-                                const isActive = (p as any)[flagKey] !== false;
-                                const loadingTag = lifecycleLoading[p.id];
-                                const busy = loadingTag === 'activate' || loadingTag === 'deactivate';
-                                const onClick = () => handleToggleActive(p, !isActive);
-                                if (isActive) {
-                                  return (
-                                    <button
-                                      onClick={onClick}
-                                      disabled={busy}
-                                      className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
-                                      title="Deactivate this pipeline (DEV — direct)"
-                                    >
-                                      {busy ? '…' : 'Deactivate'}
-                                    </button>
-                                  );
-                                }
-                                return (
-                                  <button
-                                    onClick={onClick}
-                                    disabled={busy}
-                                    className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                                    title="Activate this pipeline (DEV — direct)"
-                                  >
-                                    {busy ? '…' : 'Activate'}
-                                  </button>
-                                );
-                              })()}
-
                               {/* Edit */}
                               {canEdit && ns !== 'running' && (
                                 <button
@@ -5340,31 +5310,87 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                 const canCopy = ns !== 'archived' && ns !== 'running';
                                 const canTemplate = ns !== 'archived' && ns !== 'running';
                                 const canDeleteHere = canDelete && (ns === 'draft' || ns === 'failed' || ns === 'archived');
-                                const anyMenuItem = canCopy || canTemplate || canDeleteHere;
+                                const anyMenuItem = canCopy || canTemplate || canDeleteHere || ns === 'running';
                                 if (!anyMenuItem) return null;
                                 return (
-                                  <div className="relative" data-row-more-menu>
+                                  <RowActionsPopover open={moreMenuFor === p.id} onOpenChange={open => setMoreMenuFor(open ? p.id : null)}>
+                                    <div className="flex flex-col items-stretch gap-1 px-2 py-1">
+                              {/* Publish — for draft/failed pipelines */}
+                              {canEdit && (ns === 'draft' || ns === 'failed') && !approval && (
+                                <button
+                                  onClick={() => handleLifecycleAction(p.id, 'publish')}
+                                  disabled={!!lifecycleLoading[p.id]}
+                                  className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                  title="Publish pipeline"
+                                >
+                                  {lifecycleLoading[p.id] === 'publish' ? 'Publishing...' : 'Publish'}
+                                </button>
+                              )}
+                              {/* Revoke — pull a published pipeline back to draft.
+                                  Inverse of Publish. Schedules + triggers stop
+                                  firing once status flips. */}
+                              {canEdit && ns === 'published' && !approval && (
+                                <button
+                                  onClick={() => handleLifecycleAction(p.id, 'revoke')}
+                                  disabled={!!lifecycleLoading[p.id]}
+                                  className="px-2 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                  title="Revoke — move back to draft (stops schedules and triggers)"
+                                >
+                                  {lifecycleLoading[p.id] === 'revoke' ? 'Revoking...' : 'Revoke'}
+                                </button>
+                              )}
+                              {/* Submit for Deploy — Plus only. PROD promotion via
+                                  approvals is a Plus-tier feature; Free has no PROD
+                                  environment, so the button is hidden entirely. */}
+                              {tier === 'plus' && !approval && canSubmitForReview && ns === 'published' && (
+                                <button
+                                  onClick={() => handleSubmitForReview(p.id, p.name)}
+                                  className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+                                  title="Submit for deploy review"
+                                >
+                                  Submit for Deploy
+                                </button>
+                              )}
+
+
+
+                              {/* Activate/Deactivate.
+                                  This block lives in the DEV branch (PROD has its own
+                                  early-return UI at ~line 2832), so we hard-bind to
+                                  the DEV flag + direct-toggle labels. The PROD-request
+                                  variant lives in the PROD render block above. */}
+                              {(() => {
+                                const flagKey = 'is_active_dev';
+                                const isActive = (p as any)[flagKey] !== false;
+                                const loadingTag = lifecycleLoading[p.id];
+                                const busy = loadingTag === 'activate' || loadingTag === 'deactivate';
+                                const onClick = () => handleToggleActive(p, !isActive);
+                                if (isActive) {
+                                  return (
                                     <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMoreMenuFor(moreMenuFor === p.id ? null : p.id);
-                                      }}
-                                      className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-                                      title="More actions"
-                                      aria-label="More actions"
-                                      aria-expanded={moreMenuFor === p.id}
+                                      onClick={onClick}
+                                      disabled={busy}
+                                      className="px-2 py-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+                                      title="Deactivate this pipeline (DEV — direct)"
                                     >
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                        <circle cx="5" cy="12" r="2" />
-                                        <circle cx="12" cy="12" r="2" />
-                                        <circle cx="19" cy="12" r="2" />
-                                      </svg>
+                                      {busy ? '…' : 'Deactivate'}
                                     </button>
-                                    {moreMenuFor === p.id && (
-                                      <div
-                                        className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-slate-200 shadow-lg z-30 py-1"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
+                                  );
+                                }
+                                return (
+                                  <button
+                                    onClick={onClick}
+                                    disabled={busy}
+                                    className="px-2 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                                    title="Activate this pipeline (DEV — direct)"
+                                  >
+                                    {busy ? '…' : 'Activate'}
+                                  </button>
+                                );
+                              })()}
+
+                                    </div>
+                                    <div className="my-1 border-t border-slate-100" />
                                         {canCopy && (
                                           <button
                                             onClick={() => { setMoreMenuFor(null); handleDuplicate(p); }}
@@ -5424,9 +5450,7 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
                                             </button>
                                           </>
                                         )}
-                                      </div>
-                                    )}
-                                  </div>
+                                  </RowActionsPopover>
                                 );
                               })()}
                             </div>
@@ -6195,6 +6219,41 @@ export default function PipelinesPage({ onOpenEditor, projectId, projectName = '
               className="w-full py-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── dbt Import Result ── */}
+    {dbtResult && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setDbtResult(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="px-6 py-4 border-b border-slate-200">
+            <h2 className="text-sm font-bold text-slate-800">dbt project imported</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Created <span className="font-semibold text-slate-900">{dbtResult.name}</span> —{' '}
+              {dbtResult.report?.models ?? 0} model(s), {dbtResult.report?.sources ?? 0} source(s),{' '}
+              {dbtResult.connections_imported ?? 0} edge(s).
+            </p>
+          </div>
+          {Array.isArray(dbtResult.report?.warnings) && dbtResult.report.warnings.length > 0 && (
+            <div className="px-6 py-4 max-h-72 overflow-auto">
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Review before running</div>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-700 list-disc pl-5">
+                {dbtResult.report.warnings.map((w: string, i: number) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+            <button
+              onClick={() => setDbtResult(null)}
+              className="px-4 py-2 text-white text-sm font-bold rounded-lg shadow-sm hover:shadow-md transition-all"
+              style={{ background: 'linear-gradient(135deg, #3B7DD8, #1E5AAF)' }}
+            >
+              Done
             </button>
           </div>
         </div>

@@ -105,7 +105,7 @@ def test_registry_register_initial_loads_all_tools():
     """
     reg = ToolRegistry()
     register_initial_tools(reg)
-    assert len(reg) == 26
+    assert len(reg) == 29
     for name in (
         # Original 10 READ
         "get_user_role", "get_workspace_overview",
@@ -165,10 +165,11 @@ def test_registry_filter_by_tiers_includes_safe_write_when_allowed():
     reg = ToolRegistry()
     register_initial_tools(reg)
     rw = reg.filter_by_tiers([ToolTier.READ, ToolTier.SAFE_WRITE])
-    # 21 READ + 4 SAFE_WRITE = 25
+    # 21 READ + 7 SAFE_WRITE = 28 (excludes the 1 HIGH_IMPACT_WRITE).
     # 2026-05-25 — bumped after +list_storage (Storage inventory tool).
     # 2026-06-16 — bumped after +list_steward_findings (Steward advisories).
-    assert len(rw) == 25
+    # 2026-07-21 — +draft_connector_from_openapi/_from_samples/test_connection.
+    assert len(rw) == 28
 
 
 def test_rbac_unknown_role_allows_all_tiers_on_oss():
@@ -323,15 +324,19 @@ def test_register_initial_tools_also_registers_normalize_schemas():
 
 
 def test_initial_tools_count():
-    """Canonical count is 26 — 21 READ + 4 SAFE_WRITE + 1 HIGH_IMPACT_WRITE.
+    """Canonical count is 29 — 21 READ + 7 SAFE_WRITE + 1 HIGH_IMPACT_WRITE.
     See `docs/product_facts/10_ai_copilot.md` for the per-tier breakdown.
 
-    Last bumped 2026-06-16: +list_steward_findings (read-only Steward
+    Last bumped 2026-07-21: +draft_connector_from_openapi,
+    +draft_connector_from_samples, +test_connection (SAFE_WRITE — agentic
+    connector authoring: the Copilot drafts a connector, a human approves to
+    activate; no secrets pass through the LLM).
+    Earlier 2026-06-16: +list_steward_findings (read-only Steward
     advisories — duplicate sources, governance, connector health, user rules).
     Earlier bumps: +list_storage (2026-05-25), +lookup_help_topic (2026-05-17),
     +validate_pipeline + explain_step (2026-05-12), and +list_templates.
     """
-    assert len(INITIAL_TOOLS) == 26
+    assert len(INITIAL_TOOLS) == 29
 
 
 def test_list_pipelines_handler_returns_shape():

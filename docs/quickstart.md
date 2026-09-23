@@ -4,7 +4,83 @@ Run your first F-Pulse pipeline in 5 minutes.
 
 ## Install
 
-### Option 1: Docker (recommended)
+### Option 1: PyPI
+
+Needs Python 3.11+.
+
+```powershell
+# Windows: avoids Python Scripts/PATH shortcut issues
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+If `py` is unavailable, or on macOS/Linux, use:
+
+```powershell
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
+
+`python -m fpulse open` starts on port `8001` when it is free. If another process
+already owns `8001`, F-Pulse prints the alternate URL it selected, for example:
+
+```text
+[note] port 8001 was in use — using 8003 instead
+URL: http://127.0.0.1:8003
+```
+
+Open the printed URL. The health check is `/api/health`, for example
+`http://localhost:8001/api/health`; plain `/health` is not an endpoint.
+
+### Windows: `fpulse` is not recognized
+
+If installation finishes but this fails:
+
+```powershell
+fpulse open
+```
+
+with:
+
+```text
+The term 'fpulse' is not recognized
+```
+
+then Python installed F-Pulse, but PowerShell cannot find the generated
+`fpulse.exe` shortcut. That shortcut lives in Python's `Scripts` folder, and
+some Windows installs do not add that folder to `PATH`. Run it through Python
+instead:
+
+```powershell
+py -m fpulse open
+```
+
+or:
+
+```powershell
+python -m fpulse open
+```
+
+To diagnose the install:
+
+```powershell
+py -m pip show fpulse
+py -m site --user-base
+```
+
+The command shortcut is normally in:
+
+```text
+<user-base>\Scripts
+```
+
+Add that folder to your user `PATH` only if you want the shorter `fpulse open`
+command. After changing `PATH`, close and reopen PowerShell or Visual Studio
+Code. The `py -m fpulse open` command works without changing `PATH`. If running
+`C:\...\Scripts\fpulse.exe open` works, the package is installed correctly; the
+remaining issue is only PATH lookup for the shortcut.
+
+### Option 2: Docker
 
 ```bash
 git clone https://github.com/hybridyn/fpulse.git
@@ -14,7 +90,7 @@ docker compose up -d
 
 Open [http://localhost:8001](http://localhost:8001).
 
-### Option 2: From source
+### Option 3: From source
 
 **Linux/macOS** (needs Python 3.11+ and Node 20+):
 ```bash
@@ -26,10 +102,10 @@ cd fpulse
 cd frontend && npm ci && npm run build && cd ..
 
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
-`fpulse open` starts the backend on a free port (defaults to 8001, falls back if taken) and opens your default browser to the local URL. If you prefer manual launch: `fpulse serve` then open the printed URL yourself.
+`python -m fpulse open` starts the backend on a free port (defaults to 8001, falls back if taken) and opens your default browser to the local URL. If you prefer manual launch: `python -m fpulse serve` then open the printed URL yourself.
 
 **Windows:**
 ```powershell
@@ -81,7 +157,7 @@ All three carry the F-Pulse logo and open the app in your browser.
 
 ### Ports already taken? F-Pulse picks a free pair automatically
 
-If something else on your machine already owns `5174` or `8001` (Postman, another project's dev server, an earlier F-Pulse instance you forgot to stop), F-Pulse **just works** — the launcher scans for the next free pair, writes the chosen pair to `.fpulse/runtime/instance.json`, points Vite + the backend at those ports, and prints the single URL it ended up using:
+If something else on your machine already owns `5174` or `8001` (Postman, another project's dev server, an earlier F-Pulse instance you forgot to stop), F-Pulse **just works** — the source/dev launcher scans for the next free pair, writes the chosen pair to `.fpulse/runtime/instance.json`, points Vite + the backend at those ports, and prints the single URL it ended up using:
 
 ```text
 > .\start.bat
@@ -95,6 +171,10 @@ If something else on your machine already owns `5174` or `8001` (Postman, anothe
 ```
 
 No env vars to set, nothing to kill manually.
+
+The packaged `fpulse open` command behaves the same way for the backend port:
+it starts at `8001`, falls back to the next free port if needed, and writes the
+chosen port to `~/.fpulse/runtime/instance.json`.
 
 If you want F-Pulse to **prefer** a specific port (it'll still scan onward from there if busy), set the prefs once:
 

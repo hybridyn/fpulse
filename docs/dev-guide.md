@@ -7,8 +7,8 @@
 cd backend
 pip install -r requirements.txt
 python -m fpulse serve            # or: fpulse serve  (after `pip install -e .`)
-# → http://localhost:8001 (API)
-# → http://localhost:8001/docs (Swagger)
+# → http://localhost:8001 (API + built UI)
+# → http://localhost:8001/docs (Swagger, when FPULSE_ENABLE_API_DOCS=1)
 
 # Frontend
 cd frontend

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { WORKSPACES_ENABLED } from '../config/edition';
 import { canAccessAdmin, canAccessAdminInEnv, canAccessProd, hasPermission, roleLabel } from '../auth/permissions';
 import { useDarkMode } from '../hooks/useDarkMode';
 import { notificationHref } from '../lib/notificationHref';
@@ -282,7 +283,9 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
   const wsDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // OSS is single-operator — no workspace switcher, so don't even fetch the
+    // list. Gated on the edition flag so a Plus build restores it.
+    if (!user || !WORKSPACES_ENABLED) return;
     api.listWorkspaces().then(ws => setWorkspaces(ws || [])).catch(() => {});
   }, [user]);
 
@@ -521,7 +524,7 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
   });
 
   return (
-    <div className={`h-16 flex items-center px-4 gap-1 shrink-0 shadow-sm relative transition-colors ${
+    <div className={`fpulse-global-nav min-h-16 flex flex-wrap items-center px-2 sm:px-4 gap-1 shrink-0 relative transition-colors ${
       isProd
         ? dark
           ? 'bg-[#1e3a5f] border-b-2 border-blue-400'
@@ -581,18 +584,15 @@ export default function Sidebar({ activePage, onNavigate, user, onLogout, enviro
           so the full text labels fit at 1536 alongside the right-side
           controls (bell + avatar were clipping at maximized). */}
 
-      {/* Workspace Switcher — PROD-only.
-          2026-05-27: hidden in DEV because workspaces are a
-          multi-tenant production concept. DEV is the local sandbox
-          where the operator iterates on a single set of pipelines;
-          showing a workspace dropdown there created the impression
-          that DEV had per-workspace scopes (it doesn't), and made
-          the same install look different from one DEV session to
-          the next depending on workspace membership. PROD keeps
-          the switcher so multi-workspace operators can flip between
-          tenants in the environment where workspaces actually
-          carry meaning. */}
-      {user && isProd && workspaces.length > 1 && (
+      {/* Workspace Switcher — Plus-only (edition-gated).
+          F-Pulse OSS is single-operator: every pipeline/connection lives in
+          the one shared `default` workspace, so a switcher only invited
+          confusion — and landing in an empty Personal workspace made
+          pipelines look like they'd vanished. Multi-workspace switching is a
+          Plus capability; WORKSPACES_ENABLED is false in the OSS build, so
+          this never renders (and OSS pins every scope to `default`, so the
+          "unreachable data" case can't arise). See src/config/edition.ts. */}
+      {user && WORKSPACES_ENABLED && workspaces.length > 1 && (
         <div className="relative hidden sm:block mr-2 shrink-0" ref={wsDropdownRef}>
           <button
             onClick={() => setWsDropdownOpen(!wsDropdownOpen)}

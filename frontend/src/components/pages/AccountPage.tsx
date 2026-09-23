@@ -368,9 +368,7 @@ export default function AccountPage({ onProfileUpdated, onNavigate, environment 
                 ))}
               </div>
               <div className="text-xs text-slate-400 mt-1">
-                {['admin', 'super_admin', 'workspace_admin'].includes(user.role)
-                  ? 'As an admin you switch environments from the top bar. PROD is part of F-Pulse+.'
-                  : 'Environment access is controlled by your admin.'}
+                Switch environments from the top bar. PROD access requires F-Pulse+.
               </div>
             </div>
 

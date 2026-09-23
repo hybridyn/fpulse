@@ -222,7 +222,7 @@ export default function EditorContextBar() {
     // 3-zone grid — Project on the left, Pipeline Name centered (with
     // baseline of the row), version chip on the right. Slate background
     // visually separates the ribbon from the cream canvas below.
-    <div className={`px-4 py-2 grid grid-cols-[1fr_auto_1fr] items-center gap-3 shrink-0 border-b ${
+    <div data-testid="editor-context" className={`editor-context px-3 py-2 flex flex-wrap items-center gap-2 shrink-0 border-b ${
       dark ? 'bg-[#0f1726]/60 border-white/[0.05]' : 'bg-slate-100 border-slate-200'
     }`}>
       {/* LEFT — Project picker */}

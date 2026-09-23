@@ -336,32 +336,25 @@ def _mssql_catalog(config: dict[str, Any]) -> Catalog:
     except ImportError:
         return _unsupported("pyodbc driver not installed")
 
-    installed = [d for d in pyodbc.drivers() if "SQL Server" in d]
-    preferred = [
-        "ODBC Driver 18 for SQL Server",
-        "ODBC Driver 17 for SQL Server",
-        "ODBC Driver 13 for SQL Server",
-        "SQL Server Native Client 11.0",
-        "SQL Server",
-    ]
-    driver = next((d for d in preferred if d in installed), None) or (installed[0] if installed else None)
+    from fpulse.connections.mssql_odbc import build_mssql_odbc_conn_str, select_mssql_odbc_driver
+
+    driver = select_mssql_odbc_driver(pyodbc, config.get("driver"))
     if not driver:
         return _unsupported("No SQL Server ODBC driver installed")
 
     raw_user = config.get("user") or config.get("username")
     password = config.get("password", "")
     windows_auth = bool(config.get("windows_auth")) or (not raw_user and not password)
-    trust_cert = "yes" if (config.get("trust_server_certificate") or "18" in driver) else "no"
-    encrypt = "yes" if config.get("encrypt") else ("optional" if "18" in driver else "no")
-    auth = "Trusted_Connection=yes;" if windows_auth else f"UID={raw_user or 'sa'};PWD={password};"
-
-    conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={config.get('host','localhost')},{int(config.get('port',1433))};"
-        f"DATABASE={config.get('database','master')};"
-        f"{auth}Encrypt={encrypt};TrustServerCertificate={trust_cert};"
-        f"Connection Timeout={DEFAULT_TIMEOUT};"
-    )
+    conn_str = build_mssql_odbc_conn_str({
+        **config,
+        "host": config.get("host", "localhost"),
+        "port": int(config.get("port", 1433)),
+        "database": config.get("database", "master"),
+        "user": raw_user or "sa",
+        "password": password,
+        "windows_auth": windows_auth,
+        "driver": driver,
+    }, pyodbc, timeout=DEFAULT_TIMEOUT)
     conn = pyodbc.connect(conn_str)
     try:
         cur = conn.cursor()

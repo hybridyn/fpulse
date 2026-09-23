@@ -1479,7 +1479,7 @@ export default function ModulesPanel() {
 
   if (collapsed) {
     return (
-      <div className="w-10 bg-slate-50 border-r border-pipe-200 flex flex-col items-center py-2 gap-1 shrink-0">
+      <div data-fpulse-panel="nodes" className="w-10 bg-slate-50 border-r border-pipe-200 flex flex-col items-center py-2 gap-1 shrink-0">
         <button
           onClick={() => setCollapsed(false)}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"

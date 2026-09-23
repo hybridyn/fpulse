@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
+import { WORKSPACES_ENABLED, DEFAULT_WORKSPACE_ID } from '../../config/edition';
 
 interface LoginPageProps {
   onLogin: (user: any) => void;
@@ -32,14 +33,14 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [sso, setSso] = useState<{ enabled: boolean; provider_label: string }>({ enabled: false, provider_label: '' });
-  // Signup policy — defaults to "register visible" since OSS F-Pulse ships
-  // with open signup ON. The policy call still runs on mount and will hide
-  // the Register tab if the admin has flipped the instance to invite-only,
-  // but the optimistic default avoids hiding signup for one paint cycle on
-  // every fresh load (which would otherwise look like F-Pulse is invite-only
-  // even on a brand-new install). `firstBootstrap` is still computed and
-  // wins over the flag: if the DB is empty the Register tab always shows.
-  const [signupAllowed, setSignupAllowed] = useState<boolean>(true);
+  // Signup policy — defaults to "register hidden", matching the server
+  // (`allow_self_registration` defaults to False: F-Pulse OSS is a
+  // single-operator install and the operator's account is seeded on first
+  // boot). Defaulting to hidden means we never flash a Register tab that
+  // the policy call is about to take away. `firstBootstrap` still wins
+  // over the flag: if the user table is empty the tab always shows, so a
+  // wiped data dir can still create its first account.
+  const [signupAllowed, setSignupAllowed] = useState<boolean>(false);
   const [firstBootstrap, setFirstBootstrap] = useState<boolean>(false);
 
   // Password policy + live strength check
@@ -84,13 +85,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         }
       })
       .catch(() => {
-        // Endpoint is missing or unreachable — leave the optimistic
-        // default in place. F-Pulse OSS ships with signup ON; if the
-        // server is actually invite-only it will return 403 on submit
-        // and the user will see a clear error then. Hiding the tab
-        // here would mean an old client paired with a new server
-        // briefly thought signup was off after every network blip.
-        setSignupAllowed(true);
+        // Endpoint missing or unreachable — stay closed, matching the
+        // server default. Showing a Register tab we can't back up would
+        // send the operator into a form that 403s on submit.
+        setSignupAllowed(false);
       });
 
     // Deep-link entry into the reset flow via query string, e.g.
@@ -248,20 +246,37 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       localStorage.setItem('fpulse_token', result.token);
       localStorage.setItem('fpulse_user', JSON.stringify(result.user));
       // Schema v2: persist the user's workspace memberships and pick a
-      // default current workspace. Self-signed-up users prefer their
-      // Personal workspace (so their first project lands in their own
-      // sandbox, not the org-wide Default); admins / legacy users with
-      // no Personal workspace fall through to the first membership
-      // (typically Default). We never leave fpulse_workspace_id unset
-      // because the api client reads it on every request.
+      // current workspace. Landing rules (order matters):
+      //   1. The shared "default" workspace WHEN the user is a member of
+      //      it. For a single-operator OSS install the operator belongs to
+      //      "default", that's where the seeded + existing pipelines live,
+      //      and it's where the backend's no-header fallback stamps new
+      //      ones (auth/deps current_workspace_id → "default"). Landing
+      //      anywhere else made real pipelines look like they'd vanished.
+      //   2. Otherwise the user's Personal workspace — self-signed-up Plus
+      //      users who aren't "default" members still get their own sandbox
+      //      (unchanged behaviour for that path).
+      //   3. Otherwise the first membership.
+      // If the landing is ever wrong, the Sidebar workspace switcher (shown
+      // whenever the user has >1 workspace, DEV or PROD) recovers it — a
+      // user must never have data they can't reach. We never leave
+      // fpulse_workspace_id unset because the api client reads it on every
+      // request.
+      // OSS is single-operator: always land in the one shared `default`
+      // workspace (the block below only runs when workspaces are enabled in a
+      // Plus build). This is what keeps pipelines from "vanishing" into an
+      // empty Personal scope.
       const workspaces: any[] = Array.isArray(result.workspaces) ? result.workspaces : [];
-      if (workspaces.length > 0) {
+      if (WORKSPACES_ENABLED && workspaces.length > 0) {
         localStorage.setItem('fpulse_workspaces', JSON.stringify(workspaces));
-        const personal = workspaces.find((w) => w.is_personal);
-        const chosen = personal || workspaces[0];
-        localStorage.setItem('fpulse_workspace_id', chosen.workspace_id || chosen.id || 'default');
+        const wsId = (w: any) => w.workspace_id || w.id;
+        const chosen =
+          workspaces.find((w) => wsId(w) === 'default') ||
+          workspaces.find((w) => w.is_personal) ||
+          workspaces[0];
+        localStorage.setItem('fpulse_workspace_id', wsId(chosen) || DEFAULT_WORKSPACE_ID);
       } else {
-        localStorage.setItem('fpulse_workspace_id', 'default');
+        localStorage.setItem('fpulse_workspace_id', DEFAULT_WORKSPACE_ID);
       }
       onLogin(result.user);
     } catch (err: any) {
@@ -486,7 +501,9 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             <div className="mb-7 text-center">
               <h2 className="text-lg font-bold text-slate-700">Sign in</h2>
               <p className="text-xs text-slate-400 mt-1">
-                This instance is invite-only. Ask your administrator to create your account.
+                F-Pulse OSS runs as a single operator. Sign in with this instance's
+                account — Docker and headless installs find the initial password in{' '}
+                <span className="font-mono">INITIAL_ADMIN_PASSWORD.txt</span> in the data folder.
               </p>
             </div>
           )}

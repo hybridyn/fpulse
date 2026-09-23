@@ -1,3 +1,5 @@
+import { currentWorkspaceId } from '../config/edition';
+
 const BASE = '/api';
 
 // 2026-05-19 (P1 #14 of PAGE_BY_PAGE_AUDIT.md): centralised backend-reach
@@ -27,7 +29,7 @@ function emitBackendReachable(reachable: boolean, reason?: string) {
  */
 export function authHeaders(extra?: Record<string, string>): Record<string, string> {
   const token = localStorage.getItem('fpulse_token');
-  const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+  const workspaceId = currentWorkspaceId();
   const csrf = getCsrfCookie();
   return {
     'Content-Type': 'application/json',
@@ -75,7 +77,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   // ships in Stage 2, the default is `default` — the back-fill workspace
   // every legacy install already has from the v2 migration. Routers that
   // don't care about workspaces simply ignore the header.
-  const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+  const workspaceId = currentWorkspaceId();
   headers['X-Workspace-Id'] = workspaceId;
 
   let res: Response;
@@ -361,7 +363,7 @@ export const api = {
    */
   postRaw: async <T = any>(path: string, body: BodyInit) => {
     const token = localStorage.getItem('fpulse_token') || '';
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const cleanPath = path.startsWith('/api') ? path : `/api${path.startsWith('/') ? '' : '/'}${path}`;
     const res = await fetch(cleanPath, {
       method: 'POST',
@@ -490,6 +492,18 @@ export const api = {
         project_id: projectId || 'default',
         rename: rename || '',
         connection_map: connectionMap || {},
+      }),
+    }),
+  // Import a compiled dbt manifest.json (models → SQL Transform nodes,
+  // ref()/source() → the pipeline DAG). Returns { id, name, steps_imported,
+  // connections_imported, report:{ models, sources, incremental_models, warnings } }.
+  importDbt: (manifest: any, projectId?: string, name?: string) =>
+    request<any>('/workflows/import-dbt', {
+      method: 'POST',
+      body: JSON.stringify({
+        manifest,
+        project_id: projectId || 'default',
+        name: name || null,
       }),
     }),
   clonePipeline: (id: string, name?: string) =>
@@ -779,7 +793,7 @@ export const api = {
     // have to attach auth + workspace headers manually or the file
     // would land in the wrong tenant bucket on the backend.
     const token = localStorage.getItem('fpulse_token') || '';
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const url = new URL(`${BASE}/upload`, window.location.origin);
     if (options?.replaces) {
       url.searchParams.set('replaces', options.replaces);
@@ -993,7 +1007,7 @@ export const api = {
     fmt: 'csv' | 'json',
   ): Promise<Blob> => {
     const token = localStorage.getItem('fpulse_token');
-    const workspaceId = localStorage.getItem('fpulse_workspace_id') || 'default';
+    const workspaceId = currentWorkspaceId();
     const res = await fetch(
       `${BASE}/execute/execution/${executionId}/step/${stepId}/output/export?fmt=${fmt}`,
       {
@@ -1143,10 +1157,10 @@ export const api = {
   },
   getConnectionMetadata: () =>
     request<{ types: string[]; categories: Record<string, string[]>; storage_types: string[]; file_formats: string[] }>('/connections/metadata'),
-  createConnection: (data: { name: string; type: string; description?: string; config?: Record<string, any>; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
+  createConnection: (data: { name: string; type: string; description?: string; config?: Record<string, any>; credential_id?: string | null; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
     request<any>('/connections/', { method: 'POST', body: JSON.stringify(data) }),
   getConnection: (id: string) => request<any>(`/connections/${id}`),
-  updateConnection: (id: string, data: { name?: string; description?: string; config?: Record<string, any>; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
+  updateConnection: (id: string, data: { name?: string; description?: string; config?: Record<string, any>; credential_id?: string | null; tags?: string[]; project_id?: string | null; environment?: string | null; capabilities?: string[] }) =>
     request<any>(`/connections/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteConnection: (id: string) => request<any>(`/connections/${id}`, { method: 'DELETE' }),
   testConnection: (id: string, signal?: AbortSignal) => request<any>(`/connections/${id}/test`, { method: 'POST', signal }),
@@ -1208,6 +1222,30 @@ export const api = {
     request<any>(`/workflows/${id}/restore`, { method: 'POST' }),
   getWorkflowLifecycle: (id: string) =>
     request<any>(`/workflows/${id}/lifecycle`),
+
+  // Pipeline documentation (self-documenting pipelines)
+  getWorkflowDocs: (id: string) =>
+    request<{ workflow_id: string; filename: string; markdown: string }>(
+      `/workflows/${id}/docs?format=json`,
+    ),
+  updateWorkflowDocs: (
+    id: string,
+    data: { business_purpose?: string; readme?: string; tags?: string[] },
+  ) =>
+    request<any>(`/workflows/${id}/docs`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  // Admin publish policy — is a business purpose required before publishing?
+  getPublishPolicy: () =>
+    request<{ require_business_purpose: boolean; setting_value: boolean; env_override: boolean }>(
+      `/admin/publish-policy`,
+    ),
+  setPublishPolicy: (requireBusinessPurpose: boolean) =>
+    request<any>(`/admin/publish-policy`, {
+      method: 'PUT',
+      body: JSON.stringify({ require_business_purpose: requireBusinessPurpose }),
+    }),
 
   // Schema Contracts
   listContracts: (workflowId: string) =>

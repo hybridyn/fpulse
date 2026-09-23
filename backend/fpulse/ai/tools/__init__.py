@@ -21,6 +21,9 @@ from fpulse.ai.tools.base import ToolContext, ToolDefinition, ToolTier
 from fpulse.ai.tools.compose_report import DEFINITION as COMPOSE_REPORT
 from fpulse.ai.tools.draft_alert_rule import DEFINITION as DRAFT_ALERT_RULE
 from fpulse.ai.tools.draft_pipeline_from_intent import DEFINITION as DRAFT_PIPELINE_FROM_INTENT
+from fpulse.ai.tools.draft_connector_from_openapi import DEFINITION as DRAFT_CONNECTOR_FROM_OPENAPI
+from fpulse.ai.tools.draft_connector_from_samples import DEFINITION as DRAFT_CONNECTOR_FROM_SAMPLES
+from fpulse.ai.tools.test_connection import DEFINITION as TEST_CONNECTION
 from fpulse.ai.tools.modify_pipeline_step import DEFINITION as MODIFY_PIPELINE_STEP
 from fpulse.ai.tools.get_installation_health import DEFINITION as GET_INSTALLATION_HEALTH
 from fpulse.ai.tools.get_next_scheduled import DEFINITION as GET_NEXT_SCHEDULED
@@ -49,6 +52,8 @@ from fpulse.ai.tools.summarize_pipeline import DEFINITION as SUMMARIZE_PIPELINE
 from fpulse.ai.tools.validate_pipeline import DEFINITION as VALIDATE_PIPELINE
 from fpulse.ai.tools.explain_step import DEFINITION as EXPLAIN_STEP
 from fpulse.ai.tools.workspace_overview import DEFINITION as GET_WORKSPACE_OVERVIEW
+from fpulse.ai.tools.web_fetch import DEFINITION as WEB_FETCH
+from fpulse.ai.tools.web_search import DEFINITION as WEB_SEARCH
 
 INITIAL_TOOLS: tuple[ToolDefinition, ...] = (
     # Identity / overview first — common entrypoints for "who am I" / "what's here"
@@ -96,14 +101,30 @@ INITIAL_TOOLS: tuple[ToolDefinition, ...] = (
     MODIFY_PIPELINE_STEP,
     DRAFT_ALERT_RULE,
     COMPOSE_REPORT,
+    # Safe-write (draft only) — agentic connector authoring: draft a connector
+    # from an OpenAPI spec/URL or sample responses (inert until an admin
+    # approves it, which activates it as a Beta connector), and test a saved
+    # connection. No secrets ever pass through the LLM.
+    DRAFT_CONNECTOR_FROM_OPENAPI,
+    DRAFT_CONNECTOR_FROM_SAMPLES,
+    TEST_CONNECTION,
     # High-impact write — apply a confirmed pipeline draft (the only mutation
     # tool the agent has; gated by RBAC + dry-run-by-default + confirmation).
     APPLY_PIPELINE_DRAFT,
 )
 
+# Opt-in web tools — READ-tier, registered ONLY when the operator sets
+# FPULSE_AI_WEB_ACCESS=1 (see fpulse.ai.web). Kept OUT of INITIAL_TOOLS so the
+# canonical count stays 29 and the air-gap default holds: with the flag off the
+# LLM never sees these tools at all.
+OPTIONAL_WEB_TOOLS: tuple[ToolDefinition, ...] = (
+    WEB_SEARCH,
+    WEB_FETCH,
+)
+
 
 def register_initial_tools(registry: ToolRegistry | None = None) -> ToolRegistry:
-    """Register the 26 initial tools + their output schemas. Idempotent.
+    """Register every tool in INITIAL_TOOLS + their output schemas. Idempotent.
 
     Pass `registry=None` (default) to register into the per-process default;
     pass an explicit ToolRegistry to register into a test-owned instance.
@@ -111,11 +132,27 @@ def register_initial_tools(registry: ToolRegistry | None = None) -> ToolRegistry
     Output schemas are pulled from each ToolDefinition.output_schema and
     forwarded to fpulse.ai.normalize so normalize_tool_output enforces them
     on every tool result.
+
+    The opt-in web tools (OPTIONAL_WEB_TOOLS) are RECONCILED against the live
+    web-access state (env var OR the admin Settings toggle): registered when
+    on, removed when off. Because this runs per agent request, flipping the
+    Settings toggle takes effect on the next Copilot turn with no restart.
     """
     target = registry if registry is not None else default_registry()
     for tool in INITIAL_TOOLS:
         target.register(tool)
         register_output_schema(tool.name, tool.output_schema)
+
+    from fpulse.ai.web import web_access_enabled
+    web_on = web_access_enabled()
+    for tool in OPTIONAL_WEB_TOOLS:
+        if web_on:
+            target.register(tool)
+            register_output_schema(tool.name, tool.output_schema)
+        elif tool.name in target:
+            # Toggle was turned off since the last run — drop the tool so the
+            # LLM stops seeing it immediately.
+            del target.tools[tool.name]
     return target
 
 
@@ -129,6 +166,9 @@ __all__ = [
     "reset_default_registry",
     "register_initial_tools",
     "INITIAL_TOOLS",
+    "OPTIONAL_WEB_TOOLS",
+    "WEB_FETCH",
+    "WEB_SEARCH",
     # Identity / overview
     "GET_USER_ROLE",
     "GET_WORKSPACE_OVERVIEW",
@@ -157,6 +197,9 @@ __all__ = [
     "MODIFY_PIPELINE_STEP",
     "DRAFT_ALERT_RULE",
     "COMPOSE_REPORT",
+    "DRAFT_CONNECTOR_FROM_OPENAPI",
+    "DRAFT_CONNECTOR_FROM_SAMPLES",
+    "TEST_CONNECTION",
     # High-impact write
     "APPLY_PIPELINE_DRAFT",
 ]

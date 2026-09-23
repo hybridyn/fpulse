@@ -29,8 +29,8 @@ Design principles:
   - Self-contained: no dependency on the existing tests/conftest.py.
   - Temp-dir-per-module: zero cross-test contamination.
   - Explicit migration run: proves the runner works before any test executes.
-  - Graceful skip: if auth endpoints are unreachable, tests skip — they
-    don't hard-fail with opaque errors.
+  - Required setup failures fail the test instead of silently skipping it.
+  - One client owns the lifespan; authenticated clients reuse that app.
 """
 from __future__ import annotations
 
@@ -138,7 +138,7 @@ def db_fixture(data_dir: str) -> Generator[str, None, None]:
     try:
         import fpulse.main  # noqa: F401  (import for side effect)
     except Exception as exc:
-        pytest.skip(f"fpulse.main import failed: {exc}")
+        pytest.fail(f"fpulse.main import failed: {exc}")
 
     # Step 4: defensively poke each store module to ensure _db is non-None.
     # If a store is still None after main import, we know the app's startup
@@ -169,7 +169,7 @@ def db_fixture(data_dir: str) -> Generator[str, None, None]:
                 unbound.append(f"{modname}.{attr_name}")
 
     if unbound:
-        pytest.skip(
+        pytest.fail(
             f"Stores with unbound _db after startup: {unbound}. "
             f"Likely fpulse.main startup path changed; update this fixture."
         )
@@ -187,7 +187,7 @@ def app_v2(db_fixture: str):
 @pytest.fixture(scope="module")
 def client(app_v2) -> Generator[TestClient, None, None]:
     """Unauthenticated client. For protected endpoints use `authed_client`."""
-    with TestClient(app_v2) as c:
+    with TestClient(app_v2, base_url="http://localhost") as c:
         yield c
 
 
@@ -274,16 +274,24 @@ def _reset_bootstrap_admin_password(data_dir_path: str) -> bool:
 
 @pytest.fixture(scope="module")
 def admin_token(client: TestClient, data_dir: str) -> str:
-    """Dev-seed admin token. Skips cleanly if login endpoint unavailable.
+    """Dev-seed admin token. Fails if required login setup is unavailable.
 
     Resets the bootstrap admin password to DEV_ADMIN_PASSWORD first so
     the test-known credentials work even on a fresh boot where the
     admin was just bootstrapped with a random password.
     """
-    _reset_bootstrap_admin_password(data_dir)
+    from fpulse.main import app_state
+    from fpulse.auth.models import User
+
+    users = app_state["user_store"]
+    admin = users.get_user("admin")
+    assert admin is not None, "Test startup did not bootstrap an admin"
+    admin.password_hash = User.hash_password(DEV_ADMIN_PASSWORD)
+    admin.is_active = True
+    users._save_user(admin)
     tok = _login(client, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD)
     if not tok:
-        pytest.skip(
+        pytest.fail(
             f"Could not log in as {DEV_ADMIN_EMAIL} via any of {LOGIN_PATHS}. "
             f"Check the dev-seed in fpulse/main.py or update LOGIN_PATHS."
         )
@@ -297,12 +305,15 @@ def authed_client(app_v2, admin_token: str) -> Generator[TestClient, None, None]
     Every request carries both Bearer header AND session cookie (covers both
     auth styles the middleware might check).
     """
-    c = TestClient(app_v2)
+    # admin_token owns the single active lifespan through the client fixture.
+    c = TestClient(app_v2, base_url="http://localhost")
     c.headers["Authorization"] = f"Bearer {admin_token}"
     c.cookies.set("session", admin_token)
     c.cookies.set("fpulse_session", admin_token)
-    with c:
+    try:
         yield c
+    finally:
+        c.close()
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -404,7 +415,7 @@ def role_clients(
         if role == "super_admin":
             continue
         _ensure_user(authed_client, email, pw, role)
-        c = TestClient(app_v2)
+        c = TestClient(app_v2, base_url="http://localhost")
         tok = _login(c, email, pw)
         if tok:
             c.headers["Authorization"] = f"Bearer {tok}"

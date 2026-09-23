@@ -778,7 +778,12 @@ class WorkflowExecutor:
 
         conn = _open_duckdb()
         try:
-            ctx = ExecutionContext(conn=conn, data_dir=self.data_dir, app_state=self.app_state)
+            ctx = ExecutionContext(
+                conn=conn,
+                data_dir=self.data_dir,
+                app_state=self.app_state,
+                preview_mode=True,
+            )
             ctx.node_labels = {s.id: (s.label or s.type.value) for s in workflow.steps}
             input_map = self._build_input_map(workflow)
 

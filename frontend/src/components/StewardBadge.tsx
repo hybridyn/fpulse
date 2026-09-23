@@ -1243,7 +1243,7 @@ export default function StewardBadge({ signedIn, isProd = false }: StewardBadgeP
                   )}
 
                   <div className="text-[10px] text-slate-400 leading-snug pt-1 border-t border-slate-100">
-                    Rules save as YAML you can version-control or hand-edit for advanced matches. SQL / expression rules are a Plus feature.
+                    Rules save as YAML you can version-control or hand-edit for advanced matches.
                   </div>
                 </div>
               )

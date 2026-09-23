@@ -1,0 +1,29 @@
+name: Windows portable validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install build dependencies
+        run: python -m pip install . pyinstaller pywebview
+      - name: Build and boot single executable
+        shell: pwsh
+        run: ./installer/windows/build-portable.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fpulse-windows-portable
+          path: dist/portable/fpulse.exe
+          if-no-files-found: error

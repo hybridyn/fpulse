@@ -92,9 +92,7 @@ export default function PageHeader({
   return (
     <div className={`sticky top-0 z-30 border-b ${bg}`}>
       <div
-        className={`px-8 h-[78px] grid items-center gap-4 ${
-          tabs ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-[1fr_auto]'
-        }`}
+        className={`page-header-content ${tabs ? 'has-centered-tabs' : ''} px-4 min-h-[78px] py-3 flex flex-wrap items-center gap-4`}
       >
         {/* ── Title cluster ──────────────────────────────────────── */}
         <div className="min-w-0 flex items-center gap-3">
@@ -115,10 +113,10 @@ export default function PageHeader({
         </div>
 
         {/* ── Centered tab strip slot ───────────────────────────── */}
-        {tabs && <div className="justify-self-center">{tabs}</div>}
+        {tabs && <div className="page-header-tabs min-w-0 max-w-full overflow-x-auto">{tabs}</div>}
 
         {/* ── Right-side actions cluster ────────────────────────── */}
-        <div className="justify-self-end flex items-center gap-2 shrink-0">{actions}</div>
+        <div className="ml-auto flex flex-wrap items-center gap-2 min-w-0">{actions}</div>
       </div>
     </div>
   );

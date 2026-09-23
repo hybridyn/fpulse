@@ -91,6 +91,7 @@ jobs:
         run: |
           cd frontend && npm ci && npm run build && cd ..
           python scripts/stage_frontend.py
+          python scripts/stage_docs.py
 
       - name: Build sdist + wheel
         run: |
@@ -108,6 +109,8 @@ jobs:
               "frontend assets":     any("/frontend_dist/assets/" in n for n in names),
               "connector manifests": len([n for n in names if "/connectors/manifests/" in n and n.endswith(".json")]) >= 40,
               "swagger-ui assets":   any("/static/swagger-ui/" in n for n in names),
+              "help docs":           any(n.endswith("fpulse/docs/quickstart.md") for n in names),
+              "product facts":       any("/docs/product_facts/" in n for n in names),
           }
           for label, ok in checks.items():
               print(f"  {'OK  ' if ok else 'FAIL'}  {label}")

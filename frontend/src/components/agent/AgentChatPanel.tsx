@@ -550,7 +550,7 @@ export default function AgentChatPanel() {
       const msg = err instanceof Error ? err.message : `Delete failed: ${name}`;
       // Special-case the Plus admin-only response so users see a clear reason
       const friendly = /admin|forbidden|403/i.test(msg)
-        ? `Only an admin can remove models on F-Pulse+. Contact your workspace administrator.`
+        ? `This model could not be removed (the server rejected the request).`
         : msg;
       setDeleteError(friendly);
       setPendingDelete(null);

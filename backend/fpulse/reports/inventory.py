@@ -64,6 +64,13 @@ class PipelineInventory:
     lifecycle: list[dict] = field(default_factory=list)            # last N lifecycle events
     content_hash: str = ""
     tags: list[str] = field(default_factory=list)
+    # ── Documentation (self-documenting pipelines) — the "what & why" ──
+    # Folded into the inventory report so a reader gets the pipeline's
+    # stated purpose (and any README) alongside its structure, without
+    # opening the editor. business_purpose is the one-line WHY that the
+    # publish gate requires; readme is freeform Markdown notes.
+    business_purpose: str = ""
+    readme: str = ""
     # ── Prominent operational signals (gap 4) ─────────────────────────
     # Derived from last_runs[0] and schedules[0] so renderers can show a
     # coloured pill at the top of each pipeline block instead of forcing
@@ -952,7 +959,12 @@ class InventoryCollector:
             for s in steps
         })
         # step_count is count of actual steps (truncated at MAX for node_types display).
-        step_count = len(steps)
+        # list_all() returns a listing-summary shape that carries a scalar
+        # `step_count` and strips the `steps[]` array (see versioning.list_all),
+        # so `steps` is empty here and len(steps) would render "0 steps" for
+        # every pipeline. Fall back to the pre-counted value when we don't
+        # have the expanded step list.
+        step_count = len(steps) or int(w.get("step_count", 0) or 0)
         connections = dag.get("connections", []) or []
 
         # Extract connection references from source/sink steps.
@@ -1028,6 +1040,8 @@ class InventoryCollector:
             lifecycle=lifecycle,
             content_hash=w.get("content_hash", "") or "",
             tags=w.get("tags", []) or [],
+            business_purpose=w.get("business_purpose", "") or "",
+            readme=w.get("readme", "") or "",
             last_run_status=last_run_status,
             last_run_at=last_run_at,
             next_run_at=next_run_at,

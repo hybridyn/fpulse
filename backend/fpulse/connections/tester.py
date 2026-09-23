@@ -39,6 +39,8 @@ def _suggestion_for(error: Exception, conn_type: str) -> str:
         return "Hostname could not be resolved. Verify the hostname/IP address is correct."
     if "no such file" in msg or "does not exist" in msg:
         return "The specified file or path does not exist. Check the path and permissions."
+    if conn_type == "mongodb" and ("ssl" in msg or "certificate" in msg or "tls" in msg):
+        return "MongoDB TLS handshake failed. For MongoDB Atlas, first check Network Access and add this machine's public IP address to the IP access list. Also check whether a corporate proxy/firewall is intercepting TLS."
     if "ssl" in msg or "certificate" in msg or "tls" in msg:
         return "SSL/TLS handshake failed. Check certificate configuration or try disabling SSL verification if appropriate."
     if "permission" in msg or "forbidden" in msg:
@@ -69,6 +71,36 @@ def _fail(message: str, error: Exception | str, conn_type: str) -> dict:
         "message": message,
         "details": {},
         "error": err_str,
+        "suggestion": suggestion,
+    }
+
+
+def _addon_unavailable(connector: str, *, system_requirement: str = "") -> dict:
+    """Failure result for a connector whose optional runtime package isn't
+    available in this F-Pulse install.
+
+    Worded for a non-developer on a packaged desktop build: those users have
+    no shell and the app isn't pip-managed, so "pip install X" is a dead end
+    (and reads as a bug). Point them at whoever set F-Pulse up, and — for
+    connectors like SQL Server — name the system-level driver that also has
+    to be present on the machine.
+    """
+    detail = (
+        f"The {connector} connector needs an add-on that isn't included in "
+        f"this F-Pulse install."
+    )
+    suggestion = f"Ask whoever set up F-Pulse to enable the {connector} connector."
+    if system_requirement:
+        detail += f" It also needs {system_requirement} installed on this computer."
+        suggestion = (
+            f"Ask whoever set up F-Pulse to enable the {connector} connector, "
+            f"and install {system_requirement} on this computer."
+        )
+    return {
+        "success": False,
+        "message": f"The {connector} connector isn't available in this install",
+        "details": {},
+        "error": detail,
         "suggestion": suggestion,
     }
 
@@ -157,11 +189,7 @@ class ConnectionTester:
         try:
             import psycopg2  # type: ignore
         except ImportError:
-            return _fail(
-                "psycopg2 driver not installed",
-                "Install with: pip install psycopg2-binary",
-                "postgresql",
-            )
+            return _addon_unavailable("PostgreSQL")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 5432))
@@ -221,11 +249,7 @@ class ConnectionTester:
         try:
             import pymysql  # type: ignore
         except ImportError:
-            return _fail(
-                "pymysql driver not installed",
-                "Install with: pip install pymysql",
-                "mysql",
-            )
+            return _addon_unavailable("MySQL")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 3306))
@@ -278,10 +302,9 @@ class ConnectionTester:
         try:
             import pyodbc  # type: ignore
         except ImportError:
-            return _fail(
-                "pyodbc driver not installed",
-                "Install with: pip install pyodbc (also requires Microsoft ODBC Driver for SQL Server)",
-                "mssql",
+            return _addon_unavailable(
+                "SQL Server",
+                system_requirement="the Microsoft ODBC Driver for SQL Server",
             )
 
         host = config.get("host", "localhost")
@@ -294,17 +317,9 @@ class ConnectionTester:
         windows_auth = bool(config.get("windows_auth")) or (not raw_user and not password)
         user = raw_user or "sa"
 
-        # Pick the best ODBC driver actually installed on this machine.
-        # Order of preference: 18 → 17 → SQL Server Native Client → 13 → SQL Server.
-        installed = [d for d in pyodbc.drivers() if "SQL Server" in d]
-        preferred_order = [
-            "ODBC Driver 18 for SQL Server",
-            "ODBC Driver 17 for SQL Server",
-            "ODBC Driver 13 for SQL Server",
-            "SQL Server Native Client 11.0",
-            "SQL Server",
-        ]
-        driver = next((d for d in preferred_order if d in installed), None) or (installed[0] if installed else None)
+        from fpulse.connections.mssql_odbc import build_mssql_odbc_conn_str, select_mssql_odbc_driver
+
+        driver = select_mssql_odbc_driver(pyodbc, config.get("driver"))
         if not driver:
             return _fail(
                 "No SQL Server ODBC driver installed",
@@ -312,20 +327,16 @@ class ConnectionTester:
                 "mssql",
             )
 
-        # Driver 18 enforces TLS by default — for local dev on a self-signed
-        # SQL Server, allow opting out via TrustServerCertificate.
-        trust_cert = "yes" if (config.get("trust_server_certificate") or "18" in driver) else "no"
-        encrypt = "yes" if config.get("encrypt") else ("optional" if "18" in driver else "no")
-
-        auth_clause = "Trusted_Connection=yes;" if windows_auth else f"UID={user};PWD={password};"
-        conn_str = (
-            f"DRIVER={{{driver}}};"
-            f"SERVER={host},{port};"
-            f"DATABASE={database};"
-            f"{auth_clause}"
-            f"Encrypt={encrypt};TrustServerCertificate={trust_cert};"
-            f"Connection Timeout={DEFAULT_TIMEOUT};"
-        )
+        conn_str = build_mssql_odbc_conn_str({
+            **config,
+            "host": host,
+            "port": port,
+            "database": database,
+            "user": user,
+            "password": password,
+            "windows_auth": windows_auth,
+            "driver": driver,
+        }, pyodbc, timeout=DEFAULT_TIMEOUT)
 
         start = time.time()
         try:
@@ -614,11 +625,7 @@ class ConnectionTester:
             import boto3  # type: ignore
             from botocore.exceptions import ClientError, NoCredentialsError, EndpointConnectionError  # type: ignore
         except ImportError:
-            return _fail(
-                "boto3 not installed",
-                "Install with: pip install boto3",
-                "s3",
-            )
+            return _addon_unavailable("S3")
 
         endpoint_url = config.get("endpoint") or config.get("endpoint_url")
         region = config.get("region", "us-east-1")
@@ -738,11 +745,7 @@ class ConnectionTester:
                 topics=topics[:20],
             )
         except ImportError:
-            return _fail(
-                "No Kafka client library installed",
-                "Install with: pip install confluent-kafka   OR   pip install kafka-python",
-                "kafka",
-            )
+            return _addon_unavailable("Kafka")
         except Exception as exc:
             return _fail(f"Kafka connection failed to {brokers}", exc, "kafka")
 
@@ -799,10 +802,7 @@ class ConnectionTester:
         try:
             import paramiko
         except ImportError as exc:
-            return _fail(
-                "SFTP test needs the 'paramiko' package — run: pip install paramiko",
-                exc, "sftp",
-            )
+            return _addon_unavailable("SFTP")
         start = time.time()
         ssh = None
         try:
@@ -1784,11 +1784,7 @@ class ConnectionTester:
         try:
             import redis as redis_lib  # type: ignore
         except ImportError:
-            return _fail(
-                "redis library not installed",
-                "Install with: pip install redis",
-                "redis",
-            )
+            return _addon_unavailable("Redis")
 
         host = config.get("host", "localhost")
         port = int(config.get("port", 6379))
@@ -1849,13 +1845,14 @@ class ConnectionTester:
             from pymongo import MongoClient  # type: ignore
             from pymongo.errors import ConnectionFailure, OperationFailure  # type: ignore
         except ImportError:
-            return _fail(
-                "pymongo not installed",
-                "Install with: pip install pymongo",
-                "mongodb",
-            )
+            return _addon_unavailable("MongoDB")
 
-        uri = config.get("uri") or config.get("connection_string")
+        uri = (
+            config.get("uri")
+            or config.get("mongodb_uri")
+            or config.get("connection_string")
+            or config.get("connection_uri")
+        )
         if uri:
             host = uri
         else:
@@ -1863,7 +1860,7 @@ class ConnectionTester:
             p = int(config.get("port", 27017))
             user = config.get("user") or config.get("username")
             password = config.get("password")
-            database = config.get("database", "admin")
+            database = config.get("database") or config.get("db") or "admin"
 
             if user and password:
                 host = f"mongodb://{user}:{password}@{h}:{p}/{database}"

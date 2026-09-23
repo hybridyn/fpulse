@@ -1814,11 +1814,19 @@ class WarehouseSinkNode(BaseNode):
             )
         elif conn_type == "mssql":
             import pyodbc  # type: ignore
-            conn_str = (
-                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={host},{port or 1433};DATABASE={database};"
-                f"UID={user};PWD={password};Connection Timeout=10;"
-            )
+            from fpulse.connections.mssql_odbc import build_mssql_odbc_conn_str
+
+            conn_str = build_mssql_odbc_conn_str({
+                "host": host,
+                "port": port or 1433,
+                "database": database,
+                "user": user,
+                "password": password,
+                "windows_auth": config.get("windows_auth"),
+                "encrypt": config.get("encrypt"),
+                "trust_server_certificate": config.get("trust_server_certificate"),
+                "driver": config.get("driver"),
+            }, pyodbc, timeout=10)
             return pyodbc.connect(conn_str)
         else:
             raise ValueError(f"Warehouse Sink: unsupported connection type '{conn_type}'")

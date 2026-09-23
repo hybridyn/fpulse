@@ -5,6 +5,7 @@ import {
   type WranglerPreviewEntry,
 } from '../stores/workflowStore';
 import ResizeHandle from './shared/ResizeHandle';
+import { humanizeExecutionError } from '../utils/errorMessages';
 
 // Z8 — bounds for the drag-to-resize bottom panel. Tighter than the
 // Storage drawer's [220, 85vh] because here the canvas above the panel
@@ -28,6 +29,32 @@ function loadStoredPreviewHeight(): number {
 }
 
 type Tab = 'input' | 'output' | 'schema' | 'json';
+
+function FriendlyErrorBlock({ error }: { error: unknown }) {
+  const friendly = humanizeExecutionError(error);
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800">
+      <div className="text-xs font-bold text-red-600 uppercase tracking-wider mb-1">Error</div>
+      <div className="text-sm font-bold text-red-900">{friendly.title}</div>
+      <div className="text-xs mt-0.5">{friendly.message}</div>
+      {friendly.actions.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs list-disc pl-4">
+          {friendly.actions.map((action) => <li key={action}>{action}</li>)}
+        </ul>
+      )}
+      {friendly.technical && friendly.technical !== friendly.message && (
+        <details className="mt-2">
+          <summary className="text-[11px] font-semibold text-red-700 cursor-pointer hover:text-red-900">
+            Show technical details
+          </summary>
+          <div className="mt-1 text-[11px] text-red-700 font-mono whitespace-pre-wrap break-words bg-white/60 border border-red-100 rounded-md p-2 max-h-32 overflow-auto">
+            {friendly.technical}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
 
 /** Synthesize a StepResult from a wrangler sub-step so the existing
  *  OutputView / SchemaView / JsonView code paths can render it without
@@ -202,7 +229,7 @@ export default function PreviewPanel() {
         className="absolute top-0 left-0 right-0 -mt-1 z-20"
       />
       {/* Header */}
-      <div className="flex items-center px-4 py-2 border-b border-amber-200/30 gap-2 shrink-0">
+      <div className="flex flex-wrap items-center px-3 py-2 border-b border-amber-200/30 gap-2 shrink-0">
         <span className="text-sm font-semibold text-slate-700">{String((node.data as any)?.label ?? '')}</span>
 
         {/* Step ▾ selector — Data Wrangler nodes only. Lets the user inspect
@@ -244,7 +271,7 @@ export default function PreviewPanel() {
         )}
 
         {/* Tabs: Input | Output | Schema | JSON */}
-        <div className="flex gap-0.5 ml-3">
+        <div className="flex flex-wrap gap-0.5">
           {(!isSource ? ['input', 'output', 'schema', 'json'] as Tab[] : ['output', 'schema', 'json'] as Tab[]).map((t) => (
             <button
               key={t}
@@ -291,10 +318,7 @@ export default function PreviewPanel() {
             </div>
           ) : result.status === 'error' ? (
             <div className="p-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <div className="text-xs font-bold text-red-600 uppercase tracking-wider mb-1">Error</div>
-                <div className="text-xs text-red-500 font-mono whitespace-pre-wrap">{result.error}</div>
-              </div>
+              <FriendlyErrorBlock error={result.error} />
             </div>
           ) : (
             <OutputView result={result} />
@@ -304,7 +328,9 @@ export default function PreviewPanel() {
             Click "Test Node" or "Run All" to see output
           </div>
         ) : result.status === 'error' ? (
-          <div className="p-4 text-red-500 text-xs font-mono whitespace-pre-wrap">{result.error}</div>
+          <div className="p-4">
+            <FriendlyErrorBlock error={result.error} />
+          </div>
         ) : tab === 'schema' ? (
           <SchemaView result={result} />
         ) : tab === 'json' ? (

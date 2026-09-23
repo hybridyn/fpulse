@@ -156,6 +156,21 @@ _KEYWORD_TOOLS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     # Build / draft / create
     (("create", "build", "draft", "make a pipeline"),
      ("draft_pipeline_from_intent", "apply_pipeline_draft")),
+    # Web search / fetch. These tools are only in the candidate set when
+    # the operator has enabled web access (otherwise they aren't registered,
+    # so `_add`'s `name not in by_name` guard makes this boost inert). Without
+    # this entry the selector trims web_search/web_fetch out of the 14-tool
+    # cap and the model denies web access even when it's on. Also covers the
+    # connector-discovery phrasing (find an API's docs / OpenAPI spec).
+    (("web", "internet", "online", "search the", "look up", "look it up",
+      "google", "browse", "http://", "https://", "fetch ", "url",
+      "api documentation", "api docs", "openapi", "swagger",
+      "find the api", "docs for", "spec for",
+      # external-integration phrasings — "get the FactoHR api", "integrate
+      # stripe", "connect to salesforce". These are where a user wants an
+      # external system, so the web tools must be candidates.
+      " api", "integrat", "connector for", "connect to", "sdk", "endpoint"),
+     ("web_search", "web_fetch")),
 )
 
 
@@ -232,6 +247,14 @@ def select_tools(
 
     # 1. Floor — always present
     for name in _FLOOR_TOOLS:
+        _add(name)
+
+    # 1b. Web tools are a CONDITIONAL floor: they only appear in
+    # `available_tools` when the operator enabled web access, and when they
+    # do we keep them every turn. Keyword matching alone was too brittle —
+    # "add Aconex as a source" has no web keyword yet clearly needs the web.
+    # The system prompt tells the model to use them for external systems.
+    for name in ("web_search", "web_fetch"):
         _add(name)
 
     # 2. Page bucket

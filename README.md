@@ -16,31 +16,63 @@
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.1-blue" alt="Status: 1.0.1"></a>
 </p>
 
-Single-binary, local-first data pipeline engine. Clone it, `pip install -e .`, `fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
+Single-binary, local-first data pipeline engine. `pip install fpulse`, `python -m fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
 
 > **Status:** 1.0.1 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
 >
-> **Install today: PyPI, from source, or Docker** — each is one command and
-> fully supported ([Quick start](#quick-start)). The prebuilt desktop
-> installers are not published yet; the sections below say so where it
-> matters rather than pointing you at a 404.
+> **Install today: PyPI, Docker, or source** — all are supported
+> ([Quick start](#quick-start)). `pip install fpulse` is published on PyPI;
+> prebuilt desktop installers are still pending.
 
 ## Why F-Pulse
 
-- **Fast engine.** DuckDB-powered, vectorised execution. Joins, group-bys, pivots and aggregates run column-at-a-time, not row-by-row. Streams to disk on bigger-than-RAM datasets so you don't blow a heap.
-- **Operational layer built in.** Scheduler (runs pipelines automatically at fixed times), alerts (email / Slack / Teams / webhook), run history with per-step row counts + duration, lineage view, and version control with deploy / rollback. Ships in the box — nothing to bolt on. OSS runs as a solo / single-workspace install; multi-user team workspaces with per-workspace RBAC are an **F-Pulse+** upgrade.
-- **Local-first.** Run it on your laptop or a VM — no cloud lock-in, telemetry off by default (opt-in only). Single binary, no IDE install, no runtime tuning required.
-- **Visual + code.** Drag-and-drop canvas, a real expression engine (`$json`, `$now`, `$('Node').output`), and a DuckDB SQL transform when you need to escape the canvas.
-- **Open connector framework — extend in minutes, not weeks.** 33 first-party connectors visible by default (4 database dialects + 2 bulk-load dialects + 27 SaaS REST manifests), tier-labeled honestly (currently 0 Production + 0 Verified + 19 Beta + 8 Experimental). 10 additional consumer-marketing / SMB-CRM manifests ship Hidden — out of enterprise-data-engineering scope. See [docs/connectors.md](docs/connectors.md) for the per-connector matrix and live `GET /api/connectors/cert-matrix`. When you need one we don't ship, you have **four** first-class paths — none of them require a vendor build cycle:
-  1. **Paste an OpenAPI URL → get a working connector in 90 seconds.** `Insights → Author Connector → from OpenAPI`. See [docs/extend/build-a-connector.md](docs/extend/build-a-connector.md) for the 30-minute end-to-end tutorial.
-  2. **Paste 1–5 sample API responses → get a draft connector.** Same UI, "from samples" mode — for vendors without a public OpenAPI spec.
-  3. **Hand-author the manifest.** Full control when the vendor's API doesn't fit a generated shape — ~30 minutes. Same tutorial as above.
-  4. **Suggest or contribute.** [Request a connector or node](https://github.com/hybridyn/fpulse/issues/new/choose), or open a PR. Templates pre-fill what we need to act on it.
+F-Pulse is built for teams who want a local, visual ETL engine without dragging
+in a warehouse-first platform or a heavyweight IDE.
 
-  This is the OSS bet: we ship the framework, the community ships the long tail. **No connector is Plus-gated** — every manifest, every node, every extension path is open.
-- **Honest status badges.** Every connector carries a user-facing tier — Production / Verified / Beta / Experimental / Hidden — derived from the cert matrix. Today: 0 Production, 0 Verified, 19 Beta, 8 Experimental visible (10 Hidden). The default picker shows Production + Verified + Beta; Experimental sits behind a toggle. The bar for Verified is a live-vendor smoke test on every PR plus a stored fixture; Production adds a 30-day green streak and a named owner. Treat the matrix output as ground truth — we'd rather show "0 Verified" than soft-label everything "Certified."
-- **Embedded AI (optional).** Pluggable providers (Claude / OpenAI / Gemini / Ollama / OpenRouter) for ghost nodes, autoconfig, error diagnosis — works fully without an LLM via deterministic fallbacks. Local Ollama on `qwen2.5:7b` is the 2026-05-19 tool-use floor; see [docs/supported-models.md](docs/supported-models.md).
-- **F-Pulse Steward — read-only workspace observer with a gated Memory Layer.** Most pipeline tools observe execution; Steward adds a workspace-level observation surface above it. **Actively detected today:** duplicate-source + duplicate-pipeline (Archeologist); connector health (auth-failure / unreachable / rate-limit / credential-near-expiry); schema drift; automatic volume anomaly (baseline-variance) plus threshold data-quality checks (null-rate / freshness / row-count / partition); node-level empty-output; warehouse-waste (cost); governance (env-crossing / unapproved-destination / PII-leak); and user-defined YAML rules. All carry persistent-occurrence counts, time-clamped severity escalation, rebound detection on previously-resolved findings, dismiss-with-reason (sanitized for AWS keys / bearer tokens / passwords / URI creds / private IPs before journal write), and notification de-dup at the (user, finding, severity, rebound-state) tuple. **Still contract-ready (enum + storage + UI present, detector deferred):** pipeline-level SLA-breach / partial-output / retry-storm, structural join-explosion / join-collapse, credential-sprawl, and cost-drift / cost-recommendation — future specialists plug in without contract changes. Detection is plain code — no LLM in the decision path, no hallucinated findings. Read-only by architectural rule: never mutates a workflow. **The F-Pulse Memory Layer** ([docs/steward/memory-layer.md](docs/steward/memory-layer.md)) is a separate, explicit lesson store — `POST /api/steward/lessons` creates a `PROPOSED` entry, which stays inert until a human `approve`s it. Dismiss and Resolve are separate flows (suppression / closure), neither auto-creates a lesson; that prevents the lesson store from being polluted with exception text. Auto-invocation of lesson search on failure ships with Incident Analyst in 1.2. **Ships in OSS, not paywalled.** See [docs/steward/overview.md](docs/steward/overview.md), [docs/steward/positioning.md](docs/steward/positioning.md), [docs/steward/architecture.md](docs/steward/architecture.md).
+| What you get | Why it matters |
+|---|---|
+| **DuckDB execution** | Joins, group-bys, pivots and aggregates run in a vectorised engine, with disk spill for larger local workloads. |
+| **Operations in the box** | Scheduler, alerts, run history, per-step row counts, lineage view, versioning, deploy and rollback are included. |
+| **Local-first install** | Runs on a laptop or VM. No cloud lock-in. Telemetry is off by default and opt-in only. |
+| **Visual + code workflow** | Drag nodes on the canvas, use expressions for light logic, and drop into DuckDB SQL when the canvas is not enough. |
+| **Optional AI assistance** | Claude, OpenAI, Gemini, Ollama and OpenRouter can help with node setup, SQL and error diagnosis; deterministic fallbacks keep the app useful without an LLM. |
+
+**Connector model.** F-Pulse ships an open connector framework, not a closed
+vendor queue. Current OSS includes native database/bulk-load connectors plus
+REST-manifest SaaS connectors, each labeled by maturity: Production, Verified,
+Beta, Experimental or Hidden. The picker shows stable tiers first; Experimental
+connectors sit behind a toggle. See [docs/connectors.md](docs/connectors.md)
+or `GET /api/connectors/cert-matrix` for the live matrix.
+
+Need a connector that is not shipped yet?
+
+| Path | Best when |
+|---|---|
+| Paste an OpenAPI URL | The vendor publishes an OpenAPI spec. |
+| Paste sample API responses | The API has no public spec, but you have example payloads. |
+| Hand-author a manifest | The API needs custom paging, auth or field mapping. |
+| Request or contribute | The connector should become part of the OSS catalog. |
+
+No connector is Plus-gated. Every OSS manifest, node and extension path remains
+open. See [docs/extend/build-a-connector.md](docs/extend/build-a-connector.md)
+for the connector authoring tutorial.
+
+**Steward reliability layer.** F-Pulse Steward is a read-only observer for
+pipeline health. It detects duplicate sources/pipelines, connector health,
+schema drift, volume anomalies, data-quality threshold failures, empty node
+outputs, warehouse waste, governance issues and user-defined YAML rules. Findings
+carry occurrence counts, severity escalation, rebound detection, sanitized
+dismiss reasons and notification de-duplication.
+
+Steward does not mutate workflows and does not use an LLM to decide findings.
+Its Memory Layer is gated: lessons are proposed first and stay inert until a
+human approves them. See [docs/steward/overview.md](docs/steward/overview.md),
+[docs/steward/positioning.md](docs/steward/positioning.md) and
+[docs/steward/architecture.md](docs/steward/architecture.md).
+
+**OSS vs Plus.** OSS is a solo / single-workspace install. F-Pulse+ adds the
+team layer: multi-user workspaces, RBAC, approval flows, enterprise deployment,
+monitoring and advanced governance surfaces.
 
 > **Evaluating against another orchestrator?** See [docs/vs-talend.md](docs/vs-talend.md) for the side-by-side comparison.
 
@@ -52,7 +84,7 @@ the *same one command* on Windows, macOS, and Linux. Pick what fits you:
 
 | You are | Recommended path | Time |
 |---|---|---|
-| **On Windows / macOS / Linux — want it to just work** | **Docker Compose** below (needs Docker Desktop or Docker Engine) | 5 min |
+| **On Windows / macOS / Linux — want it to just work** | **PyPI install** below (needs Python 3.11+) or **Docker Compose** | 2-5 min |
 | **On Linux, and you'd rather not run Docker** | **Linux package** below — `.deb` / `.rpm` / `.AppImage` (no Python, no Docker on the box) | 2 min |
 | **A developer / contributor** | **From source** below (Python 3.11+, Node 20+) | 10 min |
 
@@ -66,16 +98,94 @@ Want the native app anyway? Build it yourself in one command — see
 [`installer/readme.md`](installer/readme.md) — and click through the warning.
 Signed installers land once we have an EV certificate + Apple notarization.
 
-`pip install fpulse` works — the package is on
-[PyPI](https://pypi.org/project/fpulse/). `docker pull hybridyn/fpulse` is not
-on Docker Hub yet, but **you don't need it**: `docker compose up` builds the
-image locally on first run (see below).
+### PyPI install
+
+```powershell
+# Windows: avoids Python Scripts/PATH shortcut issues
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+```bash
+# macOS / Linux
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
 
 > **Intel Macs (x86_64).** `cryptography` 49+ publishes macOS wheels for Apple
-> Silicon only, so pip falls back to a source build that needs Rust and OpenSSL
-> headers, failing with `openssl-sys: Could not find directory of OpenSSL
-> installation`. 1.0.1 caps that dependency to the last Intel-compatible
-> release. On 1.0.0, run `pip install "cryptography<49"` first.
+> Silicon only, so on an Intel Mac pip falls back to a source build that needs
+> a Rust toolchain and OpenSSL headers — it fails with `openssl-sys: Could not
+> find directory of OpenSSL installation`. F-Pulse 1.0.1 caps that dependency
+> to the last Intel-compatible release, so a current install just works. If you
+> are pinned to 1.0.0, run `pip install "cryptography<49"` first.
+
+`python -m fpulse open` defaults to port `8001`, but if that port is already in use it
+prints the alternate URL it selected, for example `http://127.0.0.1:8003`.
+Open the printed URL, not necessarily `http://localhost:8001`.
+
+The health endpoint is `/api/health`:
+
+```bash
+curl http://localhost:8001/api/health
+```
+
+`fpulse open` is optional shorthand. If `fpulse` is not found after install,
+use the same Python that installed it:
+
+```bash
+python -m fpulse open
+```
+
+**Windows: `fpulse` is not recognized after install**
+
+If `pip install fpulse` succeeds but PowerShell says:
+
+```text
+The term 'fpulse' is not recognized
+```
+
+F-Pulse is usually installed correctly. Windows just cannot find the generated
+`fpulse.exe` command because Python's `Scripts` folder is not on `PATH`.
+This is a Windows/Python PATH setting, not an F-Pulse server failure.
+
+Use the Python launcher form first:
+
+```powershell
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+If `py` is unavailable:
+
+```powershell
+python -m pip install --upgrade fpulse
+python -m fpulse open
+```
+
+To confirm where it installed:
+
+```powershell
+py -m pip show fpulse
+py -m site --user-base
+```
+
+The direct command works only when the matching Python `Scripts` folder is on
+your user `PATH`, for example:
+
+```text
+<user-base>\Scripts
+```
+
+After changing `PATH`, close and reopen PowerShell or Visual Studio Code. You
+can always keep using `py -m fpulse open`; it avoids the shortcut-path issue
+entirely. Running `C:\...\Scripts\fpulse.exe open` proves the package installed,
+but `py -m fpulse open` is the cleaner command to give new Windows users.
+
+**Not on Docker Hub yet** (we'd rather say so than send you to a 404):
+
+| Not yet available | Use this instead |
+|---|---|
+| `docker pull hybridyn/fpulse` | Not on Docker Hub yet, but **you don't need it** — `docker compose up` builds it locally on first run (see below). |
 
 > **Behind a corporate / office proxy?** If `pip install` — or the first-time
 > `docker compose up` build, which runs `pip` *inside* the image — fails with
@@ -117,9 +227,9 @@ After install, open <http://localhost:8001> — the service is already running.
 **Manage the service** (any OS, same commands):
 
 ```bash
-fpulse service-status        # is it running?
-fpulse uninstall-service     # stop + deregister (does NOT delete data)
-fpulse install-service       # re-register after an update
+python -m fpulse service-status        # is it running?
+python -m fpulse uninstall-service     # stop + deregister (does NOT delete data)
+python -m fpulse install-service       # re-register after an update
 ```
 
 Building these installers yourself (CI / private builds): see
@@ -172,10 +282,10 @@ Then open <http://localhost:8001>.
 
 ### From source (Python 3.11+ and Node 20+)
 
-`pip install -e .` and `fpulse open` are **two separate commands** — install first,
+`pip install -e .` and `python -m fpulse open` are **two separate commands** — install first,
 then run. The `.` means "the project in the current folder", so you must be
 **inside the cloned repo** when you run it. `fpulse` only exists *after* the
-install succeeds (it's the command that install creates).
+install succeeds (it's the optional command shortcut that install creates).
 
 **macOS / Linux:**
 
@@ -190,7 +300,7 @@ cd frontend && npm ci && npm run build && cd ..
 # 2. Install into a venv, then run.
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
 **Windows (PowerShell)** — run these **one line at a time**; `&&` chaining and
@@ -210,27 +320,27 @@ cd ..
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e .
-fpulse open
+python -m fpulse open
 ```
 
 > **Windows tip:** if `Activate.ps1` is blocked by execution policy, don't fight
 > it — just call the venv's executables directly instead:
-> `.\.venv\Scripts\pip.exe install -e .` then `.\.venv\Scripts\fpulse.exe open`.
+> `.\.venv\Scripts\pip.exe install -e .` then `.\.venv\Scripts\python.exe -m fpulse open`.
 
 > Skipping step 1 gets you a working API and a blank page. F-Pulse will say
 > so loudly at startup (`no frontend build found …`) rather than leaving you
 > to guess.
 
-The `fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. No need to type or remember a URL.
+The `python -m fpulse open` command starts the backend on a free port (defaults to 8001, falls back if in use) and opens your default browser to the local URL. If the output says `port 8001 was in use — using 8003 instead`, open the printed URL (`http://127.0.0.1:8003` in that example). No need to type or remember a URL.
 
 If you prefer the manual flow:
 ```bash
-fpulse serve        # starts on http://127.0.0.1:8001, you open the browser yourself
-fpulse serve --open # same as `fpulse open`
-fpulse serve --port 9000
+python -m fpulse serve        # starts on http://127.0.0.1:8001, you open the browser yourself
+python -m fpulse serve --open # same as `python -m fpulse open`
+python -m fpulse serve --port 9000
 ```
 
-Headless / WSL2 / Docker / DevContainer / remote-SSH users: `fpulse open` detects these automatically, skips the browser auto-launch, and prints the URL prominently so you can paste it into a browser on your host machine. You can also pass `--no-open` to force-skip the auto-launch while keeping the friendly port-fallback behaviour.
+Headless / WSL2 / Docker / DevContainer / remote-SSH users: `python -m fpulse open` detects these automatically, skips the browser auto-launch, and prints the URL prominently so you can paste it into a browser on your host machine. You can also pass `--no-open` to force-skip the auto-launch while keeping the friendly port-fallback behaviour.
 
 > **Bind defaults to loopback (127.0.0.1)** — invisible to your LAN, no port exposure to coworkers / hotel WiFi / conference networks. If you genuinely need LAN-visible binding for an on-prem multi-user install, set `FPULSE_ALLOW_LAN=1` or pass `--host 0.0.0.0` explicitly. Full rationale: [docs/install/security-hardening.md](docs/install/security-hardening.md).
 
@@ -240,21 +350,20 @@ runbook: [docs/deployment.md](docs/deployment.md).
 
 ### Run it in the background (as a service)
 
-`fpulse serve` / `fpulse open` run in the **foreground** — fine while you're
+`python -m fpulse serve` / `python -m fpulse open` run in the **foreground** — fine while you're
 trying it out, but they stop the moment you close the terminal. For an
 always-on install that survives terminal close, logout, and reboot, register
-F-Pulse with your OS service manager. **One command, every platform, no
-admin/sudo:**
+F-Pulse with your OS service manager. **One command, every platform:**
 
 ```bash
-fpulse install-service     # register + start it supervised in the background
-fpulse service-status      # check whether it's running
-fpulse uninstall-service   # remove it
+python -m fpulse install-service     # register + start it supervised in the background
+python -m fpulse service-status      # check whether it's running
+python -m fpulse uninstall-service   # remove it
 ```
 
 | OS | What it registers | Notes |
 |---|---|---|
-| **Windows** | Scheduled Task at logon (`schtasks`) | runs hidden, restarts on crash — no NSSM / pywin32 |
+| **Windows** | Scheduled Task at logon (`schtasks`) | runs hidden, restarts on crash — no NSSM / pywin32. Current 1.0.x builds register with highest privileges, so run PowerShell as Administrator if you see `REGISTER_FAIL: Access is denied`. |
 | **macOS** | launchd LaunchAgent | auto-starts at login, `KeepAlive` restart |
 | **Linux** | user-mode `systemd` unit | `systemctl --user enable --now`; add `loginctl enable-linger $USER` to keep it running after you log out |
 

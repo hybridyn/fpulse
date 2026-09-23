@@ -86,6 +86,22 @@ interface Project {
   icon?: string;
 }
 
+interface CredentialOption {
+  id: string;
+  name: string;
+  type?: string;
+  category?: string;
+  username?: string;
+  config?: Record<string, unknown>;
+  environment?: 'dev' | 'prod' | 'all';
+  project_id?: string | null;
+}
+
+const credentialMatchesEnvironment = (credential: CredentialOption, env: 'dev' | 'prod' | 'all') => {
+  const credEnv = credential.environment || 'all';
+  return credEnv === 'all' || env === 'all' || credEnv === env;
+};
+
 // 2026-05-19 (P2 #10 of PAGE_BY_PAGE_AUDIT.md): the `icon` emoji column
 // on each entry below is DEPRECATED — every render site routes through
 // `<ConnectorIcon type={...} />` (shared/ConnectorIcons) which loads the
@@ -428,7 +444,7 @@ const CONNECTION_FIELDS: Record<string, ConnField[]> = {
     { key: 'connection_mode', label: 'Connection Mode', type: 'select', placeholder: '', required: true, defaultValue: 'uri', options: [
       { value: 'uri', label: 'Connection URI' }, { value: 'fields', label: 'Individual Fields' },
     ]},
-    { key: 'uri', label: 'MongoDB URI', type: 'password', placeholder: 'mongodb+srv://user:pass@cluster.mongodb.net/mydb', hint: 'Full connection string (Atlas or self-hosted)' },
+    { key: 'uri', label: 'MongoDB URI', type: 'password', placeholder: 'mongodb+srv://user:pass@cluster.mongodb.net/mydb?authSource=admin', hint: 'Use the MongoDB driver connection string from Atlas Connect -> Drivers, or build mongodb://user:pass@host:27017/db?authSource=admin.' },
     { key: 'host', label: 'Host', type: 'text', placeholder: 'localhost' },
     { key: 'port', label: 'Port', type: 'number', placeholder: '27017', defaultValue: '27017' },
     { key: 'database', label: 'Database', type: 'text', placeholder: 'mydb', required: true },
@@ -1046,6 +1062,99 @@ const CONNECTION_FIELDS: Record<string, ConnField[]> = {
   ],
 };
 
+function configWithFieldDefaults(type: string, config: Record<string, string>): Record<string, string> {
+  const next = { ...config };
+  for (const field of CONNECTION_FIELDS[type] || []) {
+    if (
+      field.defaultValue !== undefined &&
+      (next[field.key] === undefined || next[field.key] === '')
+    ) {
+      next[field.key] = field.defaultValue;
+    }
+  }
+  return next;
+}
+
+function buildConnectionConfig(
+  type: string,
+  config: Record<string, string>,
+  credentialId: string,
+  credentialFieldMap: Record<string, string>,
+): Record<string, any> {
+  const next: Record<string, any> = configWithFieldDefaults(type, config);
+  const mappedFields: Record<string, string> = {};
+  if (credentialId) {
+    Object.entries(next).forEach(([targetKey, value]) => {
+      const sourceKey = parseCredentialToken(String(value ?? ''));
+      if (sourceKey) {
+        mappedFields[targetKey] = sourceKey;
+        delete next[targetKey];
+      }
+    });
+  }
+  if (credentialId) {
+    const legacyMap = Object.fromEntries(
+      Object.entries(credentialFieldMap).filter(([, sourceKey]) => !!sourceKey)
+    );
+    const finalMap = { ...legacyMap, ...mappedFields };
+    if (Object.keys(finalMap).length > 0) {
+      next.credential_field_map = finalMap;
+      Object.keys(finalMap).forEach(targetKey => {
+        delete next[targetKey];
+      });
+    } else {
+      delete next.credential_field_map;
+    }
+  } else {
+    delete next.credential_field_map;
+  }
+  return next;
+}
+
+function credentialToken(key: string): string {
+  return key;
+}
+
+function parseCredentialToken(value: string): string | null {
+  const match = value.trim().match(/^\{\{\s*credential\.([A-Za-z0-9_.-]+)\s*\}\}$/);
+  return match ? match[1] : null;
+}
+
+const CREDENTIAL_MAPPING_EXCLUDED_FIELDS = new Set([
+  'connection_mode',
+  'auth_method',
+  'auth_type',
+  'ssl',
+  'use_ssl',
+  'verify_ssl',
+  'security_protocol',
+]);
+
+function canMapCredentialField(field: ConnField): boolean {
+  return field.type !== 'checkbox' && !CREDENTIAL_MAPPING_EXCLUDED_FIELDS.has(field.key);
+}
+
+function credentialFieldPlaceholder(field: ConnField, hasCredentialKeys: boolean): string | undefined {
+  if (!hasCredentialKeys) return field.placeholder;
+  return field.placeholder
+    ? `${field.placeholder} or choose a saved credential field`
+    : 'Type inline or choose a saved credential field';
+}
+
+function updateFieldWithCredentialChoice(
+  currentMap: Record<string, string>,
+  fieldKey: string,
+  value: string,
+  credentialKeys: string[],
+): Record<string, string> {
+  const next = { ...currentMap };
+  const tokenKey = parseCredentialToken(value);
+  const sourceKey = tokenKey || (credentialKeys.includes(value) ? value : '');
+  if (sourceKey) next[fieldKey] = sourceKey;
+  else delete next[fieldKey];
+  return next;
+}
+
 /* ═══ TableToolbar column config ═══ */
 const CONN_COLUMNS: TColumn[] = [
   // Core
@@ -1200,6 +1309,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   const colState = useTableColumns('fpulse_connections_cols', CONN_COLUMNS);
   const canCreate = useCan('create', environment);
   const canDelete = useCan('delete', environment);
+  const isPlusTier = tier === 'plus';
   const [view, setView] = useState<View>('list');
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   // Quick-detail drawer (master-detail pattern). Row clicks open this
@@ -1270,6 +1380,10 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   };
   const [formDesc, setFormDesc] = useState('');
   const [formConfig, setFormConfig] = useState<Record<string, string>>({});
+  const [formCredentialId, setFormCredentialId] = useState('');
+  const [formCredentialFieldMap, setFormCredentialFieldMap] = useState<Record<string, string>>({});
+  const [credentialFieldMenu, setCredentialFieldMenu] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<CredentialOption[]>([]);
   const [formTags, setFormTags] = useState('');
   const [formScope, setFormScope] = useState<'global' | 'project'>('global');
   const [formProjectId, setFormProjectId] = useState('');
@@ -1277,11 +1391,30 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   // so a connection created in DEV stays in DEV unless the user explicitly
   // picks 'Both'. Matches CredentialsPage behaviour.
   const [formEnvironment, setFormEnvironment] = useState<'dev' | 'prod' | 'all'>(environment || 'dev');
+  const effectiveFormEnvironment = isPlusTier ? formEnvironment : 'dev';
   // Direction capabilities. Both checked by default; auto-unchecks 'read'
   // when the user picks a notifier type (slack/smtp/etc). User can flip
   // either box manually.
   const [formCanRead, setFormCanRead] = useState(true);
   const [formCanWrite, setFormCanWrite] = useState(true);
+
+  useEffect(() => {
+    if (!credentialFieldMenu) return;
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-credential-field-picker="true"]')) return;
+      setCredentialFieldMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCredentialFieldMenu(null);
+    };
+    document.addEventListener('mousedown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [credentialFieldMenu]);
 
   // Report form
   const [showReportForm, setShowReportForm] = useState(false);
@@ -1303,6 +1436,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   useEffect(() => {
     loadConnections();
     loadProjects();
+    loadCredentials();
   }, []);
 
   useEffect(() => {
@@ -1348,6 +1482,15 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
     } catch { setProjects([]); }
   };
 
+  const loadCredentials = async () => {
+    try {
+      const data = await api.listCredentials();
+      setCredentials((Array.isArray(data) ? data : []) as CredentialOption[]);
+    } catch {
+      setCredentials([]);
+    }
+  };
+
   // Publish page context for the AI Copilot — lets the agent answer
   // "which connections are write-only?" / "find Postgres ones" without
   // a discovery tool call.
@@ -1389,12 +1532,14 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       return;
     }
     try {
+      const config = buildConnectionConfig(formType, formConfig, formCredentialId, formCredentialFieldMap);
       await api.createConnection({
         name: formName, type: formType, description: formDesc,
-        config: formConfig,
+        config,
+        credential_id: formCredentialId || null,
         tags: formTags.split(',').map(t => t.trim()).filter(Boolean),
         project_id: formScope === 'project' ? formProjectId || null : null,
-        environment: formEnvironment,
+        environment: effectiveFormEnvironment,
         capabilities: capabilitiesFromForm(formCanRead, formCanWrite),
       });
       setView('list');
@@ -1410,12 +1555,14 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       return;
     }
     try {
+      const config = buildConnectionConfig(selectedConnection.type, formConfig, formCredentialId, formCredentialFieldMap);
       await api.updateConnection(selectedConnection.id, {
         name: formName, description: formDesc,
-        config: formConfig,
+        config,
+        credential_id: formCredentialId || null,
         tags: formTags.split(',').map(t => t.trim()).filter(Boolean),
         project_id: formScope === 'project' ? formProjectId || null : null,
-        environment: formEnvironment,
+        environment: effectiveFormEnvironment,
         capabilities: capabilitiesFromForm(formCanRead, formCanWrite),
       });
       toast.success('Connection updated');
@@ -1427,9 +1574,11 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
 
   const resetCreateForm = () => {
     setFormName(''); setFormType(''); setFormDesc(''); setFormConfig({});
+    setFormCredentialId('');
+    setFormCredentialFieldMap({});
     setFormTags(''); setFormScope('global'); setFormProjectId('');
     setCreateStep(0);
-    setFormEnvironment(environment || 'dev');
+    setFormEnvironment(isPlusTier ? (environment || 'dev') : 'dev');
     setFormCanRead(true);
     setFormCanWrite(true);
   };
@@ -1514,18 +1663,19 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
     setInlineTestResult(null);
     const started = Date.now();
     try {
+      const config = buildConnectionConfig(formType, formConfig, formCredentialId, formCredentialFieldMap);
       const res = await api.post<any>('/api/connections/test-inline', {
         type: formType,
-        config: { ...formConfig },
-        // credential_id intentionally omitted — the form is in CREATE
-        // mode so there's no saved credential to reference. If the user
-        // later switches to "use saved credential", we can add a picker.
+        config,
+        credential_id: formCredentialId || undefined,
       });
       const ok = res?.success === true || res?.status === 'ok' || res?.ok === true;
       setInlineTestResult({
         ok,
         latency_ms: typeof res?.latency_ms === 'number' ? res.latency_ms : Date.now() - started,
-        detail: res?.detail || res?.message || (ok ? 'Connection successful' : 'Connection failed'),
+        detail: [res?.detail || res?.message || (ok ? 'Connection successful' : 'Connection failed'), res?.error, res?.suggestion]
+          .filter(Boolean)
+          .join(' · '),
         at: Date.now(),
       });
     } catch (err: any) {
@@ -1540,7 +1690,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   };
   // Clear stale test result when the user changes type or edits config
   // — the previous "✓ connected" green is misleading after the URL changes.
-  useEffect(() => { setInlineTestResult(null); }, [formType, formConfig]);
+  useEffect(() => { setInlineTestResult(null); }, [formType, formConfig, formCredentialId, formCredentialFieldMap]);
 
   const handleTestConnection = async (id: string) => {
     const conn = connections.find(c => c.id === id);
@@ -1581,6 +1731,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       setTestSteps([{ label: honestLabel, status: 'error', detail: e?.message || 'Connection refused' }]);
     }
     setTestDone(true);
+    loadConnections();
   };
 
   const openDetail = (conn: Connection) => {
@@ -2335,7 +2486,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                 <dt className="text-slate-500 font-medium">Scope</dt>
                 <dd className="text-slate-800">{drawerConn.project_id ? projectName(drawerConn.project_id) : 'Global'}</dd>
               </div>
-              {drawerConn.environment && (
+              {isPlusTier && drawerConn.environment && (
                 <div className="flex justify-between gap-3 py-2 border-b border-slate-100">
                   <dt className="text-slate-500 font-medium">Environment</dt>
                   <dd className="text-slate-800 uppercase font-semibold">{drawerConn.environment}</dd>
@@ -2388,7 +2539,11 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   if (view === 'create') {
     const fields = formType ? (CONNECTION_FIELDS[formType] || CONNECTION_FIELDS['rest_api'] || []) : [];
     const categories = [...new Set(CONNECTION_TYPES.map(t => t.category))];
-    const missingRequired = fields.filter(f => f.required && !formConfig[f.key]);
+    const effectiveFormConfig = formType ? configWithFieldDefaults(formType, formConfig) : formConfig;
+    const availableCredentials = credentials.filter(c => credentialMatchesEnvironment(c, effectiveFormEnvironment));
+    const selectedCredential = availableCredentials.find(c => c.id === formCredentialId);
+    const credentialFieldKeys = selectedCredential?.config ? Object.keys(selectedCredential.config) : [];
+    const missingRequired = fields.filter(f => f.required && !effectiveFormConfig[f.key] && !parseCredentialToken(effectiveFormConfig[f.key] || ''));
     // Z30 (2026-05-23) — `basicsReady` must include `formName`. Step 0
     // ("Basics — Name, scope, environment") renders the Connection Name
     // input alongside scope + role pickers; previously the readiness flag
@@ -2408,7 +2563,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
     const saveReady = nameReady && testedReady;
     const canCreateConnection = basicsReady && detailsReady && saveReady;
     const createSteps: Array<{ key: 0 | 1 | 2; label: string; detail: string }> = [
-      { key: 0, label: 'Basics', detail: 'Name, scope, environment' },
+      { key: 0, label: 'Basics', detail: isPlusTier ? 'Name, scope, environment' : 'Name, scope, access' },
       { key: 1, label: 'Connection', detail: 'Endpoint and credentials' },
       { key: 2, label: 'Test & Save', detail: 'Validate and create' },
     ];
@@ -2443,6 +2598,8 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       : filteredConnectors.filter(t => selectedConnectorGroupMeta.categories.includes(t.category));
     const selectConnector = (type: string) => {
       setFormType(type);
+      setFormConfig(configWithFieldDefaults(type, {}));
+      setFormCredentialFieldMap({});
       setCreateStep(0);
       if (WRITE_ONLY_TYPES.has(type)) {
         setFormCanRead(false);
@@ -2827,34 +2984,38 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                 </div>
               )}
 
-              {/* Environment visibility — enforces no-leak between DEV/PROD */}
-              <div>
-                <label className="text-sm font-semibold text-slate-700 block mb-1.5">Environment</label>
-                <div className="flex gap-1.5">
-                  {([
-                    { value: 'dev',  label: 'DEV only',  color: '#10b981' },
-                    { value: 'prod', label: 'PROD only', color: '#ef4444' },
-                    { value: 'all',  label: 'Both',      color: '#64748b' },
-                  ] as const).map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormEnvironment(opt.value)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-                        formEnvironment === opt.value
-                          ? 'text-white shadow-sm border-transparent'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
-                      }`}
-                      style={formEnvironment === opt.value ? { background: opt.color } : undefined}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  PROD connections never appear in DEV and vice versa. Pick "Both" only for connections that are genuinely shared.
-                </p>
-              </div>
+              {isPlusTier && (
+                <>
+                  {/* Environment visibility — enforces no-leak between DEV/PROD */}
+                  <div>
+                    <label className="text-sm font-semibold text-slate-700 block mb-1.5">Environment</label>
+                    <div className="flex gap-1.5">
+                      {([
+                        { value: 'dev',  label: 'DEV only',  color: '#10b981' },
+                        { value: 'prod', label: 'PROD only', color: '#ef4444' },
+                        { value: 'all',  label: 'Both',      color: '#64748b' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setFormEnvironment(opt.value)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                            formEnvironment === opt.value
+                              ? 'text-white shadow-sm border-transparent'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+                          }`}
+                          style={formEnvironment === opt.value ? { background: opt.color } : undefined}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      PROD connections never appear in DEV and vice versa. Pick "Both" only for connections that are genuinely shared.
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Direction capabilities — Apr 22 2026. Source-node and
                   sink-node ConnectionPickers filter by these flags so a
@@ -2915,6 +3076,30 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                   <label className="text-sm font-semibold text-slate-700 block mb-1.5">Description</label>
                   <input value={formDesc} onChange={e => setFormDesc(e.target.value)} placeholder="What is this connection used for?" className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-slate-700 block mb-1.5">Use as *</label>
+                  <div className="flex flex-wrap gap-2">
+                    <label className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border cursor-pointer transition-all ${
+                      formCanRead ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-50 text-slate-500 border-slate-200'
+                    }`}>
+                      <input type="checkbox" checked={formCanRead} onChange={e => setFormCanRead(e.target.checked)} className="w-4 h-4" />
+                      Source (read)
+                    </label>
+                    <label className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border cursor-pointer transition-all ${
+                      formCanWrite ? 'bg-amber-50 text-amber-700 border-amber-300' : 'bg-slate-50 text-slate-500 border-slate-200'
+                    }`}>
+                      <input type="checkbox" checked={formCanWrite} onChange={e => setFormCanWrite(e.target.checked)} className="w-4 h-4" />
+                      Sink (write)
+                    </label>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Source connections appear in source nodes. Sink connections appear in write/output nodes.
+                  </p>
+                  {!formCanRead && !formCanWrite && (
+                    <p className="text-xs text-red-500 mt-1 font-semibold">Pick at least one role.</p>
+                  )}
+                </div>
               </div>
               {/* ── End: Identity ── */}
 
@@ -2926,11 +3111,39 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                       </svg>
-                      <span className="text-sm font-bold uppercase tracking-wider text-slate-800">Connection Details</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-slate-800">Connection Details</span>
                     </div>
                   </div>
 
-                  {fields.map(f => (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+                    <label className="text-sm font-semibold text-slate-700 block mb-1.5">Saved credential</label>
+                    <select
+                      value={formCredentialId}
+                      onChange={e => {
+                        setFormCredentialId(e.target.value);
+                        setFormCredentialFieldMap({});
+                      }}
+                      className="w-full text-sm px-3 py-2 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                    >
+                      <option value="">Use inline fields below</option>
+                      {availableCredentials.map(cred => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.name}{cred.username ? ` - ${cred.username}` : ''}{cred.type ? ` (${cred.type})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-blue-700 mt-1.5 leading-relaxed">
+                      Select a saved credential to reuse secrets from Credentials. Inline fields below can still hold non-secret endpoint details such as database, host, schema, or collection.
+                    </p>
+                  </div>
+
+                  {fields.map(f => {
+                    const fieldCanUseCredential = !!formCredentialId && credentialFieldKeys.length > 0 && canMapCredentialField(f);
+                    const fieldCredentialKeys = fieldCanUseCredential ? credentialFieldKeys : [];
+                    const fieldValue = formConfig[f.key] ?? f.defaultValue ?? '';
+                    const mappedCredentialKey = formCredentialFieldMap[f.key] || '';
+                    const menuKey = `create:${f.key}`;
+                    return (
                     <div key={f.key}>
                       <label className="text-sm font-semibold text-slate-700 block mb-1.5">
                         {f.label}{f.required && <span className="text-red-400 ml-0.5">*</span>}
@@ -2938,7 +3151,13 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                       {f.type === 'select' && f.options ? (
                         <select
                           value={formConfig[f.key] || f.defaultValue || ''}
-                          onChange={e => setFormConfig({ ...formConfig, [f.key]: e.target.value })}
+                          onChange={e => {
+                            const value = e.target.value;
+                            setFormConfig({ ...formConfig, [f.key]: value });
+                            const nextMap = { ...formCredentialFieldMap };
+                            delete nextMap[f.key];
+                            setFormCredentialFieldMap(nextMap);
+                          }}
                           className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                         >
                           <option value="">— Select —</option>
@@ -2963,22 +3182,77 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                           className="w-full text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 font-mono text-xs"
                         />
                       ) : (
-                        <input
-                          type={f.type === 'number' ? 'text' : f.type}
-                          inputMode={f.type === 'number' ? 'numeric' : undefined}
-                          value={formConfig[f.key] ?? f.defaultValue ?? ''}
-                          onChange={e => setFormConfig({ ...formConfig, [f.key]: e.target.value })}
-                          placeholder={f.placeholder}
-                          className={`w-full text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-                            f.required && !formConfig[f.key] ? 'border-slate-200' : 'border-slate-200'
-                          }`}
-                        />
+                        <div className="relative">
+                          <input
+                            type={f.type === 'number' || mappedCredentialKey ? 'text' : f.type}
+                            inputMode={f.type === 'number' ? 'numeric' : undefined}
+                            value={fieldValue}
+                            onChange={e => {
+                              const nextMap = { ...formCredentialFieldMap };
+                              delete nextMap[f.key];
+                              setFormCredentialFieldMap(nextMap);
+                              setFormConfig({ ...formConfig, [f.key]: e.target.value });
+                            }}
+                            placeholder={credentialFieldPlaceholder(f, fieldCanUseCredential)}
+                            className={`w-full text-sm px-3 py-2 ${fieldCanUseCredential ? 'pr-11' : ''} border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                              mappedCredentialKey ? 'border-blue-200 bg-blue-50 text-blue-800' : 'border-slate-200'
+                            }`}
+                          />
+                          {fieldCanUseCredential && (
+                            <button
+                              type="button"
+                              data-credential-field-picker="true"
+                              onClick={() => setCredentialFieldMenu(credentialFieldMenu === menuKey ? null : menuKey)}
+                              title={`Choose ${f.label} from saved credential`}
+                              className={`absolute inset-y-0 right-0 w-9 rounded-r-lg border-l text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                                mappedCredentialKey
+                                  ? 'border-blue-200 bg-blue-100 text-blue-700'
+                                  : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                              }`}
+                            >
+                              {mappedCredentialKey ? '✓' : '▾'}
+                            </button>
+                          )}
+                          {fieldCanUseCredential && credentialFieldMenu === menuKey && (
+                            <div data-credential-field-picker="true" className="absolute right-0 top-[calc(100%+4px)] z-50 w-56 rounded-lg border border-slate-200 bg-white shadow-xl py-1 max-h-56 overflow-auto">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextMap = { ...formCredentialFieldMap };
+                                  delete nextMap[f.key];
+                                  setFormCredentialFieldMap(nextMap);
+                                  setFormConfig({ ...formConfig, [f.key]: '' });
+                                  setCredentialFieldMenu(null);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${!mappedCredentialKey ? 'font-semibold text-blue-700 bg-blue-50' : 'text-slate-700'}`}
+                              >
+                                Manual entry
+                              </button>
+                              <div className="my-1 border-t border-slate-100" />
+                              {fieldCredentialKeys.map(key => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormCredentialFieldMap(updateFieldWithCredentialChoice(formCredentialFieldMap, f.key, key, credentialFieldKeys));
+                                    setFormConfig({ ...formConfig, [f.key]: key });
+                                    setCredentialFieldMenu(null);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-blue-50 ${mappedCredentialKey === key ? 'text-blue-700 bg-blue-50 font-semibold' : 'text-slate-700'}`}
+                                >
+                                  {key}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {f.hint && f.type !== 'checkbox' && (
                         <p className="text-xs text-slate-400 mt-0.5">{f.hint}</p>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
 
                 </div>
               )}
@@ -3115,7 +3389,9 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                     const target = formConfig['base_url'] || formConfig['host'] || formConfig['endpoint_url']
                       || formConfig['endpoint'] || formConfig['file_path'] || formConfig['bucket']
                       || formConfig['account_name'] || formConfig['account'] || '';
-                    const auth = formConfig['auth_method'] || (formConfig['username'] ? 'Basic auth' : formConfig['token'] || formConfig['api_key'] || formConfig['access_token'] ? 'API key' : 'None');
+                    const auth = selectedCredential
+                      ? `Saved credential: ${selectedCredential.name}`
+                      : formConfig['auth_method'] || (formConfig['username'] ? 'Basic auth' : formConfig['token'] || formConfig['api_key'] || formConfig['access_token'] ? 'API key' : 'None');
                     const scopeLabel = formScope === 'global' ? 'Global' : (formProjectId ? `Project · ${(projects.find(p => p.id === formProjectId)?.name) || formProjectId}` : 'Project (not picked)');
                     return (
                       <>
@@ -3131,10 +3407,12 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                           <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Scope</span>
                           <span className="text-slate-700">{scopeLabel}</span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Env</span>
-                          <span className="text-slate-700 uppercase">{formEnvironment === 'all' ? 'DEV + PROD' : formEnvironment}</span>
-                        </div>
+                        {isPlusTier && (
+                          <div className="flex items-center gap-3">
+                            <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Env</span>
+                            <span className="text-slate-700 uppercase">{formEnvironment === 'all' ? 'DEV + PROD' : formEnvironment}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <span className="w-20 text-xs font-semibold uppercase tracking-wider text-slate-400 shrink-0">Use as</span>
                           <span className="text-slate-700">
@@ -3151,7 +3429,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
               <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-b from-emerald-50/60 to-white">
                   <div className="text-xs font-bold uppercase tracking-wider text-emerald-700">Test connection</div>
-                  <p className="text-sm text-slate-500 mt-1 leading-relaxed">Validates credentials + reachability without saving. Probes from the F-Pulse host.</p>
+                  <p className="text-sm text-slate-500 mt-1 leading-relaxed">Validates credentials + reachability without saving. Source/Sink controls where the connection can be used; tests never perform sink writes.</p>
                 </div>
                 <div className="px-5 py-4 space-y-3.5">
                   <button
@@ -3257,6 +3535,8 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                       const t = pendingBetaType;
                       setPendingBetaType(null);
                       setFormType(t);
+                      setFormConfig(configWithFieldDefaults(t, {}));
+                      setFormCredentialFieldMap({});
                       setCreateStep(0);
                       if (WRITE_ONLY_TYPES.has(t)) {
                         setFormCanRead(false);
@@ -3283,7 +3563,10 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   if (view === 'edit' && selectedConnection) {
     const fields = formType ? (CONNECTION_FIELDS[formType] || CONNECTION_FIELDS['rest_api'] || []) : [];
     const meta = typeMeta(selectedConnection.type);
-    const editMissingRequired = fields.filter(f => f.required && !formConfig[f.key]);
+    const availableCredentials = credentials.filter(c => credentialMatchesEnvironment(c, effectiveFormEnvironment));
+    const selectedCredential = availableCredentials.find(c => c.id === formCredentialId);
+    const credentialFieldKeys = selectedCredential?.config ? Object.keys(selectedCredential.config) : [];
+    const editMissingRequired = fields.filter(f => f.required && !formConfig[f.key] && !parseCredentialToken(formConfig[f.key] || ''));
     const editBasicsReady = !!formName && (formScope !== 'project' || !!formProjectId) && (formCanRead || formCanWrite);
     const editDetailsReady = editMissingRequired.length === 0;
     const editCanSave = editBasicsReady && editDetailsReady;
@@ -3361,29 +3644,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  // Save form changes first so the test reflects what's on
-                  // screen, but stay on the editor so the user can iterate.
-                  // (handleUpdate redirects to list — we don't want that here.)
-                  if (!selectedConnection) return;
-                  try {
-                    if (formName && (formCanRead || formCanWrite)) {
-                      await api.updateConnection(selectedConnection.id, {
-                        name: formName,
-                        description: formDesc,
-                        config: formConfig,
-                        tags: formTags.split(',').map(t => t.trim()).filter(Boolean),
-                        project_id: formScope === 'project' ? formProjectId || null : null,
-                        environment: formEnvironment,
-                        capabilities: capabilitiesFromForm(formCanRead, formCanWrite),
-                      });
-                      loadConnections();
-                    }
-                  } catch (e: any) {
-                    toast.error('Save failed before test', e?.message || 'Unknown error');
-                  }
-                  handleTestConnection(selectedConnection.id);
-                }}
+                onClick={() => handleTestConnection(selectedConnection.id)}
                 className={`px-4 py-2 text-sm font-bold rounded-lg transition-all shadow-sm hover:shadow-md ${
                   environment === 'prod'
                     ? 'bg-emerald-700 text-white hover:bg-emerald-600'
@@ -3486,30 +3747,32 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                   </div>
                 </div>
 
-                <div>
-                  <label className="text-sm font-semibold text-slate-600 block mb-1.5">Environment</label>
-                  <div className="flex gap-2">
-                    {([
-                      { value: 'dev',  label: 'DEV only',  color: '#10b981' },
-                      { value: 'prod', label: 'PROD only', color: '#ef4444' },
-                      { value: 'all',  label: 'Both',      color: '#64748b' },
-                    ] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setFormEnvironment(opt.value)}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                          formEnvironment === opt.value
-                            ? 'text-white shadow-sm border-transparent'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
-                        }`}
-                        style={formEnvironment === opt.value ? { background: opt.color } : undefined}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                {isPlusTier && (
+                  <div>
+                    <label className="text-sm font-semibold text-slate-600 block mb-1.5">Environment</label>
+                    <div className="flex gap-2">
+                      {([
+                        { value: 'dev',  label: 'DEV only',  color: '#10b981' },
+                        { value: 'prod', label: 'PROD only', color: '#ef4444' },
+                        { value: 'all',  label: 'Both',      color: '#64748b' },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setFormEnvironment(opt.value)}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all border ${
+                            formEnvironment === opt.value
+                              ? 'text-white shadow-sm border-transparent'
+                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+                          }`}
+                          style={formEnvironment === opt.value ? { background: opt.color } : undefined}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="text-sm font-semibold text-slate-600 block mb-1.5">Use as</label>
@@ -3562,8 +3825,35 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                     <span className="text-sm font-bold uppercase tracking-wider text-slate-700">Connection Details</span>
                   </div>
 
+                  <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+                    <label className="text-sm font-semibold text-slate-700 block mb-1.5">Saved credential</label>
+                    <select
+                      value={formCredentialId}
+                      onChange={e => {
+                        setFormCredentialId(e.target.value);
+                        setFormCredentialFieldMap({});
+                      }}
+                      className="w-full text-sm px-4 py-2.5 border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                    >
+                      <option value="">Use inline fields below</option>
+                      {availableCredentials.map(cred => (
+                        <option key={cred.id} value={cred.id}>
+                          {cred.name}{cred.username ? ` - ${cred.username}` : ''}{cred.type ? ` (${cred.type})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-blue-700 mt-1.5 leading-relaxed">
+                      Saved credentials are merged at test and run time. Keep endpoint-specific fields here only when they are not already stored in the credential.
+                    </p>
+                  </div>
+
                   {fields.map(f => {
                     const inputCls = 'w-full text-sm px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300';
+                    const fieldCanUseCredential = !!formCredentialId && credentialFieldKeys.length > 0 && canMapCredentialField(f);
+                    const fieldCredentialKeys = fieldCanUseCredential ? credentialFieldKeys : [];
+                    const fieldValue = formConfig[f.key] ?? f.defaultValue ?? '';
+                    const mappedCredentialKey = formCredentialFieldMap[f.key] || '';
+                    const menuKey = `edit:${f.key}`;
                     return (
                     <div key={f.key}>
                       <label className="text-sm font-medium text-slate-600 block mb-1.5">
@@ -3572,7 +3862,13 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                       {f.type === 'select' && f.options ? (
                         <select
                           value={formConfig[f.key] || f.defaultValue || ''}
-                          onChange={e => setFormConfig({ ...formConfig, [f.key]: e.target.value })}
+                          onChange={e => {
+                            const value = e.target.value;
+                            setFormConfig({ ...formConfig, [f.key]: value });
+                            const nextMap = { ...formCredentialFieldMap };
+                            delete nextMap[f.key];
+                            setFormCredentialFieldMap(nextMap);
+                          }}
                           className={`${inputCls} bg-white`}
                         >
                           <option value="">— Select —</option>
@@ -3597,14 +3893,68 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                           className={`${inputCls} font-mono text-sm`}
                         />
                       ) : (
-                        <input
-                          type={f.type === 'number' ? 'text' : f.type}
-                          inputMode={f.type === 'number' ? 'numeric' : undefined}
-                          value={formConfig[f.key] ?? f.defaultValue ?? ''}
-                          onChange={e => setFormConfig({ ...formConfig, [f.key]: e.target.value })}
-                          placeholder={f.placeholder}
-                          className={inputCls}
-                        />
+                        <div className="relative">
+                          <input
+                            type={f.type === 'number' || mappedCredentialKey ? 'text' : f.type}
+                            inputMode={f.type === 'number' ? 'numeric' : undefined}
+                            value={fieldValue}
+                            onChange={e => {
+                              const nextMap = { ...formCredentialFieldMap };
+                              delete nextMap[f.key];
+                              setFormCredentialFieldMap(nextMap);
+                              setFormConfig({ ...formConfig, [f.key]: e.target.value });
+                            }}
+                            placeholder={credentialFieldPlaceholder(f, fieldCanUseCredential)}
+                            className={`${inputCls} ${fieldCanUseCredential ? 'pr-12' : ''} ${mappedCredentialKey ? 'border-blue-200 bg-blue-50 text-blue-800' : ''}`}
+                          />
+                          {fieldCanUseCredential && (
+                            <button
+                              type="button"
+                              data-credential-field-picker="true"
+                              onClick={() => setCredentialFieldMenu(credentialFieldMenu === menuKey ? null : menuKey)}
+                              title={`Choose ${f.label} from saved credential`}
+                              className={`absolute inset-y-0 right-0 w-9 rounded-r-lg border-l text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                                mappedCredentialKey
+                                  ? 'border-blue-200 bg-blue-100 text-blue-700'
+                                  : 'border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100'
+                              }`}
+                            >
+                              {mappedCredentialKey ? '✓' : '▾'}
+                            </button>
+                          )}
+                          {fieldCanUseCredential && credentialFieldMenu === menuKey && (
+                            <div data-credential-field-picker="true" className="absolute right-0 top-[calc(100%+4px)] z-50 w-56 rounded-lg border border-slate-200 bg-white shadow-xl py-1 max-h-56 overflow-auto">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextMap = { ...formCredentialFieldMap };
+                                  delete nextMap[f.key];
+                                  setFormCredentialFieldMap(nextMap);
+                                  setFormConfig({ ...formConfig, [f.key]: '' });
+                                  setCredentialFieldMenu(null);
+                                }}
+                                className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 ${!mappedCredentialKey ? 'font-semibold text-blue-700 bg-blue-50' : 'text-slate-700'}`}
+                              >
+                                Manual entry
+                              </button>
+                              <div className="my-1 border-t border-slate-100" />
+                              {fieldCredentialKeys.map(key => (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormCredentialFieldMap(updateFieldWithCredentialChoice(formCredentialFieldMap, f.key, key, credentialFieldKeys));
+                                    setFormConfig({ ...formConfig, [f.key]: key });
+                                    setCredentialFieldMenu(null);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm font-mono hover:bg-blue-50 ${mappedCredentialKey === key ? 'text-blue-700 bg-blue-50 font-semibold' : 'text-slate-700'}`}
+                                >
+                                  {key}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {f.hint && f.type !== 'checkbox' && (
                         <p className="text-xs mt-1 text-slate-400">{f.hint}</p>
@@ -3688,11 +4038,21 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       setFormName(selectedConnection.name);
       setFormType(selectedConnection.type);
       setFormDesc(selectedConnection.description || '');
-      setFormConfig(selectedConnection.config as Record<string, string>);
+      const rawConfig = { ...(selectedConnection.config as Record<string, any>) };
+      const rawFieldMap = rawConfig.credential_field_map && typeof rawConfig.credential_field_map === 'object'
+        ? rawConfig.credential_field_map as Record<string, string>
+        : {};
+      delete rawConfig.credential_field_map;
+      Object.entries(rawFieldMap).forEach(([targetKey, sourceKey]) => {
+        if (sourceKey) rawConfig[targetKey] = sourceKey;
+      });
+      setFormConfig(rawConfig as Record<string, string>);
+      setFormCredentialId(selectedConnection.credential_id || '');
+      setFormCredentialFieldMap(rawFieldMap);
       setFormTags((selectedConnection.tags || []).join(', '));
       setFormScope(selectedConnection.project_id ? 'project' : 'global');
       setFormProjectId(selectedConnection.project_id || '');
-      setFormEnvironment((selectedConnection.environment as 'dev' | 'prod' | 'all') || 'all');
+      setFormEnvironment(isPlusTier ? ((selectedConnection.environment as 'dev' | 'prod' | 'all') || 'all') : 'dev');
       const cf = formFromCapabilities(selectedConnection.capabilities);
       setFormCanRead(cf.canRead);
       setFormCanWrite(cf.canWrite);
@@ -3859,11 +4219,11 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
         <div className="max-w-[1400px] mx-auto">
 
           {/* ── STAT STRIP — at-a-glance metrics (2026-05-25 polish) ──
-              Four lightweight tiles: reports, used-by pipelines,
-              capabilities, environment. Anchors the top of the body so
+              Lightweight tiles: reports, used-by pipelines, capabilities,
+              and Plus-only environment. Anchors the top of the body so
               the page doesn't open with the eye dropping into config-
               field labels. */}
-          <div className="mb-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className={`mb-5 grid grid-cols-2 ${isPlusTier ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-3`}>
             {([
               {
                 label: 'Reports',
@@ -3885,12 +4245,12 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
                 suffix: undefined,
                 accent: 'bg-cyan-500',
               },
-              {
+              ...(isPlusTier ? [{
                 label: 'Environment',
                 value: (selectedConnection.environment || 'all').toUpperCase(),
                 suffix: undefined,
                 accent: selectedConnection.environment === 'prod' ? 'bg-red-500' : 'bg-slate-400',
-              },
+              }] : []),
             ] as Array<{ label: string; value: number | string; suffix?: string; accent: string }>).map((s) => (
               <div
                 key={s.label}

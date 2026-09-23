@@ -1275,7 +1275,7 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
           : { label: 'View Deployments', onClick: () => onNavigate('pipelines') })
       : { label: 'My Deployments', onClick: () => onNavigate('pipelines') };
     return isAdmin
-      ? { label: 'Team Activity', onClick: () => onNavigate('admin') }
+      ? { label: 'Team Activity', onClick: () => onNavigate('activity') }
       : { label: 'New Pipeline', onClick: () => onNavigate('templates') };
   })();
 
@@ -2326,6 +2326,9 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
             card was rendered unconditionally — the audit flagged
             this as "permanent marketing card in an operational
             dashboard reduces seriousness." */}
+        {/* F-Pulse+ open-core info card — informational, dismissible, hidden
+            on Plus tier. Restored to the Dashboard by request as the bottom
+            banner; the PROD toggle remains the other F-Pulse+ touchpoint. */}
         {!prodCardDismissed && tier !== 'plus' && (
         <section className="relative rounded-2xl overflow-hidden border border-amber-200 shadow-sm bg-gradient-to-br from-amber-50 via-white to-orange-50">
           {/* Accent stripe — amber/gold matches the F-Pulse brand mark */}

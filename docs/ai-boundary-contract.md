@@ -45,6 +45,22 @@ The send-rules table below is normative. New tools must extend this table before
 | `auto_fill_config(node_type, upstream_schema)` | Node type, upstream column names + types | Sample values |
 | `compute_approval_plan(pipeline_id, target_env)` | Pipeline ID, env, current approval state | (no LLM call — deterministic) |
 | `check_connector_health(connector_id)` | Connector type, last test status, latency | Credential fields |
+| `draft_connector_from_openapi(connector_id, openapi_url\|openapi_text\|openapi_spec)` | The OpenAPI spec's structure (paths, schemas, auth *scheme types*), discovered endpoint names | API keys / tokens — the manifest holds auth **templates** only (e.g. `Bearer {token}`); the real secret is entered later on the Connection |
+| `web_fetch(url)` — opt-in | The public URL, and the fetched page text (≤1 MB, public hosts only) | Anything on a private/loopback/metadata host (SSRF-blocked); no request body is sent |
+| `web_search(query, count)` — opt-in | The search query string | (query goes to the operator-configured search provider only when web access is explicitly enabled) |
+
+### Opt-in web access (default OFF)
+
+The Copilot has **no web access by default** — F-Pulse is local-first. The
+`web_fetch` and `web_search` tools are registered only when an admin turns web
+access on — either via **Settings → AI Provider → "Copilot web access"** (a
+live toggle, no restart) or the `FPULSE_AI_WEB_ACCESS=1` env var; until then the
+LLM never sees them. `web_fetch` is
+SSRF-hardened (private/loopback/metadata hosts blocked unless
+`FPULSE_AI_WEB_ALLOW_PRIVATE=1`) and capped at 1 MB. `web_search` calls only the
+search provider the operator configures (`FPULSE_WEB_SEARCH_PROVIDER` +
+`FPULSE_WEB_SEARCH_API_KEY`); with none configured it returns a "not configured"
+message rather than reaching any network.
 
 ### Universal redaction (applied AFTER per-tool field selection, BEFORE LLM call)
 

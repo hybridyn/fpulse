@@ -121,6 +121,12 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
   });
   const [displayName, setDisplayName] = useState('');
   const [openapiUrl, setOpenapiUrl] = useState('');
+  // OpenAPI can come from a public URL the server fetches, OR from a spec the
+  // user pastes / uploads — the latter is the path for gated vendor APIs (e.g.
+  // FactoHR) whose spec isn't hosted at a public URL. Parsed server-side so
+  // both JSON and YAML work with no frontend YAML dependency.
+  const [openapiSource, setOpenapiSource] = useState<'url' | 'paste'>('url');
+  const [openapiText, setOpenapiText] = useState('');
   const [samplesText, setSamplesText] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [streamName, setStreamName] = useState('');
@@ -129,6 +135,24 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => { setResult(null); setError(null); };
+
+  // Read an uploaded spec file into the paste box. Keeps the whole flow
+  // client-side until Generate, and derives a connector_id from the filename
+  // when the user hasn't typed one yet.
+  const onSpecFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setOpenapiText(typeof reader.result === 'string' ? reader.result : '');
+      if (!connectorId.trim()) {
+        const base = file.name.replace(/\.(json|ya?ml)$/i, '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        if (base) setConnectorId(base.slice(0, 64));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';  // allow re-uploading the same filename
+  };
 
   // 2026-05-29: pre-fill from URL query params. Gallery + empty-state
   // links route here as `#author?prefill_id=stripe&prefill_url=...`
@@ -193,13 +217,22 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
       let endpoint: string;
 
       if (mode === 'openapi') {
-        if (!openapiUrl.trim()) { setError('Provide an OpenAPI URL'); setLoading(false); return; }
         endpoint = '/connectors/author/from-openapi';
-        body = {
-          connector_id: connectorId.trim(),
-          display_name: displayName.trim() || undefined,
-          openapi_url: openapiUrl.trim(),
-        };
+        if (openapiSource === 'paste') {
+          if (!openapiText.trim()) { setError('Paste or upload an OpenAPI spec'); setLoading(false); return; }
+          body = {
+            connector_id: connectorId.trim(),
+            display_name: displayName.trim() || undefined,
+            openapi_text: openapiText,
+          };
+        } else {
+          if (!openapiUrl.trim()) { setError('Provide an OpenAPI URL'); setLoading(false); return; }
+          body = {
+            connector_id: connectorId.trim(),
+            display_name: displayName.trim() || undefined,
+            openapi_url: openapiUrl.trim(),
+          };
+        }
       } else {
         let parsed: any;
         try { parsed = JSON.parse(samplesText); }
@@ -268,9 +301,10 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
       setSaveMsg('Save & use currently supports the OpenAPI path; for samples, download the manifest for now.');
       return;
     }
-    if (!connectorId.trim() || !openapiUrl.trim()) {
+    const specReady = openapiSource === 'paste' ? !!openapiText.trim() : !!openapiUrl.trim();
+    if (!connectorId.trim() || !specReady) {
       setSaveState('error');
-      setSaveMsg('Need a connector id and an OpenAPI URL.');
+      setSaveMsg('Need a connector id and an OpenAPI spec (a URL or a pasted/uploaded spec).');
       return;
     }
     setSaveState('saving');
@@ -279,7 +313,9 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
       const rt = await api.post<{ manifest: any }>('/connectors/author/from-openapi-runtime', {
         connector_id: connectorId.trim(),
         display_name: displayName.trim() || undefined,
-        openapi_url: openapiUrl.trim(),
+        ...(openapiSource === 'paste'
+          ? { openapi_text: openapiText }
+          : { openapi_url: openapiUrl.trim() }),
       });
       const res = await api.post<{ name: string; streams: number }>(
         '/connectors/author/save', { manifest: rt.manifest },
@@ -306,7 +342,9 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
   } focus:outline-none focus:ring-2 focus:ring-pipe-300`;
   const labelCls = `block text-sm font-semibold mb-1.5 ${dark ? 'text-slate-200' : 'text-slate-700'}`;
   const helperCls = `text-xs mt-1 ${dark ? 'text-slate-400' : 'text-slate-500'}`;
-  const sourceReady = mode === 'openapi' ? !!openapiUrl.trim() : !!samplesText.trim();
+  const sourceReady = mode === 'openapi'
+    ? (openapiSource === 'url' ? !!openapiUrl.trim() : !!openapiText.trim())
+    : !!samplesText.trim();
   const basicsReady = !!connectorId.trim();
   const canGenerate = basicsReady && sourceReady && !loading;
   const steps: Array<{ key: 0 | 1 | 2; label: string; detail: string }> = [
@@ -547,17 +585,68 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
 
             <div className={authorStep === 1 ? 'space-y-4' : 'hidden'}>
             {mode === 'openapi' ? (
-              <div>
-                <label className={labelCls}>OpenAPI spec URL <span className="text-red-500">*</span></label>
-                <input
-                  value={openapiUrl}
-                  onChange={e => setOpenapiUrl(e.target.value)}
-                  placeholder="https://api.example.com/openapi.json"
-                  className={inputCls}
-                />
-                <div className={helperCls}>
-                  Public URL to a JSON or YAML OpenAPI 3.x spec. We'll fetch it server-side.
+              <div className="space-y-3">
+                {/* URL vs paste/upload — many vendors gate their spec behind a
+                    login, so a public URL isn't always available. */}
+                <div className={`inline-flex rounded-lg p-0.5 ${dark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                  {([['url', 'From URL'], ['paste', 'Paste / upload spec']] as const).map(([val, lbl]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => { setOpenapiSource(val); reset(); }}
+                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                        openapiSource === val
+                          ? (dark ? 'bg-slate-700 text-white' : 'bg-white text-slate-800 shadow-sm')
+                          : (dark ? 'text-slate-400' : 'text-slate-500')
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
                 </div>
+
+                {openapiSource === 'url' ? (
+                  <div>
+                    <label className={labelCls}>OpenAPI spec URL <span className="text-red-500">*</span></label>
+                    <input
+                      value={openapiUrl}
+                      onChange={e => setOpenapiUrl(e.target.value)}
+                      placeholder="https://api.example.com/openapi.json"
+                      className={inputCls}
+                    />
+                    <div className={helperCls}>
+                      Public URL to a JSON or YAML OpenAPI 3.x spec. We'll fetch it server-side.
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className={labelCls}>OpenAPI spec (JSON or YAML) <span className="text-red-500">*</span></label>
+                      <label className={`cursor-pointer text-xs font-semibold px-2.5 py-1 rounded-md border ${
+                        dark ? 'border-slate-600 text-slate-200 hover:bg-slate-800' : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                      }`}>
+                        Upload file…
+                        <input
+                          type="file"
+                          accept=".json,.yaml,.yml,application/json,text/yaml"
+                          onChange={onSpecFile}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    <textarea
+                      value={openapiText}
+                      onChange={e => setOpenapiText(e.target.value)}
+                      rows={12}
+                      placeholder={'{\n  "openapi": "3.0.0",\n  "info": { "title": "FactoHR" },\n  "paths": { ... }\n}'}
+                      className={`${inputCls} font-mono`}
+                    />
+                    <div className={helperCls}>
+                      Paste the spec your vendor gave you, or upload the file — nothing leaves your
+                      instance. Works for private APIs (e.g. FactoHR) that don't publish a public URL.
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -619,7 +708,7 @@ export default function ConnectorAuthorPage({ embedded = false }: { embedded?: b
                 )}
                 {!sourceReady && (
                   <div className={`text-xs rounded-lg px-3 py-2 ${dark ? 'bg-amber-500/10 text-amber-200' : 'bg-amber-50 text-amber-700'}`}>
-                    Add {mode === 'openapi' ? 'an OpenAPI spec URL' : 'sample JSON'} before generating.
+                    Add {mode === 'openapi' ? (openapiSource === 'url' ? 'an OpenAPI spec URL' : 'an OpenAPI spec') : 'sample JSON'} before generating.
                   </div>
                 )}
               </div>

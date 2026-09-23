@@ -159,7 +159,16 @@ backend/_regress.txt
 
 # Local validation / run artifacts (not for the repo)
 .fpulse-validation-*.txt
-# Staged frontend build — copied from frontend/dist by
-# scripts/stage_frontend.py so the wheel can carry the UI.
-# Build artifact, never source: it is rewritten on every stage.
-backend/fpulse/frontend_dist/
+
+# Local verification environments and generated distribution staging
+/.venv-ci/
+/.pytest-tmp/
+/.tmp-validation-logs/
+/backend/.tmp-pytest/
+/frontend/.test-results/
+/backend/fpulse/frontend_dist/
+/backend/fpulse/docs/
+/backend/fpulse/CHANGELOG.md
+/backend/fpulse/connectors/ci/last_local_status.json
+/backend/fpulse/connectors/ci/last_replay_status.json
+/Environment

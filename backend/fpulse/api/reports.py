@@ -434,6 +434,7 @@ _DOC_CATALOG: list[dict] = [
         "summary": "Entry point — map of every available document.",
         "admin_only": False,
         "plus_only": False,
+        "repo_root": True,
     },
     {
         "path": "quickstart.md",
@@ -472,6 +473,14 @@ _DOC_CATALOG: list[dict] = [
         "title": "Pipelines",
         "audience": "All users",
         "summary": "Build, test, validate, run, schedule, monitor, archive, clone, export.",
+        "admin_only": False,
+        "plus_only": False,
+    },
+    {
+        "path": "pipeline-documentation.md",
+        "title": "Self-documenting pipelines",
+        "audience": "All users",
+        "summary": "Business purpose (required to publish), README, tags, and one-click Markdown docs generated from the pipeline itself.",
         "admin_only": False,
         "plus_only": False,
     },
@@ -862,14 +871,6 @@ _DOC_CATALOG: list[dict] = [
         "admin_only": True,
         "plus_only": True,
     },
-    {
-        "path": "admin/runbook.md",
-        "title": "Administrator Runbook",
-        "audience": "Operators, SREs",
-        "summary": "Install, backup, retention, drift, observability, upgrade.",
-        "admin_only": True,
-        "plus_only": True,
-    },
 ]
 
 
@@ -880,10 +881,14 @@ def _is_admin_like(user) -> bool:
 
 
 def _docs_root() -> Path:
-    """Resolve the docs/ directory next to the running backend."""
-    # backend/fpulse/api/reports.py → backend/fpulse/api
-    # → ../../.. = repo root; repo_root/docs.
+    """Resolve docs/ for source checkouts and PyPI wheel installs."""
     here = Path(__file__).resolve()
+    packaged_docs = here.parents[1] / "docs"
+    if packaged_docs.is_dir():
+        return packaged_docs
+
+    # backend/fpulse/api/reports.py -> backend/fpulse/api
+    # -> ../../.. = repo root; repo_root/docs.
     repo_root = here.parents[3]   # fpulse-f-pulse/
     return repo_root / "docs"
 

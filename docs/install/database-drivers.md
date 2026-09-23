@@ -11,11 +11,10 @@ Connections page with the exact install command. This page is the
 master reference for every install command and any OS-level driver
 that needs to live alongside the Python wheel.
 
-> **At launch, `fpulse` is not on PyPI yet.** Until it's published, install
-> from a source checkout — replace `pip install fpulse[x]` anywhere on this
-> page with `pip install -e ".[x]"`, run from the repo root (e.g.
-> `pip install -e ".[postgres]"`). The `pip install fpulse[x]` shorthand
-> shown below works unchanged once F-Pulse is published to PyPI.
+`fpulse` is published on PyPI. Use the `pip install fpulse[x]` commands
+below for normal installs. If you are developing from a source checkout,
+use the editable equivalent from the repo root, for example
+`pip install -e ".[postgres]"`.
 
 ## TL;DR
 

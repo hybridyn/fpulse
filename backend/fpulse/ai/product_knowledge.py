@@ -69,10 +69,13 @@ def _content_hash(text: str) -> str:
 
 
 def _product_facts_dir() -> Path:
-    """Resolve docs/product_facts/ regardless of cwd. Looks up via the
-    package — the repo layout fixes this relative path."""
-    # backend/fpulse/ai/product_knowledge.py → repo root is 4 parents up.
+    """Resolve docs/product_facts/ in source and PyPI wheel installs."""
     here = Path(__file__).resolve()
+    packaged = here.parents[1] / "docs" / "product_facts"
+    if packaged.is_dir():
+        return packaged
+
+    # backend/fpulse/ai/product_knowledge.py -> repo root is 4 parents up.
     repo_root = here.parents[3]
     return repo_root / "docs" / "product_facts"
 
