@@ -13,6 +13,21 @@ require a major bump and a deprecation window of at least one minor.
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-23
+
+Patch release. Dependency fix only — no functional changes to the engine,
+UI, or API surface.
+
+### Fixed
+- **Installs on Intel Macs (`darwin` / `x86_64`).** `cryptography` 49+
+  publishes macOS wheels for Apple Silicon only, so `pip install fpulse` on an
+  Intel Mac fell back to building the sdist — which downloads a Rust toolchain
+  and then fails in `openssl-sys` with *"Could not find directory of OpenSSL
+  installation"* on a machine without OpenSSL headers. The dependency is now
+  capped to `<49` on that platform alone (48.0.1 is the last release with a
+  `macosx_10_9_universal2` wheel); every other platform continues to resolve
+  to the latest `cryptography`. Reported on Python 3.12 / macOS Intel.
+
 ## [1.0.0] — 2026-07-20
 
 First stable release of F-Pulse OSS — a single-binary, local-first data

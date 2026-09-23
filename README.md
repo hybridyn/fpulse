@@ -13,17 +13,17 @@
   <a href="https://github.com/hybridyn/fpulse/actions/workflows/security-scan.yml"><img src="https://github.com/hybridyn/fpulse/actions/workflows/security-scan.yml/badge.svg?branch=main" alt="Security Scan"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License: Apache 2.0"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.0-blue" alt="Status: 1.0.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.1-blue" alt="Status: 1.0.1"></a>
 </p>
 
 Single-binary, local-first data pipeline engine. Clone it, `pip install -e .`, `fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
 
-> **Status:** 1.0.0 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
+> **Status:** 1.0.1 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
 >
-> **Install today: from source or Docker** — both are one command and fully
-> supported ([Quick start](#quick-start)). `pip install fpulse` and the
-> prebuilt desktop installers are not published yet; the sections below say
-> so where it matters rather than pointing you at a 404.
+> **Install today: PyPI, from source, or Docker** — each is one command and
+> fully supported ([Quick start](#quick-start)). The prebuilt desktop
+> installers are not published yet; the sections below say so where it
+> matters rather than pointing you at a 404.
 
 ## Why F-Pulse
 
@@ -66,12 +66,16 @@ Want the native app anyway? Build it yourself in one command — see
 [`installer/readme.md`](installer/readme.md) — and click through the warning.
 Signed installers land once we have an EV certificate + Apple notarization.
 
-**Not on the public registries yet** (we'd rather say so than send you to a 404):
+`pip install fpulse` works — the package is on
+[PyPI](https://pypi.org/project/fpulse/). `docker pull hybridyn/fpulse` is not
+on Docker Hub yet, but **you don't need it**: `docker compose up` builds the
+image locally on first run (see below).
 
-| Not yet available | Use this instead |
-|---|---|
-| `pip install fpulse` | Builds and runs, just not on PyPI yet — use **From source** below (one extra command). |
-| `docker pull hybridyn/fpulse` | Not on Docker Hub yet, but **you don't need it** — `docker compose up` builds it locally on first run (see below). |
+> **Intel Macs (x86_64).** `cryptography` 49+ publishes macOS wheels for Apple
+> Silicon only, so pip falls back to a source build that needs Rust and OpenSSL
+> headers, failing with `openssl-sys: Could not find directory of OpenSSL
+> installation`. 1.0.1 caps that dependency to the last Intel-compatible
+> release. On 1.0.0, run `pip install "cryptography<49"` first.
 
 > **Behind a corporate / office proxy?** If `pip install` — or the first-time
 > `docker compose up` build, which runs `pip` *inside* the image — fails with
