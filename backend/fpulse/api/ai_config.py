@@ -361,7 +361,7 @@ async def test_config(
             "provider": provider,
             "model": model,
             "latency_ms": int((time.monotonic() - started) * 1000),
-            "detail": f"probe error: {exc}",
+            "detail": _friendly_probe_error(exc),
         }
 
     return {
@@ -391,6 +391,39 @@ def _probe_ssrf_guard(base_url: str, user) -> None:
             raise HTTPException(
                 403, "Testing a private/internal host is restricted to admins."
             )
+
+
+def _ai_verify():
+    """httpx ``verify`` for outbound AI provider calls.
+
+    Lets users behind a TLS-intercepting proxy or antivirus (corporate MITM,
+    Kaspersky, Zscaler, ...) connect. The interceptor presents its OWN root CA,
+    which isn't in certifi's bundle, so the default verify fails with
+    ``CERTIFICATE_VERIFY_FAILED: self-signed certificate in certificate chain``.
+
+      * ``FPULSE_AI_CA_BUNDLE`` / ``REQUESTS_CA_BUNDLE`` / ``SSL_CERT_FILE`` -> a CA
+        bundle that includes the interceptor's root (SECURE — recommended)
+      * otherwise -> public bundle plus operating-system trusted certificates
+
+    Verification is always enabled; invalid explicit bundles fail closed.
+    """
+    from fpulse.ai.tls import ai_ssl_context
+    return ai_ssl_context()
+
+
+def _friendly_probe_error(exc: Exception) -> str:
+    """Turn an opaque probe exception into an actionable message for the UI."""
+    msg = str(exc)
+    low = msg.lower()
+    if ("certificate_verify_failed" in low or "self-signed certificate" in low
+            or "self signed certificate" in low):
+        return (
+            "TLS certificate verification failed. Check your system clock and trusted "
+            "certificates. If your network uses HTTPS inspection, ask your administrator "
+            "for its trusted CA bundle, set FPULSE_AI_CA_BUNDLE to that PEM file, "
+            "and restart F-Pulse. Certificate verification remains enabled."
+        )
+    return f"probe error: {msg}"
 
 
 async def _probe_provider(
@@ -441,7 +474,7 @@ async def _probe_provider(
 async def _probe_claude(*, api_key: str, model: str) -> tuple[bool, str]:
     if not api_key:
         return False, "api_key required"
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, verify=_ai_verify()) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -460,21 +493,35 @@ async def _probe_claude(*, api_key: str, model: str) -> tuple[bool, str]:
     return False, f"{resp.status_code} {resp.text[:200]}"
 
 
+async def _post_openai_chat(client, url: str, headers: dict, model: str, *, extra_headers: dict | None = None):
+    """POST a 1-shot OpenAI-schema chat completion, tolerating the
+    ``max_tokens`` -> ``max_completion_tokens`` transition on newer models.
+
+    OpenAI's newer models reject ``max_tokens`` (400: "Unsupported parameter:
+    'max_tokens' is not supported with this model. Use 'max_completion_tokens'
+    instead."). We don't hard-code which models need which param — the naming
+    keeps shifting and the model choice is the user's — so we send the classic
+    ``max_tokens`` and, only on that specific 400, retry once with
+    ``max_completion_tokens``. Old models keep working; new ones self-heal.
+    """
+    hdrs = dict(headers)
+    if extra_headers:
+        hdrs.update(extra_headers)
+    base = {"model": model, "messages": [{"role": "user", "content": "ping"}]}
+    resp = await client.post(url, headers=hdrs, json={**base, "max_tokens": 8})
+    if resp.status_code == 400 and "max_completion_tokens" in resp.text.lower():
+        resp = await client.post(url, headers=hdrs, json={**base, "max_completion_tokens": 8})
+    return resp
+
+
 async def _probe_openai(*, api_key: str, model: str) -> tuple[bool, str]:
     if not api_key:
         return False, "api_key required"
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "ping"}],
-                "max_tokens": 8,
-            },
+    async with httpx.AsyncClient(timeout=15, verify=_ai_verify()) as client:
+        resp = await _post_openai_chat(
+            client, "https://api.openai.com/v1/chat/completions",
+            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            model,
         )
     if resp.status_code == 200:
         return True, f"model ok: {model}"
@@ -486,7 +533,7 @@ async def _probe_ollama(*, base_url: str, model: str) -> tuple[bool, str]:
     is reachable and the model is pulled.
     """
     url = base_url.rstrip("/") + "/api/tags"
-    async with httpx.AsyncClient(timeout=5) as client:
+    async with httpx.AsyncClient(timeout=5, verify=_ai_verify()) as client:
         try:
             resp = await client.get(url)
         except Exception as exc:
@@ -506,7 +553,7 @@ async def _probe_azure(*, api_key: str, base_url: str, model: str) -> tuple[bool
     if not base_url:
         return False, "azure requires base_url (deployment endpoint)"
     # Azure deployments vary; we just confirm the endpoint responds.
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, verify=_ai_verify()) as client:
         try:
             resp = await client.get(
                 base_url.rstrip("/"),
@@ -529,7 +576,7 @@ async def _probe_gemini(*, api_key: str, model: str) -> tuple[bool, str]:
         f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         f"?key={api_key}"
     )
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, verify=_ai_verify()) as client:
         resp = await client.post(
             url,
             json={
@@ -551,18 +598,11 @@ async def _probe_openai_compatible(
     """
     if not api_key:
         return False, "api_key required"
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            base_url.rstrip("/") + "/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "ping"}],
-                "max_tokens": 8,
-            },
+    async with httpx.AsyncClient(timeout=15, verify=_ai_verify()) as client:
+        resp = await _post_openai_chat(
+            client, base_url.rstrip("/") + "/chat/completions",
+            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            model,
         )
     if resp.status_code == 200:
         return True, f"model ok: {model}"
@@ -580,20 +620,12 @@ async def _probe_openrouter(*, api_key: str, model: str) -> tuple[bool, str]:
         return False, "api_key required"
     referer = os.environ.get("FPULSE_OPENROUTER_REFERER", "https://hybridyn.example/fpulse")
     title = os.environ.get("FPULSE_OPENROUTER_TITLE", "F-Pulse")
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": referer,
-                "X-Title": title,
-            },
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "ping"}],
-                "max_tokens": 8,
-            },
+    async with httpx.AsyncClient(timeout=15, verify=_ai_verify()) as client:
+        resp = await _post_openai_chat(
+            client, "https://openrouter.ai/api/v1/chat/completions",
+            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            model,
+            extra_headers={"HTTP-Referer": referer, "X-Title": title},
         )
     if resp.status_code == 200:
         return True, f"model ok: {model}"

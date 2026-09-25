@@ -6,19 +6,37 @@ Run your first F-Pulse pipeline in 5 minutes.
 
 ### Option 1: PyPI
 
-Needs Python 3.11+.
+**F-Pulse requires Python 3.11 or newer** — check first, since an older Python
+is the most common install failure:
+
+```bash
+py --version         # Windows
+python3 --version    # macOS / Linux  (must print 3.11.x or higher)
+```
+
+**Windows** — use the `py` launcher (avoids Python `Scripts`/PATH shortcut issues):
 
 ```powershell
-# Windows: avoids Python Scripts/PATH shortcut issues
 py -m pip install --upgrade fpulse
 py -m fpulse open
 ```
 
-If `py` is unavailable, or on macOS/Linux, use:
+**macOS / Linux** — use `python3` (modern macOS ships `python3`, not `python`):
 
-```powershell
-python -m pip install --upgrade fpulse
-python -m fpulse open
+```bash
+python3 -m pip install --upgrade fpulse
+python3 -m fpulse open
+```
+
+**Recommended: install into a virtual environment** — it isolates F-Pulse and
+avoids the Homebrew/Debian `externally-managed-environment` error. Inside the
+venv, plain `python`, `pip`, and `fpulse` all work:
+
+```bash
+python3 -m venv ~/fpulse-venv
+source ~/fpulse-venv/bin/activate        # Windows: fpulse-venv\Scripts\activate
+pip install --upgrade fpulse
+fpulse open
 ```
 
 `python -m fpulse open` starts on port `8001` when it is free. If another process

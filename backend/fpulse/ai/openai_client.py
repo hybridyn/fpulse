@@ -16,10 +16,13 @@ function:{name, arguments}}` where `arguments` is a JSON-encoded string.
 from __future__ import annotations
 
 import json
+import re
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from fpulse.ai.tls import ai_ssl_context
 
 from fpulse.ai.agent import LLMResponse, LLMToolUse
 
@@ -76,14 +79,15 @@ class OpenAIAgentClient:
                     "function": {
                         "name": t.get("name", ""),
                         "description": t.get("description", ""),
-                        "parameters": t.get("input_schema") or {"type": "object", "properties": {}},
+                        "parameters": _openai_schema(t.get("input_schema") or {"type": "object", "properties": {}}),
+                        "strict": False,
                     },
                 }
                 for t in tools
             ]
             # Default tool_choice="auto" — model decides when to call tools.
 
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+        async with httpx.AsyncClient(timeout=self.timeout_seconds, verify=ai_ssl_context()) as client:
             resp = await client.post(
                 self.api_url,
                 headers={
@@ -92,10 +96,76 @@ class OpenAIAgentClient:
                 },
                 json=body,
             )
-            resp.raise_for_status()
+            if _requires_completion_tokens(resp):
+                body["max_completion_tokens"] = body.pop("max_tokens")
+                resp = await client.post(
+                    self.api_url,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=body,
+                )
+            if resp.is_error:
+                reasons = {
+                    400: "Request rejected. Check model and supported request parameters.",
+                    401: "API key rejected. Check the saved credential.",
+                    403: "Access denied. Check model and project permissions.",
+                    404: "Model or endpoint unavailable to this account.",
+                    429: "Rate limit or quota exceeded. Check provider usage and billing.",
+                }
+                raise RuntimeError(f"OpenAI HTTP {resp.status_code}{_error_fields(resp)}: " + reasons.get(
+                    resp.status_code, "Provider request failed. Retry later or check provider status."))
             data = resp.json()
 
         return _parse_openai_response(data)
+
+
+def _openai_schema(schema: dict) -> dict:
+    """Make object properties explicit without closing dynamic argument maps."""
+    result = deepcopy(schema)
+    def visit(node):
+        if not isinstance(node, dict):
+            return
+        kind = node.get("type")
+        if kind == "object" or (isinstance(kind, list) and "object" in kind):
+            node.setdefault("properties", {})
+        for field in ("properties", "$defs", "definitions", "patternProperties"):
+            for child in (node.get(field) or {}).values():
+                visit(child)
+        for field in ("items", "additionalProperties", "not", "if", "then", "else"):
+            visit(node.get(field))
+        for field in ("allOf", "anyOf", "oneOf", "prefixItems"):
+            for child in node.get(field) or []:
+                visit(child)
+    visit(result)
+    return result
+
+
+def _error_fields(response: httpx.Response) -> str:
+    # Do not reflect provider messages: they can echo prompts or credentials.
+    try:
+        error = response.json().get("error") or {}
+        fields = []
+        for key in ("code", "param"):
+            value = error.get(key)
+            if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.\[\]-]{1,96}", value):
+                fields.append(f"{key}={value}")
+        return f" ({', '.join(fields)})" if fields else ""
+    except (ValueError, AttributeError):
+        return ""
+
+
+def _requires_completion_tokens(response: httpx.Response) -> bool:
+    if response.status_code != 400:
+        return False
+    try:
+        error = response.json().get("error", {})
+        return (
+            isinstance(error, dict)
+            and error.get("param") == "max_tokens"
+            and error.get("code") == "unsupported_parameter"
+            and "max_completion_tokens" in str(error.get("message", ""))
+        )
+    except (ValueError, AttributeError):
+        return False
 
 
 def _translate_messages(system: str, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
