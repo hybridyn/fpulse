@@ -82,6 +82,10 @@ from .foreseer import (
     detect_volume_anomalies,
     modified_zscore,
 )
+# 2026-09-27 — cadence: automatic learned-run-cadence (freshness) anomaly
+# (CADENCE_MISS, DATA level). Threshold-free companion to quality's
+# FRESHNESS_MISS, over the same CostEvent timestamps. No new ingestion.
+from .cadence import detect_cadence_misses
 from .memory import StewardMemory, new_scan_id, apply_learning, sanitize_user_note
 from .pii import (
     PIIFindingStore,
@@ -196,6 +200,7 @@ __all__ = [
     "detect_cost_findings",
     "summarise_by_source",
     "detect_volume_anomalies",
+    "detect_cadence_misses",
     "modified_zscore",
     "PIIFindingStore",
     "check_columns_for_pii",
