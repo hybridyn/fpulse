@@ -143,6 +143,28 @@ def _receipt_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()
 
 
+def _receipt_payload(
+    contract: ExecutionContract,
+    run_id: str,
+    verdict: str,
+    clauses: list[ClauseResult],
+    verified_at: str,
+    prev_hash: str | None,
+    resumed_from: str | int | None,
+) -> dict[str, Any]:
+    """The canonical object a receipt hashes over. Shared by ``verify_contract``
+    (to produce a hash) and ``chain.verify_chain`` (to recompute one)."""
+    return {
+        "contract": contract.model_dump(mode="json"),
+        "run_id": run_id,
+        "verdict": verdict,
+        "clauses": [c.model_dump(mode="json") for c in clauses],
+        "verified_at": verified_at,
+        "prev_hash": prev_hash,
+        "resumed_from": resumed_from,
+    }
+
+
 def verify_contract(
     contract: ExecutionContract,
     run: WorkflowRunResult,
@@ -167,16 +189,9 @@ def verify_contract(
     ts = (now or datetime.now(timezone.utc)).isoformat()
     rid = run_id or run.workflow_id
 
-    payload = {
-        "contract": contract.model_dump(mode="json"),
-        "run_id": rid,
-        "verdict": verdict,
-        "clauses": [c.model_dump(mode="json") for c in clauses],
-        "verified_at": ts,
-        "prev_hash": prev_hash,
-        "resumed_from": resumed_from,
-    }
-    receipt = _receipt_hash(payload)
+    receipt = _receipt_hash(
+        _receipt_payload(contract, rid, verdict, clauses, ts, prev_hash, resumed_from)
+    )
 
     return ContractVerification(
         contract_id=contract.id,
