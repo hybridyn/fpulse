@@ -28,7 +28,12 @@ _BACKEND = os.path.join(_ROOT, "backend")
 if os.path.isdir(_BACKEND) and _BACKEND not in sys.path:
     sys.path.insert(0, _BACKEND)
 
-from fpulse.contracts import ExecutionContract, verify_run  # noqa: E402
+from fpulse.contracts import (  # noqa: E402
+    ContractVerification,
+    ExecutionContract,
+    verify_chain,
+    verify_run,
+)
 from fpulse.ir.schema import StepRunResult, WorkflowRunResult  # noqa: E402
 
 
@@ -79,6 +84,25 @@ def _load(path: str) -> dict:
         return json.load(f)
 
 
+def _verify_chain_cmd(a) -> int:
+    receipts = [ContractVerification(**d) for d in _load(a.verify_chain)]
+    contracts = None
+    if a.contracts:
+        raw = _load(a.contracts)
+        items = raw.values() if isinstance(raw, dict) else raw
+        contracts = {}
+        for d in items:
+            c = ExecutionContract(**d)
+            contracts[c.id] = c
+    result = verify_chain(receipts, contracts=contracts)
+    mode = "linkage + recompute" if result.checked_hashes else "linkage only"
+    if result.ok:
+        print(f"✓ CHAIN OK - {result.count} receipt(s), {mode}")
+        return 0
+    print(f"✗ CHAIN BROKEN at index {result.broken_at} ({mode}): {result.reason}")
+    return 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Verify an Execution Contract against a run result.")
     ap.add_argument("--demo", action="store_true", help="run the built-in Oracle-timesheet-resume scenario")
@@ -87,7 +111,12 @@ def main(argv=None) -> int:
     ap.add_argument("--facts", help="path to a facts JSON (duplicate_key_counts / checkpoint_enabled / ...)")
     ap.add_argument("--resumed-from", help="what the run resumed from (a run id, window index, unit)")
     ap.add_argument("--out", help="write the full receipt JSON here")
+    ap.add_argument("--verify-chain", help="path to a JSON list of receipts to verify as a chain")
+    ap.add_argument("--contracts", help="path to contracts (list or {id: contract}) for full hash recompute")
     a = ap.parse_args(argv)
+
+    if a.verify_chain:
+        return _verify_chain_cmd(a)
 
     if a.demo:
         contract, run = _demo_contract(), _demo_run()

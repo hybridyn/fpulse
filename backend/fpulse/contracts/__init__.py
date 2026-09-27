@@ -18,6 +18,7 @@ from .schema import (
     Guarantee,
     GuaranteeType,
 )
+from .chain import ChainResult, verify_chain
 from .service import verify_run
 from .verify import verify_contract
 
@@ -29,4 +30,6 @@ __all__ = [
     "ContractVerification",
     "verify_contract",
     "verify_run",
+    "verify_chain",
+    "ChainResult",
 ]
