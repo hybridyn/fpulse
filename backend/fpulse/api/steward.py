@@ -66,6 +66,9 @@ from fpulse.steward import (
     detect_schema_drift,
     detect_volume_anomalies,
     detect_cadence_misses,
+    detect_null_rate_anomalies,
+    samples_from_report,
+    NullRateSampleStore,
     evaluate_rules,
     load_rules,
     new_scan_id,
@@ -229,6 +232,10 @@ def _get_cost_event_store(workspace_id: str) -> CostEventStore:
 
 def _get_cost_finding_store(workspace_id: str) -> CostFindingStore:
     return CostFindingStore(_cost_findings_path(workspace_id))
+
+
+def _get_null_rate_sample_store(workspace_id: str) -> NullRateSampleStore:
+    return NullRateSampleStore(_workspace_dir(workspace_id) / "null_rate_samples.jsonl")
 
 
 def _pii_findings_path(workspace_id: str) -> Path:
@@ -500,6 +507,20 @@ def _run_scan(workspace_id: str, *, record: bool = True) -> tuple[list[StewardFi
             suppressed_signatures=suppressed,
         )
         findings.extend(cadence_findings)
+    except Exception:
+        pass
+
+    # 2026-09-27 — null-rate NULL_RATE_ANOMALY detector. Baseline-variance
+    # over the per-column null-rate samples recorded from not_null checks:
+    # flags a null-rate that breaks from the column's OWN history (earlier
+    # than a hard not_null assertion would).
+    try:
+        null_rate_findings = detect_null_rate_anomalies(
+            _get_null_rate_sample_store(workspace_id).all(),
+            workspace_id=workspace_id,
+            suppressed_signatures=suppressed,
+        )
+        findings.extend(null_rate_findings)
     except Exception:
         pass
 
@@ -1170,6 +1191,12 @@ async def record_quality_check(
         report,
         workspace_id=workspace_id,
     )
+    # Record per-column null-rate samples (from not_null counts the runner
+    # already computed) so the null-rate anomaly detector has a baseline.
+    try:
+        _get_null_rate_sample_store(workspace_id).append_many(samples_from_report(report))
+    except Exception:
+        pass
     return {
         "recorded": True,
         "assertions_total": len(report.assertions),
