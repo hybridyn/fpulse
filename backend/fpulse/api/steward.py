@@ -65,6 +65,7 @@ from fpulse.steward import (
     detect_row_deltas,
     detect_schema_drift,
     detect_volume_anomalies,
+    detect_cadence_misses,
     evaluate_rules,
     load_rules,
     new_scan_id,
@@ -485,6 +486,20 @@ def _run_scan(workspace_id: str, *, record: bool = True) -> tuple[list[StewardFi
             suppressed_signatures=suppressed,
         )
         findings.extend(volume_findings)
+    except Exception:
+        pass
+
+    # 2026-09-27 — cadence CADENCE_MISS detector. Same CostEvent history
+    # (completed_at timestamps per source): flags a source whose learned
+    # run-cadence has lapsed (Hard Rule 6 — a learned inter-run interval, not
+    # a fixed max-age). Threshold-free companion to quality's FRESHNESS_MISS.
+    try:
+        cadence_findings = detect_cadence_misses(
+            _get_cost_event_store(workspace_id).all(),
+            workspace_id=workspace_id,
+            suppressed_signatures=suppressed,
+        )
+        findings.extend(cadence_findings)
     except Exception:
         pass
 

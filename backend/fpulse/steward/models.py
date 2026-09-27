@@ -109,7 +109,8 @@ class FindingKind(str, Enum):
     NULL_SPIKE          = "null_spike"           # active — Quality engine
     DUPLICATE_KEY_SPIKE = "duplicate_key_spike"  # active — Quality engine
     VOLUME_ANOMALY      = "volume_anomaly"       # active — Foreseer (baseline variance)
-    FRESHNESS_MISS      = "freshness_miss"       # active — Quality engine
+    FRESHNESS_MISS      = "freshness_miss"       # active — Quality engine (threshold max-age)
+    CADENCE_MISS        = "cadence_miss"         # active — Foreseer (learned run-cadence)
     PARTITION_MISSING   = "partition_missing"    # active — Quality engine
     # 2026-06-07 — generic data-quality check failure for constraint-
     # style assertions (accepted_values, range, regex, custom). The
@@ -180,6 +181,7 @@ KIND_TO_LEVEL: dict[FindingKind, FindingLevel] = {
     FindingKind.DUPLICATE_KEY_SPIKE:   FindingLevel.DATA,
     FindingKind.VOLUME_ANOMALY:        FindingLevel.DATA,
     FindingKind.FRESHNESS_MISS:        FindingLevel.DATA,
+    FindingKind.CADENCE_MISS:          FindingLevel.DATA,
     FindingKind.PARTITION_MISSING:     FindingLevel.DATA,
     FindingKind.QUALITY_CHECK_FAILED:  FindingLevel.DATA,
     # Architecture — structural / design-level findings (2026-06-05).
