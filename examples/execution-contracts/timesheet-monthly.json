@@ -1,0 +1,17 @@
+{
+  "id": "timesheet-monthly",
+  "name": "Oracle timesheets -> SQL Server",
+  "input": "Oracle / HR.timesheets",
+  "expected": "~250,000 records",
+  "transformation": "SQL transform v17",
+  "output": "SQL Server / employee_timesheet",
+  "default_output_step": "sink",
+  "guarantees": [
+    {"type": "all_steps_succeeded", "description": "all 120 windows succeeded"},
+    {"type": "row_count_variance", "expected_rows": 250000, "variance_pct": 0.05, "description": "row count within 5% of expected"},
+    {"type": "no_duplicate_key", "key": "TM_REC_ID", "description": "no duplicate TM_REC_ID (exactly-once on resume)"},
+    {"type": "schema_contains", "columns": ["TM_REC_ID", "loaded_at"], "description": "destination schema compatible"},
+    {"type": "checkpoint_enabled", "description": "checkpointed / resumable"},
+    {"type": "destination_verified", "description": "destination transaction committed"}
+  ]
+}
