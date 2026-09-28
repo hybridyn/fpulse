@@ -210,6 +210,46 @@ def test_verify_run_passes_through_facts():
     assert v.verified
 
 
+# ── provenance ───────────────────────────────────────────────────────────
+
+def test_provenance_recorded_and_node_summary_derived():
+    run = _run(steps={"a": _step("a", row_count=3), "sink": _step("sink", row_count=5)})
+    c = _contract(Guarantee(type=GuaranteeType.NO_EMPTY_OUTPUT))
+    v = verify_contract(c, run, pipeline_hash="abc123", engine_version="e1", trigger="schedule")
+    assert v.provenance is not None
+    assert v.provenance.pipeline_hash == "abc123"
+    assert v.provenance.engine_version == "e1"
+    assert v.provenance.trigger == "schedule"
+    assert {n.step_id for n in v.provenance.nodes} == {"a", "sink"}
+    assert next(n for n in v.provenance.nodes if n.step_id == "sink").row_count == 5
+
+
+def test_provenance_is_in_the_receipt_hash():
+    run = _run(steps={"sink": _step("sink", row_count=5)})
+    c = _contract(Guarantee(type=GuaranteeType.NO_EMPTY_OUTPUT))
+    a = verify_contract(c, run, now=FIXED, pipeline_hash="hashA")
+    b = verify_contract(c, run, now=FIXED, pipeline_hash="hashB")
+    assert a.receipt_hash != b.receipt_hash  # provenance is part of the receipt
+
+
+def test_provenance_in_markdown():
+    run = _run(steps={"sink": _step("sink", row_count=5)})
+    c = _contract(Guarantee(type=GuaranteeType.NO_EMPTY_OUTPUT))
+    v = verify_contract(c, run, now=FIXED, pipeline_hash="deadbeefcafe0000",
+                        engine_version="fpulse-1", trigger="api")
+    md = v.render_markdown()
+    assert "pipeline: `deadbeefcafe`" in md
+    assert "engine: fpulse-1" in md
+    assert "trigger: api" in md
+
+
+def test_verify_run_passes_provenance():
+    run = _run(steps={"sink": _step("sink", row_count=5)})
+    c = _contract(Guarantee(type=GuaranteeType.NO_EMPTY_OUTPUT))
+    v = verify_run(c, run, pipeline_hash="p1", engine_version="e1", trigger="ui")
+    assert v.provenance.pipeline_hash == "p1" and v.provenance.trigger == "ui"
+
+
 # ── flagship scenario ────────────────────────────────────────────────────
 
 def test_oracle_timesheet_resume_scenario():

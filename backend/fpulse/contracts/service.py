@@ -34,6 +34,9 @@ def verify_run(
     source_age_seconds: float | None = None,
     prev_hash: str | None = None,
     now: datetime | None = None,
+    pipeline_hash: str | None = None,
+    engine_version: str | None = None,
+    trigger: str | None = None,
 ) -> ContractVerification:
     """Verify ``contract`` against a finished ``run`` and return the receipt.
 
@@ -65,4 +68,5 @@ def verify_run(
         contract, run,
         run_id=run_id, facts=facts, now=now,
         prev_hash=prev_hash, resumed_from=resumed_from,
+        pipeline_hash=pipeline_hash, engine_version=engine_version, trigger=trigger,
     )
