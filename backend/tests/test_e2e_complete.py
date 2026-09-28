@@ -1,5 +1,5 @@
 """
-F-Pulse v1.0.0 — Complete End-to-End Test Suite
+F-Pulse v1.0.1 — Complete End-to-End Test Suite
 
 Tests every feature area across the full API surface:
   1. Health & System
@@ -43,27 +43,6 @@ from fastapi.testclient import TestClient
 # CI gate (`pytest -m "not stress and not external"`) still includes
 # it but a developer wanting only unit tests can `pytest -m unit`.
 pytestmark = pytest.mark.e2e
-
-
-def _enable_self_registration() -> None:
-    """Opt in to self-service registration in admin_settings. F-Pulse OSS ships
-    it OFF by default (single-operator), so register-flow tests enable it the
-    way an operator would via Admin → Security."""
-    from datetime import datetime, timezone
-    from fpulse.main import app_state
-    db = app_state.get("db")
-    assert db is not None, "app db not wired — use the client fixture first"
-    row = db.fetchone("SELECT data FROM settings WHERE id = 'admin_settings'")
-    data = json.loads(row["data"]) if row and row["data"] else {}
-    data["allow_self_registration"] = True
-    now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "INSERT INTO settings (id, data, created_at, updated_at) VALUES (?, ?, ?, ?) "
-        "ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
-        ("admin_settings", json.dumps(data), now, now),
-    )
-    if hasattr(db, "commit"):
-        db.commit()
 
 
 # ═══════════════════════════════════════════
@@ -172,9 +151,9 @@ class TestHealthAndSystem:
         assert "product" in data
         assert "mode" in data
 
-    def test_health_version_is_1_0_0(self, client):
+    def test_health_version_is_1_0_1(self, client):
         r = client.get("/api/health")
-        assert r.json()["version"] == "1.0.0"
+        assert r.json()["version"] == "1.0.1"
 
     def test_health_readiness_endpoint(self, client):
         # /api/health/ready is the READINESS probe — returns the rich shape
@@ -201,13 +180,7 @@ class TestHealthAndSystem:
         assert r.status_code == 200
         types = r.json()
         assert isinstance(types, list)
-        # /api/node-types returns the full backend registry (105 as of
-        # 1.0.0), which is deliberately LARGER than the 40-type
-        # user-facing palette (frontend VALID_GHOST_TYPES) because it
-        # includes Plus-gated and internal types. Don't read this number
-        # as the marketed node-type count — that's 40. Floor, not an
-        # exact match, so adding a type doesn't break the test.
-        assert len(types) >= 50
+        assert len(types) >= 50  # v1.0.1 has 56 node types
         # Check structure
         for t in types:
             assert "type" in t
@@ -1025,9 +998,6 @@ class TestAuth:
         assert r.status_code == 401
 
     def test_register_new_user(self, client, state):
-        # Self-registration is OFF by default (single-operator OSS); opt in
-        # first, the way an operator would via Admin → Security.
-        _enable_self_registration()
         r = client.post("/api/auth/register", json={
             "email": "testuser@fpulse.com",
             "password": "Secure!Pass2026",

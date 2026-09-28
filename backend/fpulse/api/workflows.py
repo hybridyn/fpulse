@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -113,11 +113,6 @@ class WorkflowCreate(BaseModel):
     # W4 — full Workflow shape for one-shot creation.
     steps: list[dict] | None = None
     connections: list[dict] | None = None
-    # Documentation (self-documenting pipelines) — optional at create;
-    # all three are also settable via PUT (the full Workflow body).
-    business_purpose: str | None = None
-    readme: str | None = None
-    tags: list[str] | None = None
 
 
 class WorkflowUpdate(BaseModel):
@@ -365,9 +360,6 @@ async def create_workflow(
     wf = Workflow(
         name=raw_name,
         description=body.description,
-        business_purpose=(body.business_purpose or ""),
-        readme=(body.readme or ""),
-        tags=(body.tags or []),
         workspace_id=workspace_id,
         project_id=target_project_id,
         folder_id=target_folder_id,
@@ -1191,8 +1183,7 @@ async def test_workflow(
     executor = WorkflowExecutor(data_dir=get_data_dir())
 
     try:
-        from fpulse.security.execution_codes import mint_for_run
-        result = executor.execute_workflow(wf, preview_limit=preview_limit, execution_code=mint_for_run(wf))
+        result = executor.execute_workflow(wf, preview_limit=preview_limit)
 
         step_logs = []
         for step in wf.steps:
@@ -1388,8 +1379,7 @@ def _run_wrangler_preview(
     executor = WorkflowExecutor(data_dir=get_data_dir())
     sample_rows_clamped = max(1, min(int(sample_rows or 100), 1000))
     try:
-        from fpulse.security.execution_codes import mint_for_run
-        result = executor.execute_workflow(sliced, preview_limit=sample_rows_clamped, execution_code=mint_for_run(sliced))
+        result = executor.execute_workflow(sliced, preview_limit=sample_rows_clamped)
     except Exception as exc:
         import logging
         logging.getLogger(__name__).exception("Upstream execution failed")
@@ -1540,26 +1530,6 @@ async def publish_workflow(
     wf = v.workflow
     if wf.status == PipelineStatus.ARCHIVED:
         raise HTTPException(400, "Cannot publish an archived pipeline. Restore it first.")
-
-    # ── Documentation gate (self-documenting pipelines) ───────────────
-    # A pipeline may not go live without a stated business purpose. This
-    # fires at the publish ACTION only — it never re-validates rows that
-    # are already published, so existing pipelines keep working untouched;
-    # it's the NEXT publish that must carry a purpose. Backfill-safe by
-    # construction (field added optional; enforced on new publishes).
-    #
-    # The requirement is on by default but an operator can relax it org-wide
-    # (Settings -> Publishing / admin_settings). That single instance-level
-    # switch is the only escape hatch — there is deliberately no per-pipeline
-    # opt-out, so the guarantee stays meaningful. See api/publish_policy.py.
-    from fpulse.api.publish_policy import require_pipeline_purpose
-    if require_pipeline_purpose() and not (getattr(wf, "business_purpose", "") or "").strip():
-        raise HTTPException(
-            400,
-            "A business purpose is required before publishing. Set "
-            "'business_purpose' (the WHY of this pipeline) so anyone "
-            "reviewing it later knows what it is for and why it exists.",
-        )
 
     # Check that last test passed
     if wf.test_results is None:
@@ -2937,113 +2907,12 @@ async def export_pipeline(
     )
 
     return {
-        "fpulse_version": "1.0.0",
+        "fpulse_version": "1.0.1",
         # Bumped 2026-05-22 — parameters/folder/schedules/alerts contract.
         "format_version": 2,
         "export_type": "pipeline",
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "pipeline": pipeline,
-    }
-
-
-def _doc_slug(name: str) -> str:
-    """Filesystem-safe slug for the docs download filename."""
-    safe = "".join(c.lower() if c.isalnum() else "-" for c in (name or "pipeline"))
-    safe = "-".join(part for part in safe.split("-") if part)
-    return safe or "pipeline"
-
-
-@router.get("/{workflow_id}/docs")
-async def export_pipeline_docs(
-    workflow_id: str,
-    workspace_id: str = Depends(_safe_workspace_id),
-    download: bool = False,
-    format: str = "markdown",
-):
-    """Generate self-documenting Markdown for a pipeline.
-
-    Synthesizes name, business purpose, owner, tags, the README, declared
-    inputs, a per-node table, and the version change-log from the IR —
-    deterministic, no LLM, air-gap safe. Most orchestrators leave docs
-    external; here the pipeline documents itself from what's stored.
-
-    Returns ``text/markdown`` by default. ``?format=json`` wraps it as
-    ``{"markdown": ...}`` for a UI that renders it inline; ``?download=1``
-    adds a ``Content-Disposition: attachment`` header for a file save.
-    """
-    store = get_store()
-    v = store.get(workflow_id, workspace_id=workspace_id)
-    if not v:
-        raise HTTPException(404, "Workflow not found")
-
-    from fpulse.ir.docs import render_workflow_markdown
-
-    versions = store.get_versions(workflow_id)
-    markdown = render_workflow_markdown(v.workflow, versions)
-    filename = f"{_doc_slug(v.workflow.name)}.md"
-
-    if format == "json":
-        return {
-            "workflow_id": workflow_id,
-            "filename": filename,
-            "markdown": markdown,
-        }
-
-    headers = {}
-    if download:
-        headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return Response(
-        content=markdown,
-        media_type="text/markdown; charset=utf-8",
-        headers=headers,
-    )
-
-
-class WorkflowDocsUpdate(BaseModel):
-    """Doc-only patch body — each field applied only when present."""
-    business_purpose: str | None = None
-    readme: str | None = None
-    tags: list[str] | None = None
-
-
-@router.patch("/{workflow_id}/docs", dependencies=[_AUTHOR])
-async def update_pipeline_docs(
-    workflow_id: str,
-    body: WorkflowDocsUpdate,
-    workspace_id: str = Depends(_safe_workspace_id),
-):
-    """Update only the documentation fields (business_purpose / readme /
-    tags) without resending the full IR. Saves a new version so the edit
-    shows in history. Powers the publish-time documentation dialog and
-    the Documentation page's inline edits.
-    """
-    store = get_store()
-    v = store.get(workflow_id, workspace_id=workspace_id)
-    if not v:
-        raise HTTPException(404, "Workflow not found")
-
-    wf = v.workflow
-    changed: list[str] = []
-    if body.business_purpose is not None:
-        wf.business_purpose = body.business_purpose.strip()
-        changed.append("business purpose")
-    if body.readme is not None:
-        wf.readme = body.readme
-        changed.append("README")
-    if body.tags is not None:
-        wf.tags = [str(t).strip() for t in body.tags if str(t).strip()]
-        changed.append("tags")
-
-    if not changed:
-        return {"id": workflow_id, "updated": False}
-
-    store.save(wf, change_summary=f"Updated documentation ({', '.join(changed)})")
-    return {
-        "id": workflow_id,
-        "updated": True,
-        "business_purpose": wf.business_purpose,
-        "readme": wf.readme,
-        "tags": wf.tags,
     }
 
 
@@ -3145,82 +3014,6 @@ async def import_pipeline(
         "steps_imported": len(wf.steps),
         "connections_imported": len(wf.connections),
         "connections_remapped": remapped_count,
-    }
-
-
-class DbtImportRequest(BaseModel):
-    """Body for the dbt-project importer.
-
-    ``manifest`` is a parsed compiled dbt ``manifest.json`` (the artifact dbt
-    writes to ``target/`` after ``dbt compile`` / ``dbt docs generate``). The
-    frontend reads the file and posts its JSON as this dict.
-    """
-    manifest: dict[str, Any]
-    project_id: str = "default"
-    name: str | None = None
-
-
-@router.post("/import-dbt", dependencies=[_AUTHOR])
-async def import_dbt_project(
-    body: DbtImportRequest,
-    workspace_id: str = Depends(_safe_workspace_id),
-):
-    """Import a compiled dbt ``manifest.json`` as an F-Pulse pipeline.
-
-    dbt models become SQL Transform nodes, sources become connection-bound
-    placeholder nodes, and ``ref()``/``source()`` dependencies become the
-    pipeline DAG (each edge aliased so the model SQL resolves its upstreams).
-    Lands in the caller's workspace — imports NEVER cross tenant boundaries.
-    Returns the created pipeline plus a ``report`` of honest caveats
-    (unbound sources, incremental models, DuckDB dialect risk).
-    """
-    from fpulse.importers.dbt import manifest_to_pipeline
-    from fpulse.ir.schema import Step, StepConnection, NodePosition
-
-    try:
-        pipeline, report = manifest_to_pipeline(body.manifest, name=body.name)
-    except ValueError as exc:
-        raise HTTPException(400, f"Invalid dbt manifest: {exc}")
-
-    if not pipeline["steps"]:
-        raise HTTPException(
-            400,
-            "No dbt models found in this manifest. Run `dbt compile` and import "
-            "the manifest.json from the project's target/ directory.",
-        )
-
-    store = get_store()
-    wf = Workflow(
-        name=pipeline["name"],
-        description=pipeline.get("description", ""),
-        project_id=body.project_id,
-        workspace_id=workspace_id,
-        metadata=pipeline.get("metadata", {}),
-    )
-    for s in pipeline["steps"]:
-        wf.steps.append(Step(
-            id=s["id"],
-            type=s["type"],
-            label=s.get("label", ""),
-            params=s.get("params", {}),
-            position=NodePosition(**(s.get("position", {}))),
-        ))
-    for c in pipeline["connections"]:
-        wf.connections.append(StepConnection(**c))
-
-    version = store.save(wf, change_summary=f"Imported dbt project: {wf.name}")
-    get_lifecycle_store().add_event(
-        wf.id, "created", f"Imported dbt project: {wf.name}",
-        workspace_id=workspace_id,
-    )
-
-    return {
-        "id": wf.id,
-        "name": wf.name,
-        "version": version.version,
-        "steps_imported": len(wf.steps),
-        "connections_imported": len(wf.connections),
-        "report": report,
     }
 
 

@@ -126,41 +126,17 @@ def cmd_serve(args):
     else:
         actual_port = requested_port
 
-    _loopback = (
-        host in ("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1")
-        or host.startswith("127.")
-    )
-    if _loopback:
-        url = f"http://{host}:{actual_port}"
+    if host == "127.0.0.1":
+        url = f"http://127.0.0.1:{actual_port}"
         if not getattr(args, "open", False):
             print(f"Starting F-Pulse on {url} (loopback only — safe)")
     else:
-        # Non-loopback bind = network-reachable. In LOCAL mode the API
-        # allows anonymous access (single-user convenience), so exposing
-        # it to a network is unsafe. Refuse unless the operator opts into
-        # server mode (which requires auth). FPULSE_ALLOW_LAN=1 already
-        # implies server mode; a raw --host 0.0.0.0 while still in local
-        # mode is the dangerous combination we block here.
-        from fpulse import runtime_config as _rc
-        if _rc.IS_LOCAL_MODE:
-            print(
-                f"\n[SECURITY] Refusing to start: bind host {host!r} is "
-                "network-reachable but security mode is 'local', which "
-                "allows ANONYMOUS access (no login).\n"
-                "  Exposing local mode to a network lets anyone reach "
-                "uploads, backfills, AI actions and your data.\n"
-                "  To run on a network safely, enable server mode (adds "
-                "auth):\n"
-                "      Windows    : set FPULSE_SECURITY_MODE=server\n"
-                "      Linux/macOS: export FPULSE_SECURITY_MODE=server\n"
-                "  …or keep it private with: --host 127.0.0.1\n"
-            )
-            return
         url = f"http://{host}:{actual_port}"
         print(
-            f"\n[WARNING] Starting F-Pulse on {host}:{actual_port} in SERVER "
-            "mode — network-reachable and requiring login. Put TLS / a "
-            "reverse proxy in front for production.\n"
+            f"\n[WARNING] Starting F-Pulse on {host}:{actual_port} — "
+            "reachable from your network. Anyone on the same LAN can hit "
+            "the API. Pass --host 127.0.0.1 (or unset FPULSE_ALLOW_LAN) "
+            "to restrict to loopback.\n"
         )
 
     # 2026-06-07 — write the runtime ownership file BEFORE uvicorn
@@ -188,10 +164,6 @@ def cmd_serve(args):
     # survives the app window closing. See api/local_hardening.graceful_shutdown.
     if getattr(args, "open", False):
         os.environ["FPULSE_ALLOW_TAB_SHUTDOWN"] = "1"
-
-    # Keep the app startup banner and in-process helpers aligned with the
-    # actual fallback port selected by the launcher.
-    os.environ["FPULSE_PORT"] = str(actual_port)
 
     # Auto-launch browser before uvicorn.run() (which blocks). The
     # browser will retry until the backend is up; modern browsers
@@ -470,7 +442,7 @@ def cmd_health(args):
 
 def cmd_version(args):
     """Show version info."""
-    print("F-Pulse v1.0.0")
+    print("F-Pulse v1.0.1")
     print("AI-native, human-governed data pipeline builder")
     print(f"Python {sys.version.split()[0]}")
 
@@ -535,29 +507,14 @@ def cmd_seed_admin(args):
 
     Use after a fresh `data/` wipe so scripts/seed-test-users.ps1 can
     authenticate as admin and create the 4 test users via the
-    admin-invite API. Refuses to run unless the environment explicitly
-    identifies itself as dev, or --force is passed.
+    admin-invite API. Refuses to run when --force is omitted AND
+    FPULSE_ENV is set to anything containing 'prod'.
     """
-    # Fail CLOSED. This previously defaulted to "dev" when FPULSE_ENV was
-    # unset and only refused when it contained 'prod' — so the guard never
-    # fired on any install that doesn't set FPULSE_ENV, which includes the
-    # shipped docker-compose.yml (it sets FPULSE_MODE=prod, not FPULSE_ENV;
-    # FPULSE_ENV appears only as a commented line in .env.example). That
-    # turned a dev convenience into a one-command path to a known-password
-    # super_admin on a production container — the reset below writes the
-    # hash directly, bypassing the password policy that would reject
-    # 'admin'. Now: proceed only on an explicit dev signal.
-    env = os.environ.get("FPULSE_ENV", "").strip().lower()
-    mode = os.environ.get("FPULSE_MODE", "").strip().lower()
-    looks_dev = env in ("dev", "development", "local", "test", "ci")
-    if not looks_dev and not args.force:
+    env = os.environ.get("FPULSE_ENV", "dev").lower()
+    if "prod" in env and not args.force:
         print(
-            f"Refusing to seed admin: this resets admin@fpulse.local to the "
-            f"known password 'admin' and bypasses the password policy, so it "
-            f"only runs when the environment explicitly says dev. Got "
-            f"FPULSE_ENV={env or '<unset>'!r}, FPULSE_MODE={mode or '<unset>'!r}. "
-            f"Set FPULSE_ENV=dev on a throwaway install, or pass --force if "
-            f"you really mean it.",
+            f"Refusing to seed admin: FPULSE_ENV={env!r} looks like "
+            f"production. Pass --force if you really mean it.",
             file=sys.stderr,
         )
         sys.exit(2)

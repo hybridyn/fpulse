@@ -304,7 +304,7 @@ _PAGES: tuple[Topic, ...] = (
             "shipped connector is rated for schema coverage, auth method, incremental "
             "sync, pagination, error handling, and depth score (0-5). Use this when "
             "evaluating whether a given connector is production-grade for your use "
-            "case. All 33 connectors are open and unlocked in OSS — Plus does not "
+            "case. All 43+ connectors are open and unlocked in OSS — Plus does not "
             "gate connector access."
         ),
         see_also=("doc.connectors",),
@@ -903,7 +903,7 @@ _EDITIONS: tuple[Topic, ...] = (
         ),
         body=(
             "**F-Pulse OSS** is the free, open-source, single-user, single-tenant "
-            "build. Includes: visual pipeline editor, 40 node types, 33 "
+            "build. Includes: visual pipeline editor, 44 node types, 66 "
             "connectors, scheduling, alerts (pipeline-level), templates, the "
             "Copilot with full 23-tool surface, basic eval harness, vertical "
             "scaling up to ~500 GB / single node, telemetry opt-in, and a Help "
@@ -925,8 +925,8 @@ _EDITIONS: tuple[Topic, ...] = (
             "**F-Pulse+** adds the team / production / governance layer on top of "
             "OSS: multi-user workspaces with RBAC, DEV→PROD promotion with "
             "two-person approval, audit log with retention, SSO (OIDC + SAML), "
-            "Lineage view, drift detection, CDC + bulk-load connectors, "
-            "schedule-level alerts, alert email domain "
+            "Lineage view, drift detection, CDC + bulk-load connectors, Python "
+            "Transform node, schedule-level alerts, alert email domain "
             "allowlists, vault integration, cross-session Copilot memory, "
             "Llama-Guard moderation, and operator dashboards. Pricing: $49/mo "
             "or $449/yr per install + Enterprise."
@@ -949,7 +949,7 @@ _EDITIONS: tuple[Topic, ...] = (
             "Plus adds the things teams and production environments need: shared "
             "workspaces with RBAC, a PROD environment with approval workflows, "
             "audit logging, SSO, lineage tracking, drift detection, enterprise "
-            "data-engineering features (CDC, bulk loaders), and "
+            "data-engineering features (CDC, bulk loaders, Python Transform), and "
             "operator-grade Copilot features (cross-session memory, RAG, "
             "Llama-Guard). All connectors are open in both editions — Plus does "
             "NOT gate connector access."

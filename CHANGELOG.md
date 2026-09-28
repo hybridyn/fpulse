@@ -13,82 +13,19 @@ require a major bump and a deprecation window of at least one minor.
 
 ## [Unreleased]
 
-## [1.0.1] — 2026-09-23
-
-Patch release. Dependency fix only — no functional changes to the engine,
-UI, or API surface.
+## [1.0.1] — 2026-09-28
 
 ### Fixed
-- **Installs on Intel Macs (`darwin` / `x86_64`).** `cryptography` 49+
-  publishes macOS wheels for Apple Silicon only, so `pip install fpulse` on an
-  Intel Mac fell back to building the sdist — which downloads a Rust toolchain
-  and then fails in `openssl-sys` with *"Could not find directory of OpenSSL
-  installation"* on a machine without OpenSSL headers. The dependency is now
-  capped to `<49` on that platform alone (48.0.1 is the last release with a
-  `macosx_10_9_universal2` wheel); every other platform continues to resolve
-  to the latest `cryptography`. Reported on Python 3.12 / macOS Intel.
+
+**Intel macOS (x86_64) install no longer fails on a `cryptography` source build.**
+`cryptography` 49+ publishes macOS wheels for Apple Silicon only, so on Intel Macs
+`pip install fpulse` fell back to a source build that needs Rust + OpenSSL headers
+and failed with `openssl-sys: Could not find directory of OpenSSL installation`.
+F-Pulse now caps that dependency to the last Intel-compatible release on this
+platform, so pip uses a prebuilt wheel again. See the [README](README.md) PyPI
+section for the one-time recovery if you installed a pre-cap build.
 
 ## [1.0.0] — 2026-07-20
-
-First stable release of F-Pulse OSS — a single-binary, local-first data
-pipeline engine (Apache 2.0). The headline capabilities are below; the
-complete, dated development log for the 1.0.0 cycle is preserved verbatim
-under **[1.0.0 development log]** further down.
-
-### Added
-- **Visual pipeline builder** — drag-and-drop canvas, 40 node types, a
-  schema-aware expression engine, and a DuckDB SQL transform.
-- **F-Pulse Steward** — read-only workspace reliability layer (duplicate
-  source/pipeline detection, connector health, schema drift, volume and
-  data-quality anomalies) with a human-approved Memory Layer. Ships in OSS,
-  not paywalled.
-- **Operational layer** — scheduler, alerts (email / Slack / Teams / webhook),
-  run history with per-step row counts and timing, lineage view, and
-  deploy / rollback version control.
-- **1.2 reliability foundations** — column-level lineage, executor hardening,
-  and backfill.
-- **Connectors** — 33 first-party connectors visible by default (43 total),
-  tier-labeled from a live cert-matrix, plus four first-class extension paths
-  (OpenAPI URL, sample responses, hand-authored manifest, or contribute).
-- **Embedded AI (optional)** — pluggable providers (Claude / OpenAI / Gemini /
-  Ollama / OpenRouter) with deterministic fallbacks and a local-first default.
-- **Packaging** — Docker Compose, Linux `.deb` / `.rpm` / `.AppImage`, and a
-  from-source install that builds and serves its own UI.
-
-### Changed
-- AI provider keys unified with the Credentials store; "Needs Attention"
-  clarity pass across the app.
-- Connector tier / certification system (Production / Verified / Beta /
-  Experimental / Hidden) driven by the live cert-matrix.
-
-### Fixed
-- Scheduled runs now capture per-step output identically to manual runs.
-- SQL Server type mapping, AI cost-accounting accuracy, and row-count
-  integrity corrections.
-
-### Security
-- Loopback-by-default binding, secret sanitization in Steward journals, and
-  the full pre-launch hardening sweep detailed in the development log below.
-
-## [1.0.0 development log]
-
-_Every dated change from the 1.0.0 development cycle, newest first. This is the
-granular engineering record; the release summary above is the user-facing view._
-
-### Fixed — 2026-07-08 — scheduled-run step-output capture
-
-**Scheduled runs now capture per-step output samples.** Opening a scheduled
-execution in Executions → Lineage and clicking a node showed *"No output
-captured for step …"* even though the run succeeded, so the Output / Table /
-Schema / JSON drawer was empty. Scheduled runs built the pipeline executor
-without the run context the manual **Run** path passes — the step-output store
-(via `app_state`) and a `run_id` bound to the execution record — so capture was
-silently skipped, and even when written it was keyed under an id the drawer
-never queried. Scheduled runs and **Run now** now capture step outputs
-identically to manual runs. Code-only fix (no schema change), so existing data
-is untouched; scheduled executions recorded *before* the fix stay empty (their
-samples were never written) — re-run, or the next schedule fire, captures
-normally.
 
 ### Fixed / Added — 2026-06-18 — SQL Server types, AI cost accuracy, row-count integrity
 
@@ -314,7 +251,7 @@ user report):
   detector against the user's REAL workflow database; on the bundled
   sample-DB it detected 3 actual duplicate-source findings between
   5 of their 18 existing pipelines (Aggregation Report ↔ Simple ETL;
-  Sales Pipeline ↔ Ad-hoc Analysis; First Pipeline (copy) ↔ Ad-hoc Analysis).
+  Sales Pipeline ↔ Siva; First Pipeline (copy) ↔ Siva).
 - HTML render at `docs/steward/PROOF-2026-06-06/08-live-findings-render.html`
   + Memory-tab verification render at `10-memory-tab-rendered.html`
   (Vite-serveable at `http://localhost:5174/steward-proof.html`).
@@ -910,7 +847,7 @@ depends on actual operator + sales signal after launch.
 
 ---
 
-### 2026-06-03 — launch sprint additions
+## [1.0.0] — 2026-06-03 — launch sprint additions
 
 ### Added — 2026-06-03 final pre-launch hardening + repo standardisation
 
@@ -1315,11 +1252,15 @@ a concrete threat model + verified test:
   manifest discovery starts tagging non-first-party connectors — no
   further frontend work needed at that point.
 - **`docs/extend/build-a-connector.md`.** 30-minute end-to-end tutorial
-  for the three authoring paths (OpenAPI, samples, hand-authored).
-  Links into the Help-page docs catalog.
-- **`docs/extend/build-a-node.md`.** Guide for custom nodes —
-  try the SQL Transform node first, then write a first-class
-  node type.
+  for the four authoring paths (OpenAPI, samples, hand-authored,
+  derive-from-upstream). Links into the Help-page docs catalog.
+- **`docs/extend/build-a-node.md`.** Two-tier guide for custom nodes —
+  the 5-minute Python-transform path and the 30-minute first-class
+  node-type path.
+- **`docs/extend/derive-from-talend.md` + `talend-derivation-roadmap.md`.**
+  Process and prioritised port list for deriving connectors from
+  compatibly-licensed upstream OSS sources. Both surfaced in the Help
+  catalog under a new "Extending F-Pulse" category.
 - **`docs/vs-talend.md`.** Side-by-side comparison page for evaluators.
   Honest about where each tool wins; positioned as a reference doc
   for those who came looking for the comparison.
@@ -1450,7 +1391,7 @@ a concrete threat model + verified test:
 
 ---
 
-### 2026-06-01 — initial 1.0.0 baseline
+## [1.0.0] — 2026-06-01
 
 First public release of F-Pulse OSS — single-binary visual data pipeline
 engine with embedded AI assistance, 40 node types across 6 categories,
@@ -1796,7 +1737,7 @@ OLLAMA_IMAGE_TAG=0.5.7
 - Bulk-load dialects beyond Postgres + Snowflake (BigQuery, Redshift,
   Databricks, MSSQL, Oracle, MongoDB, ClickHouse) are designed and
   ship in a follow-up.
-- Connector marketplace remains Plus-only per
+- Connector marketplace and Python Transform node remain Plus-only per
   `edition-matrix.md`.
 - Frontend `npm run build` may emit pre-existing TypeScript strict-mode
   errors; the build still produces a runnable bundle and `vite dev`
@@ -1804,4 +1745,4 @@ OLLAMA_IMAGE_TAG=0.5.7
 
 ---
 
-[1.0.0]: https://github.com/hybridyn/fpulse/releases/tag/v1.0.0
+[1.0.0]: https://github.com/hybridyn/hybridyn-f-pulse-oss/releases/tag/v1.0.0

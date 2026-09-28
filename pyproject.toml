@@ -43,8 +43,8 @@ dependencies = [
     # pip falls back to an sdist build there, which needs a Rust toolchain
     # and OpenSSL headers and fails on a stock machine (openssl-sys: "Could
     # not find directory of OpenSSL installation"). 48.0.1 is the last
-    # release with an Intel-capable (universal2) wheel. The two markers are
-    # mutually exclusive so exactly one applies.
+    # release with an Intel-capable wheel; the installer already pins it.
+    # The two markers are mutually exclusive so exactly one applies.
     "cryptography>=42.0,<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "cryptography>=42.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "bcrypt>=4.0",
@@ -277,8 +277,8 @@ fpulse = "fpulse.cli:main"
 [project.urls]
 Homepage = "https://hybridyn.com"
 Documentation = "https://docs.hybridyn.com/f-pulse"
-Repository = "https://github.com/hybridyn/fpulse"
-Issues = "https://github.com/hybridyn/fpulse/issues"
+Repository = "https://github.com/hybridyn/hybridyn-f-pulse-oss"
+Issues = "https://github.com/hybridyn/hybridyn-f-pulse-oss/issues"
 "F-Pulse+ commercial" = "https://hybridyn.com/f-pulse"
 
 [tool.setuptools.packages.find]
