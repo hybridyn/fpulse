@@ -1,5 +1,5 @@
 """
-F-Pulse v1.0.0 — Complete End-to-End Test Suite
+F-Pulse v1.0.1 — Complete End-to-End Test Suite
 
 Tests every feature area across the full API surface:
   1. Health & System
@@ -172,9 +172,9 @@ class TestHealthAndSystem:
         assert "product" in data
         assert "mode" in data
 
-    def test_health_version_is_1_0_0(self, client):
+    def test_health_version_is_1_0_1(self, client):
         r = client.get("/api/health")
-        assert r.json()["version"] == "1.0.0"
+        assert r.json()["version"] == "1.0.1"
 
     def test_health_readiness_endpoint(self, client):
         # /api/health/ready is the READINESS probe — returns the rich shape

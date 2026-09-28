@@ -43,7 +43,7 @@ _MCP_PROTOCOL_VERSION = "2024-11-05"
 
 _SERVER_INFO = {
     "name": "fpulse-mcp",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "title": "F-Pulse Pipeline Agent",
     "description": (
         "F-Pulse exposes its data-pipeline read tools (list_pipelines, "

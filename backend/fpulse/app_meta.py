@@ -6,7 +6,7 @@ renaming the repo later is a ONE-LINE change here — nothing else needs editing
 """
 from __future__ import annotations
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # GitHub coordinates. Change REPO_OWNER (and REPO_NAME if the repo is renamed)
 # to re-point every in-app link at once.
