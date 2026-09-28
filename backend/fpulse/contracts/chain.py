@@ -64,7 +64,7 @@ def verify_chain(
                 )
             recomputed = _receipt_hash(
                 _receipt_payload(contract, r.run_id, r.verdict, r.clauses,
-                                 r.verified_at, r.prev_hash, r.resumed_from)
+                                 r.verified_at, r.prev_hash, r.resumed_from, r.provenance)
             )
             if recomputed != r.receipt_hash:
                 return ChainResult(

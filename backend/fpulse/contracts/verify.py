@@ -25,6 +25,8 @@ from .schema import (
     ExecutionContract,
     Guarantee,
     GuaranteeType,
+    NodeRun,
+    Provenance,
 )
 
 
@@ -151,6 +153,7 @@ def _receipt_payload(
     verified_at: str,
     prev_hash: str | None,
     resumed_from: str | int | None,
+    provenance: Provenance | None = None,
 ) -> dict[str, Any]:
     """The canonical object a receipt hashes over. Shared by ``verify_contract``
     (to produce a hash) and ``chain.verify_chain`` (to recompute one)."""
@@ -162,7 +165,26 @@ def _receipt_payload(
         "verified_at": verified_at,
         "prev_hash": prev_hash,
         "resumed_from": resumed_from,
+        "provenance": provenance.model_dump(mode="json") if provenance is not None else None,
     }
+
+
+def _provenance_from(
+    run: WorkflowRunResult,
+    pipeline_hash: str | None,
+    engine_version: str | None,
+    trigger: str | None,
+) -> Provenance:
+    """Assemble the receipt's provenance: the pinned pipeline/engine/trigger plus
+    a per-node execution summary derived from the run result."""
+    nodes = [
+        NodeRun(step_id=s.step_id, status=s.status, row_count=s.row_count, duration_ms=s.duration_ms)
+        for s in run.step_results.values()
+    ]
+    return Provenance(
+        pipeline_hash=pipeline_hash, engine_version=engine_version,
+        trigger=trigger, nodes=nodes,
+    )
 
 
 def verify_contract(
@@ -174,6 +196,9 @@ def verify_contract(
     now: datetime | None = None,
     prev_hash: str | None = None,
     resumed_from: str | int | None = None,
+    pipeline_hash: str | None = None,
+    engine_version: str | None = None,
+    trigger: str | None = None,
 ) -> ContractVerification:
     """Verify ``contract`` against ``run`` and return a hash-receipt verdict.
 
@@ -182,15 +207,20 @@ def verify_contract(
     ``source_age_seconds``). ``now`` is injectable for deterministic receipts.
     An empty contract (no guarantees) is ``failed`` — a promise with nothing to
     prove is not a verified operation.
+
+    ``pipeline_hash`` / ``engine_version`` / ``trigger`` are recorded as
+    provenance (which pipeline version ran, on what engine, kicked off how) and
+    are part of the hashed, chainable receipt.
     """
     facts = facts or {}
     clauses = [_check(g, run, contract, facts) for g in contract.guarantees]
     verdict = "verified" if clauses and all(c.passed for c in clauses) else "failed"
     ts = (now or datetime.now(timezone.utc)).isoformat()
     rid = run_id or run.workflow_id
+    provenance = _provenance_from(run, pipeline_hash, engine_version, trigger)
 
     receipt = _receipt_hash(
-        _receipt_payload(contract, rid, verdict, clauses, ts, prev_hash, resumed_from)
+        _receipt_payload(contract, rid, verdict, clauses, ts, prev_hash, resumed_from, provenance)
     )
 
     return ContractVerification(
@@ -202,4 +232,5 @@ def verify_contract(
         receipt_hash=receipt,
         prev_hash=prev_hash,
         resumed_from=resumed_from,
+        provenance=provenance,
     )

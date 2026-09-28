@@ -93,6 +93,26 @@ class ClauseResult(BaseModel):
     observed: Any | None = None
 
 
+class NodeRun(BaseModel):
+    """Compact per-step execution summary carried on a receipt (provenance)."""
+
+    step_id: str
+    status: str = "pending"
+    row_count: int = 0
+    duration_ms: float = 0
+
+
+class Provenance(BaseModel):
+    """Where a run came from — pins the pipeline version, engine, trigger and a
+    per-node execution summary onto the receipt, so a reviewer can answer *which*
+    pipeline ran, under what engine, and how it was kicked off."""
+
+    pipeline_hash: str | None = None   # sha256 of the workflow definition that ran
+    engine_version: str | None = None
+    trigger: str | None = None         # ui | schedule | api | backfill | ...
+    nodes: list[NodeRun] = Field(default_factory=list)
+
+
 class ContractVerification(BaseModel):
     """The receipt: a verified/failed verdict over all clauses of a contract."""
 
@@ -105,6 +125,8 @@ class ContractVerification(BaseModel):
     prev_hash: str | None = None
     # resume context (ties the Execution Contract to durable/resumable runs)
     resumed_from: str | int | None = None
+    # provenance — pipeline version / engine / trigger / per-node summary
+    provenance: Provenance | None = None
 
     @property
     def verified(self) -> bool:
@@ -117,6 +139,14 @@ class ContractVerification(BaseModel):
         lines = [head, "", f"- run: `{self.run_id}`  ", f"- verified_at: {self.verified_at}  "]
         if self.resumed_from is not None:
             lines.append(f"- resumed_from: {self.resumed_from}  ")
+        if self.provenance:
+            p = self.provenance
+            if p.pipeline_hash:
+                lines.append(f"- pipeline: `{p.pipeline_hash[:12]}`  ")
+            if p.engine_version:
+                lines.append(f"- engine: {p.engine_version}  ")
+            if p.trigger:
+                lines.append(f"- trigger: {p.trigger}  ")
         lines.append("")
         for c in self.clauses:
             mark = "✓" if c.passed else "✗"

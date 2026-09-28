@@ -18,6 +18,7 @@ contract verifies, 1 when it fails.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -113,6 +114,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", help="write the full receipt JSON here")
     ap.add_argument("--verify-chain", help="path to a JSON list of receipts to verify as a chain")
     ap.add_argument("--contracts", help="path to contracts (list or {id: contract}) for full hash recompute")
+    ap.add_argument("--pipeline-hash", help="sha256 of the pipeline definition that ran (provenance)")
+    ap.add_argument("--engine-version", help="engine/runtime version (provenance)")
+    ap.add_argument("--trigger", help="what triggered the run: ui | schedule | api | backfill")
     a = ap.parse_args(argv)
 
     if a.verify_chain:
@@ -123,6 +127,8 @@ def main(argv=None) -> int:
         facts = {"duplicate_key_counts": {"TM_REC_ID": 0}, "checkpoint_enabled": True, "destination_verified": True}
         resumed_from: object = 59
         run_id = "run-8271"
+        pipeline_hash = hashlib.sha256(contract.model_dump_json().encode("utf-8")).hexdigest()
+        engine_version, trigger = "fpulse-oss/duckdb", "backfill"
     else:
         if not (a.contract and a.run):
             ap.error("--contract and --run are required unless --demo is given")
@@ -131,6 +137,7 @@ def main(argv=None) -> int:
         facts = _load(a.facts) if a.facts else {}
         resumed_from = a.resumed_from
         run_id = None
+        pipeline_hash, engine_version, trigger = a.pipeline_hash, a.engine_version, a.trigger
 
     verification = verify_run(
         contract, run,
@@ -140,6 +147,7 @@ def main(argv=None) -> int:
         destination_verified=facts.get("destination_verified"),
         duplicate_key_counts=facts.get("duplicate_key_counts"),
         source_age_seconds=facts.get("source_age_seconds"),
+        pipeline_hash=pipeline_hash, engine_version=engine_version, trigger=trigger,
     )
 
     print(verification.render_markdown())
