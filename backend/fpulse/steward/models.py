@@ -106,7 +106,8 @@ class FindingKind(str, Enum):
 
     # ── Data level ────────────────────────────────────────────────
     SCHEMA_DRIFT        = "schema_drift"         # active — Schema-drift detector
-    NULL_SPIKE          = "null_spike"           # active — Quality engine
+    NULL_SPIKE          = "null_spike"           # active — Quality engine (assertion)
+    NULL_RATE_ANOMALY   = "null_rate_anomaly"    # active — Foreseer (learned null-rate baseline)
     DUPLICATE_KEY_SPIKE = "duplicate_key_spike"  # active — Quality engine
     VOLUME_ANOMALY      = "volume_anomaly"       # active — Foreseer (baseline variance)
     FRESHNESS_MISS      = "freshness_miss"       # active — Quality engine (threshold max-age)
@@ -178,6 +179,7 @@ KIND_TO_LEVEL: dict[FindingKind, FindingLevel] = {
     # Data
     FindingKind.SCHEMA_DRIFT:          FindingLevel.DATA,
     FindingKind.NULL_SPIKE:            FindingLevel.DATA,
+    FindingKind.NULL_RATE_ANOMALY:     FindingLevel.DATA,
     FindingKind.DUPLICATE_KEY_SPIKE:   FindingLevel.DATA,
     FindingKind.VOLUME_ANOMALY:        FindingLevel.DATA,
     FindingKind.FRESHNESS_MISS:        FindingLevel.DATA,
