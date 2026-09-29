@@ -62,6 +62,7 @@ const OnboardingWizard = lazy(() => import('./components/OnboardingWizard'));
 const OSSProductionPlaceholder = lazy(() => import('./components/OSSProductionPlaceholder'));
 const GlobalSearch = lazy(() => import('./components/GlobalSearch'));
 const OllamaRecommendationBanner = lazy(() => import('./components/OllamaRecommendationBanner'));
+const UpdateAvailableBanner = lazy(() => import('./components/UpdateAvailableBanner'));
 import Toast, { toast } from './components/Toast';
 const FloatingAgentWidget = lazy(() => import('./components/agent/FloatingAgentWidget'));
 import CopyrightFooter from './components/CopyrightFooter';
@@ -1042,6 +1043,12 @@ export default function App() {
           active model is too heavy for CPU. Dismissible; sticky via
           localStorage. */}
       <OllamaRecommendationBanner />
+
+      {/* Proactive, dismissible "new version available" bar. Reuses the
+          opt-in /api/app/update-check (PyPI + GitHub), caches the result for
+          24h, and is silent when offline. Shown to the signed-in user here;
+          F-Pulse+ gates it to admins via the `enabled` prop. */}
+      <UpdateAvailableBanner />
 
       {/* Top header nav */}
       {/* OSS-9 (2026-05-19): Sidebar + App now both import `Page` from
