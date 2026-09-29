@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────
-# F-Pulse OSS — single-binary container
+# F-Pulse OSS — container
 # ─────────────────────────────────────────────────────────────────────────
 # One container running everything: API + scheduler + worker pool + DuckDB.
 # Frontend is served via Vite dev server in development; production builds
@@ -15,14 +15,13 @@
 # ── Stage 1: build the frontend bundle ──
 FROM node:20-alpine AS frontend
 WORKDIR /build
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
-# Use vite directly — `npm run build` runs `tsc -b && vite build`, and
-# tsc strict-mode noise (pre-existing in the 1.0 baseline) would fail
-# the image build. Vite's esbuild transpile still emits the production
-# bundle correctly; type-only errors don't affect runtime output.
-RUN npx vite build
+# Same build the CI + release paths run: `tsc -b && vite build` (+ the CSS
+# guard). Type-checking is NOT bypassed here — the image build fails on a type
+# error exactly like CI, so Docker can't ship a bundle the other paths reject.
+RUN npm run build
 
 # ── Stage 2: build Python wheels ──
 FROM python:3.11-slim AS builder
