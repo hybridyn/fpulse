@@ -42,6 +42,7 @@ from fpulse.ai.tools.list_templates import DEFINITION as LIST_TEMPLATES
 from fpulse.ai.tools.lookup_help_topic import DEFINITION as LOOKUP_HELP_TOPIC
 from fpulse.ai.tools.query_metrics import DEFINITION as QUERY_METRICS
 from fpulse.ai.tools.recall_history import DEFINITION as RECALL_HISTORY
+from fpulse.ai.tools.recommend_resource_optimization import DEFINITION as RECOMMEND_RESOURCE_OPTIMIZATION
 from fpulse.ai.tools.registry import (
     ToolNotFoundError,
     ToolRegistry,
@@ -93,6 +94,9 @@ INITIAL_TOOLS: tuple[ToolDefinition, ...] = (
     GET_RUNNING_EXECUTIONS,
     GET_NEXT_SCHEDULED,
     GET_INSTALLATION_HEALTH,
+    # Performance optimization — turns a run's captured resource telemetry
+    # (peak RAM / CPU / per-step durations) into deterministic tuning advice.
+    RECOMMEND_RESOURCE_OPTIMIZATION,
     # Steward advisories — duplicate sources, governance, connector health,
     # user-rule matches (read-only; the only live-fed Steward detectors).
     LIST_STEWARD_FINDINGS,
@@ -115,7 +119,7 @@ INITIAL_TOOLS: tuple[ToolDefinition, ...] = (
 
 # Opt-in web tools — READ-tier, registered ONLY when the operator sets
 # FPULSE_AI_WEB_ACCESS=1 (see fpulse.ai.web). Kept OUT of INITIAL_TOOLS so the
-# canonical count stays 29 and the air-gap default holds: with the flag off the
+# canonical count stays 30 and the air-gap default holds: with the flag off the
 # LLM never sees these tools at all.
 OPTIONAL_WEB_TOOLS: tuple[ToolDefinition, ...] = (
     WEB_SEARCH,
@@ -191,6 +195,7 @@ __all__ = [
     "GET_RUNNING_EXECUTIONS",
     "GET_NEXT_SCHEDULED",
     "GET_INSTALLATION_HEALTH",
+    "RECOMMEND_RESOURCE_OPTIMIZATION",
     "LIST_STEWARD_FINDINGS",
     # Safe-write
     "DRAFT_PIPELINE_FROM_INTENT",

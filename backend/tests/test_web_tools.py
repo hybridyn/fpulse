@@ -25,7 +25,7 @@ def _ctx() -> ToolContext:
 def test_web_tools_absent_by_default(monkeypatch):
     monkeypatch.delenv("FPULSE_AI_WEB_ACCESS", raising=False)
     reg = register_initial_tools(ToolRegistry())
-    assert len(reg) == 29
+    assert len(reg) == 30
     assert "web_fetch" not in reg
     assert "web_search" not in reg
 
@@ -33,7 +33,7 @@ def test_web_tools_absent_by_default(monkeypatch):
 def test_web_tools_present_when_enabled(monkeypatch):
     monkeypatch.setenv("FPULSE_AI_WEB_ACCESS", "1")
     reg = register_initial_tools(ToolRegistry())
-    assert len(reg) == 31
+    assert len(reg) == 32
     assert "web_fetch" in reg
     assert "web_search" in reg
     # Both are READ tier — no idempotency key, no confirmation gate.
@@ -152,18 +152,18 @@ def test_admin_setting_enables_web_access(monkeypatch):
     monkeypatch.setattr(web, "read_admin_web_settings", lambda: settings)
 
     reg = register_initial_tools(ToolRegistry())
-    assert "web_fetch" not in reg and len(reg) == 29
+    assert "web_fetch" not in reg and len(reg) == 30
 
     # Flip the admin setting ON → same registry reconciles to include them.
     settings["ai_web_access"] = True
     assert web.web_access_enabled() is True
     register_initial_tools(reg)
-    assert "web_fetch" in reg and "web_search" in reg and len(reg) == 31
+    assert "web_fetch" in reg and "web_search" in reg and len(reg) == 32
 
     # Flip OFF → tools are removed again (live).
     settings["ai_web_access"] = False
     register_initial_tools(reg)
-    assert "web_fetch" not in reg and "web_search" not in reg and len(reg) == 29
+    assert "web_fetch" not in reg and "web_search" not in reg and len(reg) == 30
 
 
 def test_web_search_searxng_parse(monkeypatch):
