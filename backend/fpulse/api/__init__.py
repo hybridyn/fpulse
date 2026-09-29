@@ -17,6 +17,7 @@ from .contracts import router as contracts_router
 from .schema_history import router as schema_history_router
 from .connections import router as connections_router
 from .backup import router as backup_router
+from .ops_health import router as ops_health_router
 from .websocket import router as ws_router
 from .websocket import info_router as ws_info_router
 from .logs import router as logs_router
