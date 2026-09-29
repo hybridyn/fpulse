@@ -11,7 +11,7 @@ VERSION = "1.0.1"
 # GitHub coordinates. Change REPO_OWNER (and REPO_NAME if the repo is renamed)
 # to re-point every in-app link at once.
 REPO_OWNER = "hybridyn"
-REPO_NAME = "hybridyn-f-pulse-oss"
+REPO_NAME = "fpulse"
 
 HOMEPAGE = "https://hybridyn.com"
 DOCS_URL = "https://docs.hybridyn.com/f-pulse"
