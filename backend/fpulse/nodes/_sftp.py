@@ -48,7 +48,10 @@ class _PinnedFingerprintPolicy:
     def _matches(self, key: Any) -> bool:
         raw = key.asbytes()
         sha256_b64 = base64.b64encode(hashlib.sha256(raw).digest()).decode().rstrip("=")
-        md5_hex = hashlib.md5(raw).hexdigest()
+        # SSH host-key fingerprints have a legacy MD5 representation
+        # (`MD5:aa:bb:..`) we must reproduce to match user-supplied values —
+        # this is a fingerprint format, not a security hash.
+        md5_hex = hashlib.md5(raw, usedforsecurity=False).hexdigest()
         want = self._want
         # SHA256 base64 form is case-sensitive; tolerate a 'SHA256:' prefix
         # and trailing '=' padding.
