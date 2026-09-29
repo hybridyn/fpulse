@@ -474,12 +474,14 @@ def _adls_catalog(config: dict) -> Catalog:
 
 @register("ftp", ProviderMeta(category="file_system", auth="basic", tier="tier1"))
 def _ftp_catalog(config: dict) -> Catalog:
-    from ftplib import FTP, error_perm
+    # FTP is an intentional, user-selected connector protocol — F-Pulse must
+    # talk to customers' FTP servers; not an accidental insecure dependency.
+    from ftplib import FTP, error_perm  # nosec B402
     host = config.get("host", "localhost")
     port = int(config.get("port", 21))
     path = config.get("path") or config.get("directory") or "/"
     try:
-        ftp = FTP()
+        ftp = FTP()  # nosec B321
         ftp.connect(host, port, timeout=DEFAULT_TIMEOUT)
         ftp.login(_resolve_user(config, "anonymous"), config.get("password", "anonymous@"))
     except Exception as exc:  # noqa: BLE001

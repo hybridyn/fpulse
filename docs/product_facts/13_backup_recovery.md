@@ -7,6 +7,15 @@ Per `edition-matrix.md` line 73, backup capabilities split as follows.
 - **Manual backup** — operator-triggered backup of the SQLite database + data dir
 - **Cloud destinations** — S3, Azure Blob, GCS as backup targets (configured via the Settings → Backup page)
 - **Restore** — operator-triggered restore from a previously-saved backup
+- **Scheduled backups (basic)** — hourly / daily@HH:MM / weekly (UTC), driven by an in-process daemon (no external cron), pruned to a `retention_count`
+
+> **OSS runs scheduled backups.** With a schedule enabled in Settings → Backup,
+> the in-process backup daemon fires it — no external cron required — and prunes
+> to your `retention_count`. It fires a due slot at most once and catches up a
+> slot missed while the app was down (once, on the next start); it does not
+> stack missed slots. The status panel's `scheduler_active` / `next_backup_at`
+> reflect the running daemon. The cron example below still works if you prefer
+> to drive backups externally.
 
 **Where to find it:** Settings → Backup → "Create backup now". Pick destination (local filesystem, S3, Azure, GCS). Authentication via the regular Credentials page (S3 needs an `s3` credential type, etc.).
 
@@ -21,7 +30,7 @@ Per `edition-matrix.md` line 73, backup capabilities split as follows.
 
 ## F-Pulse+ adds
 
-- **Scheduled backups** — daily/weekly/monthly schedule (set inside F-Pulse, no separate OS task needed), with the same destination options
+- **Scheduled backups — advanced** — OSS now runs basic hourly / daily / weekly schedules via the in-process daemon; Plus adds a monthly cadence, managed cloud destinations at scale, and the retention tiers below
 - **Retention policy** — keep N daily, M weekly, K monthly tarballs (configurable)
 - **Parquet archive** — long-term archive of executions to a Parquet table on S3/GCS for cost-efficient storage. Lets operators drop the SQLite execution rows after archive.
 
@@ -67,6 +76,22 @@ This is the trade-off of local-first encryption: no central key recovery service
 ```
 
 Plus customers get this scheduled inside F-Pulse via the Backup page UI; OSS users set this up in their operating system's task scheduler — cron on Linux/macOS, Task Scheduler on Windows.
+
+## Verify your backups — and test the restore
+
+A backup you have never restored is a hypothesis, not a backup.
+
+- **Checksum every artifact.** Write `sha256sum` alongside each tarball and
+  verify it before trusting a restore.
+- **Encrypt off-host copies.** The tarball holds the SQLite DB (with
+  encrypted-at-rest credential blobs) and your data files; the remote copy
+  should be encrypted in transit and at rest, with tight access control.
+- **Keep the master key on a different medium from the data.** If one blob
+  holds both the DB and `secret.key`, a single leak exposes decryptable
+  credentials — defeating at-rest encryption.
+- **Run a real restore on a scratch host on a schedule** (e.g. monthly): stop,
+  restore the tarball + key, boot, log in, open a pipeline, run it. Only then
+  do you have a measured RPO/RTO instead of an assumed one.
 
 ## Anti-patterns
 

@@ -1231,7 +1231,7 @@ def cmd_restore(args):
             if not resolved.startswith(os.path.realpath(dest) + os.sep) and resolved != os.path.realpath(dest):
                 print(f"Refused unsafe path in archive: {member.name}", file=sys.stderr)
                 sys.exit(2)
-        tar.extractall(dest)
+        tar.extractall(dest)  # nosec B202
 
     print(f"Restored {src} → {dest}")
     print("Start the F-Pulse server pointing FPULSE_DATA_DIR at this directory.")

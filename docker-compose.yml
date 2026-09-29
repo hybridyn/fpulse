@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────
 # F-Pulse OSS — quick-start compose
 # ─────────────────────────────────────────────────────────────────────────
-# Spins up F-Pulse (single-binary) and optionally Ollama for local AI.
+# Spins up F-Pulse and optionally Ollama for local AI.
 #
 #   docker compose up -d                  # F-Pulse only
 #   docker compose --profile ai up -d     # F-Pulse + Ollama
@@ -32,14 +32,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: hybridyn/fpulse:${FPULSE_IMAGE_TAG:-1.0.0}
+    image: hybridyn/fpulse:${FPULSE_IMAGE_TAG:-1.0.1}
     container_name: fpulse
     restart: unless-stopped
     ports:
-      # 2026-06-01: standardized to 8001:8001 across all install paths
-      # (Docker compose, docker run, source install, packaged installer)
-      # so README "open http://localhost:8001" works everywhere.
-      - "8001:8001"
+      # Loopback-only by default. F-Pulse speaks plain HTTP; the security guide
+      # requires a TLS-terminating reverse proxy for any network exposure, so we
+      # do NOT publish to 0.0.0.0. `localhost:8001` still works for the operator
+      # on the host. To expose it, put a proxy in front (see docs/security-
+      # deployment.md) or, only if you accept plain HTTP on your LAN, change the
+      # bind below to "8001:8001".
+      - "127.0.0.1:8001:8001"
     environment:
       FPULSE_DATA_DIR: /data
       FPULSE_PORT: "8001"
@@ -104,7 +107,10 @@ services:
     profiles: ["ai"]
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      # Loopback-only: Ollama has no auth. F-Pulse reaches it over the private
+      # compose network (OLLAMA_URL=http://ollama:11434); the host publish is
+      # only for local debugging and must never face the LAN.
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     # GPU acceleration if available; harmless if not.

@@ -11,16 +11,19 @@ Settings → Backup UI work in OSS:
     latest snapshot (mtime + size) plus the next-scheduled timestamp
     computed from the saved schedule
 
-The actual scheduled triggering daemon is intentionally NOT wired in
-this file yet. OSS users get:
+The scheduled-triggering daemon is ``BackupSchedulerDaemon`` (below). When
+started from the app lifespan it wakes every 60s and, when the saved schedule
+is enabled and a due slot has passed without a backup since, runs
+``fpulse.storage.backup.backup_database()`` and prunes to the configured
+retention count. OSS users get:
 
-  * manual "Backup now" via existing POST /api/backup/create
+  * scheduled backups (hourly / daily@HH:MM / weekly, UTC) via the daemon
+  * manual "Backup now" via POST /api/backup/create
   * startup-time snapshot via fpulse.storage.backup.backup_database()
-  * configurable schedule that's stored and surfaced to the UI
 
-A future change can register a background thread that wakes up every
-60s, checks ``next_backup_at``, and calls the create endpoint when due.
-That's an operational concern — the settings surface ships first.
+The daemon fires a due slot at most once (it checks the newest backup's
+timestamp) and catches up a slot missed while the app was down once, on the
+next tick after start — it does not stack multiple missed slots.
 
 Why a JSON file (vs. SQLite row)? Backup config is one row per install,
 not one row per workspace, and it must be readable when the database is
@@ -33,6 +36,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -138,7 +142,15 @@ class BackupScheduler:
             "backups_dir": backups_dir,
             "latest_backup": latest,
             "backup_count": count,
-            "next_backup_at": _compute_next_run(settings),
+            # scheduler_active reflects whether the backup daemon loop is
+            # actually running in THIS process; next_backup_at is the real
+            # next slot only when it is — so the UI never advertises a run
+            # nothing will honor.
+            "scheduler_active": _DAEMON_RUNNING,
+            "next_backup_at": (
+                _compute_next_run(settings)
+                if (_DAEMON_RUNNING and settings.get("enabled")) else None
+            ),
         }
 
 
@@ -238,4 +250,145 @@ def _compute_next_run(settings: dict[str, Any]) -> str | None:
     return candidate.isoformat()
 
 
-__all__ = ["BackupScheduler"]
+# ─────────────────────────────────────────────────────────────────────
+# Scheduled-backup daemon
+# ─────────────────────────────────────────────────────────────────────
+
+# Set by BackupSchedulerDaemon.start()/stop() so get_status() can report
+# whether scheduled backups are actually being driven in this process.
+_DAEMON_RUNNING = False
+
+
+def _parse_hhmm(value: Any, default: tuple[int, int] = (2, 0)) -> tuple[int, int]:
+    """Parse "HH:MM" (UTC) into (hour, minute), clamped; garbage → default."""
+    try:
+        hh, mm = (int(p) for p in str(value).split(":", 1))
+        return max(0, min(23, hh)), max(0, min(59, mm))
+    except (ValueError, TypeError):
+        return default
+
+
+def _due_now(settings: dict[str, Any], latest_at: datetime | None, now: datetime) -> bool:
+    """True when the current schedule slot has arrived and no backup has been
+    taken since it. Fires a slot at most once; catches a slot missed while the
+    app was down once (on the next tick), but never stacks missed slots."""
+    freq = settings.get("frequency") or "daily"
+    if freq == "hourly":
+        slot = now.replace(minute=0, second=0, microsecond=0)
+    elif freq == "weekly":
+        try:
+            target_day = max(0, min(6, int(settings.get("weekly_day", 0))))
+        except (ValueError, TypeError):
+            target_day = 0
+        if now.weekday() != target_day:
+            return False
+        hh, mm = _parse_hhmm(settings.get("daily_time", "02:00"))
+        slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    else:  # daily
+        hh, mm = _parse_hhmm(settings.get("daily_time", "02:00"))
+        slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+    if now < slot:
+        return False
+    return latest_at is None or latest_at < slot
+
+
+def _resolve_db_path() -> str | None:
+    """The SQLite path to back up — ``data_dir/fpulse.db`` (Database's default)."""
+    try:
+        from fpulse.main import app_state  # type: ignore
+        data_dir = (app_state.get("data_dir") if isinstance(app_state, dict) else None) or "data"
+        return os.path.join(data_dir, "fpulse.db")
+    except Exception:
+        return None
+
+
+class BackupSchedulerDaemon:
+    """Background thread that runs the saved backup schedule.
+
+    Wakes every ``interval_seconds`` (default 60). On each tick, if the saved
+    schedule is enabled and a slot is due, it runs ``backup_database`` and
+    prunes to the configured retention count. Best-effort throughout: a tick
+    failure is logged and the loop continues, so a transient error never
+    silences the schedule permanently.
+    """
+
+    def __init__(self, interval_seconds: int = 60):
+        self._interval = max(5, int(interval_seconds))
+        self._stop = threading.Event()
+        self._thread: "threading.Thread | None" = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._loop, name="fpulse-backup-scheduler", daemon=True,
+        )
+        self._thread.start()
+        global _DAEMON_RUNNING
+        _DAEMON_RUNNING = True
+        logger.info("Backup scheduler daemon started (interval=%ds)", self._interval)
+
+    def stop(self) -> None:
+        self._stop.set()
+        t = self._thread
+        if t is not None and t.is_alive():
+            t.join(timeout=5)
+        self._thread = None
+        global _DAEMON_RUNNING
+        _DAEMON_RUNNING = False
+        logger.info("Backup scheduler daemon stopped")
+
+    @property
+    def is_running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _loop(self) -> None:
+        # Tick immediately on start, then every interval.
+        while not self._stop.is_set():
+            try:
+                self._tick()
+            except Exception as exc:  # noqa: BLE001 — a tick must never kill the loop
+                logger.warning("Backup scheduler tick failed (non-fatal): %s", exc)
+            self._stop.wait(self._interval)
+
+    def _tick(self) -> None:
+        settings = BackupScheduler.get_settings()
+        if not settings.get("enabled"):
+            return
+        backups_dir = _resolve_backups_dir(settings)
+        latest, _count = _scan_local_backups(backups_dir)
+        latest_at: datetime | None = None
+        if latest and latest.get("created_at"):
+            try:
+                latest_at = datetime.fromisoformat(str(latest["created_at"]).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                latest_at = None
+        now = datetime.now(timezone.utc)
+        if not _due_now(settings, latest_at, now):
+            return
+
+        db_path = _resolve_db_path()
+        if not db_path:
+            logger.warning("Backup scheduler: could not resolve the database path — skipping tick")
+            return
+
+        from fpulse.storage.backup import backup_database, _prune_backups
+        path = backup_database(db_path)
+        if not path:
+            logger.warning("Backup scheduler: scheduled backup produced no file (db missing?)")
+            return
+        logger.info("Backup scheduler: created scheduled backup %s", path)
+
+        # Honor the user's configured retention_count (backup_database already
+        # pruned to the global default; this enforces the per-install setting).
+        try:
+            keep = int(settings.get("retention_count", 5))
+            base = os.path.splitext(os.path.basename(db_path))[0]
+            _prune_backups(os.path.dirname(path), base, keep)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Backup scheduler: retention prune skipped: %s", exc)
+
+
+__all__ = ["BackupScheduler", "BackupSchedulerDaemon"]
