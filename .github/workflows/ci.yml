@@ -61,7 +61,10 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        # npm ci (not npm install) — installs exactly the locked tree from
+        # package-lock.json, so the CI build is reproducible and matches the
+        # release + Docker build paths.
+        run: npm ci --no-audit --no-fund
 
       - name: TypeScript strict check (blocking)
         # Gates the build on `tsc -b` passing — i.e. real type safety,
@@ -298,6 +301,25 @@ jobs:
             [ "$ac" = "200" ] || { echo "::error::asset $a -> $ac"; exit 1; }
           done
           echo "docker compose up serves the real UI + assets"
+      - name: Data persists across a restart
+        # A container that serves the UI once is not enough — an operator
+        # restarts it (upgrades, reboots, crashes). Prove the data volume
+        # survives: /data must be non-empty after first boot, the container
+        # must recover after `restart`, and /data must still be populated.
+        run: |
+          docker compose exec -T fpulse sh -c '[ -n "$(ls -A /data 2>/dev/null)" ]' \
+            || { echo "::error::/data empty after first boot"; exit 1; }
+          docker compose restart fpulse
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8001/api/health >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8001/api/health >/dev/null \
+            || { echo "::error::container did not recover after restart"; docker compose logs fpulse; exit 1; }
+          docker compose exec -T fpulse sh -c '[ -n "$(ls -A /data 2>/dev/null)" ]' \
+            || { echo "::error::/data empty after restart — data not persisted"; exit 1; }
+          echo "data dir persisted across container restart"
+
       - name: Tear down
         if: always()
         run: docker compose down -v || true
