@@ -470,7 +470,7 @@ def cmd_health(args):
 
 def cmd_version(args):
     """Show version info."""
-    print("F-Pulse v1.0.0")
+    print("F-Pulse v1.0.1")
     print("AI-native, human-governed data pipeline builder")
     print(f"Python {sys.version.split()[0]}")
 

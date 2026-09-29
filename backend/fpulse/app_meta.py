@@ -6,12 +6,13 @@ renaming the repo later is a ONE-LINE change here — nothing else needs editing
 """
 from __future__ import annotations
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # GitHub coordinates. Change REPO_OWNER (and REPO_NAME if the repo is renamed)
 # to re-point every in-app link at once.
 REPO_OWNER = "hybridyn"
-REPO_NAME = "hybridyn-f-pulse-oss"
+REPO_NAME = "fpulse"
+PYPI_NAME = "fpulse"
 
 HOMEPAGE = "https://hybridyn.com"
 DOCS_URL = "https://docs.hybridyn.com/f-pulse"
@@ -43,8 +44,19 @@ def releases_api_url() -> str:
     return f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
 
 
+def pypi_json_url() -> str:
+    """PyPI JSON API — latest published version at ``info.version``."""
+    return f"https://pypi.org/pypi/{PYPI_NAME}/json"
+
+
+def pypi_project_url(version: str | None = None) -> str:
+    """PyPI project page, optionally pinned to a specific version."""
+    base = f"https://pypi.org/project/{PYPI_NAME}"
+    return f"{base}/{version}/" if version else f"{base}/"
+
+
 __all__ = [
-    "VERSION", "REPO_OWNER", "REPO_NAME", "HOMEPAGE", "DOCS_URL",
+    "VERSION", "REPO_OWNER", "REPO_NAME", "PYPI_NAME", "HOMEPAGE", "DOCS_URL",
     "repo_url", "issues_url", "new_issue_url", "releases_url",
-    "discussions_url", "releases_api_url",
+    "discussions_url", "releases_api_url", "pypi_json_url", "pypi_project_url",
 ]
