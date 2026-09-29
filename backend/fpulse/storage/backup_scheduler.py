@@ -138,7 +138,13 @@ class BackupScheduler:
             "backups_dir": backups_dir,
             "latest_backup": latest,
             "backup_count": count,
-            "next_backup_at": _compute_next_run(settings),
+            # The scheduled-trigger daemon is not wired yet (see the module
+            # docstring), so never advertise a next-run the app won't honor —
+            # that misleads users into thinking backups run automatically.
+            # Report manual-only until the daemon lands; the saved schedule
+            # settings still persist for that future release.
+            "scheduler_active": False,
+            "next_backup_at": None,
         }
 
 

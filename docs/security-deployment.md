@@ -17,6 +17,29 @@ environment variables** and **§4 File-system permissions**.
 
 ---
 
+## 0. Trust model — read this first
+
+F-Pulse OSS is **single-tenant and trusted-author**. There is no per-user
+authorization boundary between pipeline authors: anyone who can author or run a
+pipeline can run **Python and SQL transforms inside the F-Pulse process**, and
+**file sources can read any path that OS process can read**. A pipeline author
+therefore effectively holds the privileges of the F-Pulse service account —
+the data directory, the master key file, and any network the host can reach.
+
+Consequences for operators:
+
+- **Never run pipelines authored by people you do not trust** on a shared
+  instance. There is no sandbox between an author and the host.
+- **Give F-Pulse its own least-privilege service account and host/VM/container**,
+  not a shared box holding other sensitive data or credentials.
+- **One instance = one trust domain.** If two groups must not run code as each
+  other or see each other's data, give them separate installs.
+- Multi-user workspaces, RBAC, approval gates and PROD sandboxing are
+  **F-Pulse+** features, not OSS ones.
+
+This is a reasonable model for a solo builder or a trusting team on a dedicated
+host; it is **not** a multi-tenant platform. See [`threat-model.md`](threat-model.md).
+
 ## 1. Network topology
 
 F-Pulse listens on plain HTTP. Always front it with a reverse proxy that

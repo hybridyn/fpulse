@@ -8,6 +8,12 @@ Per `edition-matrix.md` line 73, backup capabilities split as follows.
 - **Cloud destinations** — S3, Azure Blob, GCS as backup targets (configured via the Settings → Backup page)
 - **Restore** — operator-triggered restore from a previously-saved backup
 
+> **OSS scheduling is manual.** The Settings → Backup schedule fields
+> (frequency / enabled) are saved but **not auto-executed in OSS** — the in-app
+> scheduler daemon is an F-Pulse+ feature. In OSS, drive backups with the cron
+> example below (or any external scheduler). The status panel reports
+> "manual only" so it never implies an automatic run that will not happen.
+
 **Where to find it:** Settings → Backup → "Create backup now". Pick destination (local filesystem, S3, Azure, GCS). Authentication via the regular Credentials page (S3 needs an `s3` credential type, etc.).
 
 **What gets backed up:**
@@ -67,6 +73,22 @@ This is the trade-off of local-first encryption: no central key recovery service
 ```
 
 Plus customers get this scheduled inside F-Pulse via the Backup page UI; OSS users set this up in their operating system's task scheduler — cron on Linux/macOS, Task Scheduler on Windows.
+
+## Verify your backups — and test the restore
+
+A backup you have never restored is a hypothesis, not a backup.
+
+- **Checksum every artifact.** Write `sha256sum` alongside each tarball and
+  verify it before trusting a restore.
+- **Encrypt off-host copies.** The tarball holds the SQLite DB (with
+  encrypted-at-rest credential blobs) and your data files; the remote copy
+  should be encrypted in transit and at rest, with tight access control.
+- **Keep the master key on a different medium from the data.** If one blob
+  holds both the DB and `secret.key`, a single leak exposes decryptable
+  credentials — defeating at-rest encryption.
+- **Run a real restore on a scratch host on a schedule** (e.g. monthly): stop,
+  restore the tarball + key, boot, log in, open a pipeline, run it. Only then
+  do you have a measured RPO/RTO instead of an assumed one.
 
 ## Anti-patterns
 
