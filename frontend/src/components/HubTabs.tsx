@@ -136,5 +136,7 @@ export const WORKFLOWS_TABS: HubTab<'pipelines' | 'editor' | 'executions' | 'tem
 /** Connections family — All Connections / Credentials. */
 export const CONNECTIONS_TABS: HubTab<'connections' | 'credentials'>[] = [
   { page: 'connections', label: 'All Connections', icon: ICON_CONNECTIONS },
-  { page: 'credentials', label: 'Credentials', devOnly: true, icon: ICON_CREDENTIALS },
+  // Credentials is the OSS secret store — always visible (OSS has no Vault to
+  // supersede it, so it must never be env-gated out of view).
+  { page: 'credentials', label: 'Credentials', icon: ICON_CREDENTIALS },
 ];
