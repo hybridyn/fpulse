@@ -1,14 +1,31 @@
-# Build your own connector in 30 minutes
+# Build your own connector
 
-F-Pulse ships ~37 first-party connector manifests, but the moment you have an internal API or a niche SaaS tool, you'll need one we don't ship. **This is fine.** F-Pulse OSS is designed around the assumption that you'll bring your own — the framework is the product, the catalog is just the starter pack.
+F-Pulse ships 37 v1 connector manifests, but the moment you have an internal API
+or a niche SaaS tool you will need one we do not ship. **This is fine.** F-Pulse
+OSS assumes you will bring your own — the framework is the product, the catalog
+is a starter pack.
 
-This tutorial walks you end-to-end through building a working connector from scratch, three ways:
+Three paths, in increasing order of effort and control:
 
-1. [**Fast path: From OpenAPI**](#fast-path-from-openapi) — 90 seconds, when the vendor publishes a spec
-2. [**Medium path: From sample responses**](#medium-path-from-sample-responses) — ~10 minutes, when there's no spec
-3. [**Full path: Hand-authored manifest**](#full-path-hand-authored-manifest) — ~30 minutes, for full control
+1. [**From a specification**](#path-1-from-a-specification) — the API Explorer generates a runnable connector
+2. [**From a tested response**](#path-2-from-a-tested-response) — when no spec exists
+3. [**Hand-authored**](#path-3-hand-authored) — full control over auth, pagination and fixtures
 
-Each produces a `v2.json` manifest that drops straight into the F-Pulse install. **No compile step, no IDE, no language tax.**
+
+---
+
+## The one thing to understand first
+
+There are two manifest formats and only one of them runs.
+
+- **`<id>.json` (v1)** is the runtime manifest. The SaaS Connector node loads
+  it. This is the file that makes a connector work.
+- **`<id>.v2.json` (v2)** is the certification spec. `load_manifests()`
+  deliberately skips it. Placed beside a v1 file it promotes that connector's
+  tier to *certified*; on its own it does nothing at runtime.
+
+Generate a v2 file, drop it in `manifests/`, restart, and you will find **no new
+connector**. Paths 1 and 3 below produce v1.
 
 ---
 
@@ -16,191 +33,156 @@ Each produces a `v2.json` manifest that drops straight into the F-Pulse install.
 
 You need:
 
-- A running F-Pulse install (any of [Docker / source / single-container](../../readme.md#quick-start))
-- Admin or workspace-editor permission (Author Connector is a write surface)
-- For paths 1 + 2: a browser pointed at `http://localhost:5174`
-- For path 3: a text editor; the manifest goes into `backend/fpulse/connectors/manifests/`
+- A running F-Pulse install ([Docker / PyPI / source](../../README.md#quick-start))
+- **Developer** rank to send test requests; **admin** to save a connector
+- For path 3: a text editor, and write access to
+  `backend/fpulse/connectors/manifests/`
 
-You do **not** need:
-
-- An LLM / AI provider — the generator is deterministic, no LLM call required
-- Vendor-side setup — works against a public OpenAPI URL or pasted curl output
-- Plus license — every authoring path is open in OSS
+You do **not** need an LLM provider (the generator is deterministic), vendor-side
+setup, or a Plus licence — every authoring path is open in OSS.
 
 ---
 
-## Fast path: From OpenAPI
+## Path 1: From a specification
 
-Best when the vendor publishes an OpenAPI 3.x spec. Works for most modern enterprise REST surfaces (Stripe, GitHub, Linear, Notion, ServiceNow, Workday REST, etc.).
+Best when the vendor publishes OpenAPI 3.x.
 
-### 1. Find the OpenAPI URL
+### 1. Open Insights → API Explorer
 
-Look in the vendor's developer docs for a link to `openapi.json` / `openapi.yaml` / `swagger.json`. Examples:
+Step one offers six known APIs with published specs, or paste/upload your own
+(JSON or YAML, up to 2 MB). Your internal API probably publishes one too.
 
-- Stripe: `https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json`
-- GitHub: `https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json`
-- Your internal API: whatever your team publishes (most teams have one)
+### 2. Pick an endpoint and test it
 
-### 2. Open Author Connector
+Select a discovered endpoint, choose authentication, and send one request.
 
-In the F-Pulse sidebar: **Insights → Author Connector**.
+Do not skip this. A spec's declared authentication is not evidence that your
+credentials work, and the generated connector inherits whatever the spec
+claims. Use the **Tests** tab to assert what you expect — a 200, a JSON path
+that must exist, an acceptable response time.
 
-Pick the **From OpenAPI** tab.
+### 3. Generate and review
 
-### 3. Paste the URL, click Generate
+Open the **Connector** tab, keep the **OpenAPI specification** source selected,
+give it an id (lowercase, digits and underscores), and generate.
 
-The generator reads the spec and produces:
+You get a v2 cert manifest **and** a v1 runtime manifest. Review the per-endpoint
+authentication panel before going further. If it reports *no endpoint has a
+supported authentication option*, the definition will save but will not execute.
 
-| What it reads | What it produces |
-|---|---|
-| `servers[]` | Base URL configuration |
-| `securitySchemes` | Auth section (basic / bearer / API key / OAuth2) |
-| Each GET endpoint with array response | A **stream** (incremental + full-refresh aware) |
-| Each POST/PUT/DELETE endpoint | An **action** (writable surface for sink nodes) |
-| `responses[].content.schema` | Response shape + column types |
-| Pagination patterns (page / cursor / link header) | Pagination config per stream |
+### 4. Save
 
-You'll see a preview with every detected stream and action. Review it, click **Download manifest** → you get a `<connector>.v2.json` file.
+**Save as Beta connector** writes the v1 runtime manifest to the user manifest
+store. It is usable immediately — no restart, no filesystem access. It appears
+at the **Beta** tier, clearly distinct from first-party certified connectors.
 
-### 4. Drop the manifest into the manifests directory
+Prefer a file on disk? **Download** gives you the JSON to place in
+`backend/fpulse/connectors/manifests/` — save it as `<id>.json`, not
+`<id>.v2.json`, and restart.
 
-```bash
-mv ~/Downloads/your-connector.v2.json backend/fpulse/connectors/manifests/
-```
+### 5. Create a connection
 
-Restart F-Pulse (or hit `POST /api/connectors/reload-manifests` if you've enabled it in your install). The connector now shows up in the Connections page picker.
-
-### 5. Create a connection + test
-
-Connections page → **+ Create Connection** → pick the connector you just authored → fill credentials → **Test connection**. If the auth path validates, you're done.
-
-You can now use this connector in pipelines (Source / Sink / Read / Write nodes), schedule pipelines that hit it, alert on failures, etc. — same as any first-party connector.
-
-**Total time: ~90 seconds** from "I need this connector" to "running pipeline against it."
+Connections → **+ Create Connection** → pick your connector → fill credentials →
+**Test connection**. From there it behaves like any other connector in Source,
+Sink, Read and Write nodes.
 
 ---
 
-## Medium path: From sample responses
+## Path 2: From a tested response
 
-Best when the vendor doesn't publish an OpenAPI spec, or the spec is hand-wavy and you'd rather work from real responses.
+Best when there is no spec, or the spec is too hand-wavy to trust.
 
-### 1. Collect 1–5 sample responses
+Test a real endpoint in the Explorer, then open the **Connector** tab and choose
+**This response** as the source. The generator infers field types from actual
+data — which is often more accurate than a stale spec.
 
-Use `curl` or Postman to hit the endpoints you care about, save the raw JSON. Two-to-three responses per endpoint is plenty — the generator uses them to infer the field types and the shape.
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" https://api.example.com/v1/users > users.json
-curl -H "Authorization: Bearer $TOKEN" https://api.example.com/v1/orders > orders.json
-curl -H "Authorization: Bearer $TOKEN" https://api.example.com/v1/orders/123/items > order_items.json
-```
-
-### 2. Open Author Connector → From Samples
-
-Same sidebar entry: **Insights → Author Connector**. Pick the **From Samples** tab.
-
-### 3. Paste each response + tell us the URL pattern
-
-For each sample you paste, fill in:
-
-- The endpoint URL pattern (`/v1/users`, `/v1/orders`, etc.)
-- The HTTP method (almost always GET for stream samples)
-- The auth scheme (the generator infers from sample headers if you paste those too)
-- Whether responses are paginated and how (page / cursor / link header)
-
-### 4. Click Generate → review → download
-
-Same workflow as the OpenAPI path from here. You get a `<connector>.v2.json` to drop in.
-
-The "from samples" path produces a less-rich manifest than OpenAPI (no auto-detected sink actions, fewer streams) but covers the common "read endpoints from a SaaS" case in under 10 minutes.
+**The limitation is important:** this path returns a v2 manifest only. There is
+no runtime definition, so there is nothing to save as a connector. Use it to get
+a reviewed schema draft, download it, and finish the runtime manifest by hand
+(path 3).
 
 ---
 
-## Full path: Hand-authored manifest
+## Path 3: Hand-authored
 
-Use this when you want full control — custom auth (HMAC signatures, mutual TLS), unusual pagination, complex multi-stage handshakes, or stream-level fixtures.
+Use this for custom auth, unusual pagination, multi-stage handshakes, or when
+you want fixtures.
 
-### 1. Start from an existing manifest
-
-Copy one that's close to what you need:
+### 1. Start from a manifest close to yours
 
 ```bash
-cp backend/fpulse/connectors/manifests/github.v2.json \
-   backend/fpulse/connectors/manifests/my_connector.v2.json
+cp backend/fpulse/connectors/manifests/github.json \
+   backend/fpulse/connectors/manifests/my_connector.json
 ```
 
-Edit the copy in your editor.
+Copy a **v1** file — those are the ones that run.
 
-### 2. The five required sections
-
-A minimal v2 manifest has:
+### 2. Minimum shape
 
 ```json
 {
   "id": "my_connector",
   "name": "My Connector",
-  "version": "v2",
   "category": "saas",
-  "auth": { "type": "bearer" },
   "base_url": "https://api.example.com/v1",
+  "auth": { "type": "bearer" },
   "streams": [
     {
       "name": "items",
-      "endpoint": "/items",
+      "path": "/items",
       "method": "GET",
-      "pagination": { "type": "page", "page_param": "page", "size_param": "limit", "size": 100 },
+      "pagination": { "type": "page", "page_param": "page", "size_param": "limit" },
       "primary_key": "id"
     }
-  ],
-  "actions": [],
-  "fixtures": {}
+  ]
 }
 ```
 
-### 3. Auth schemes supported
+### 3. Auth types in use across shipped manifests
 
-| `auth.type` | Inputs the connection UI will collect |
+| `auth.type` | Manifests using it |
 |---|---|
-| `none` | (nothing) |
-| `basic` | `username`, `password` |
-| `bearer` | `token` |
-| `api_key` | `api_key`, `header_name` (defaults to `X-API-Key`) |
-| `oauth2_client_credentials` | `client_id`, `client_secret`, `token_url`, `scopes` |
-| `oauth2_authorization_code` | Standard OAuth2 dance — see manifests/google_drive.v2.json |
-| `aws_sigv4` | `access_key_id`, `secret_access_key`, `region`, `service` |
-| `custom` | You'll wire a Python tester (see `backend/fpulse/connections/tester.py`) |
+| `bearer` | 15 |
+| `basic` | 10 |
+| `oauth2` | 8 |
+| `api_key` | 4 |
 
-### 4. Pagination patterns supported
+### 4. Pagination types in use
 
-| `pagination.type` | When to use |
+| `pagination.type` | Streams using it |
 |---|---|
-| `none` | Single-page responses |
-| `page` | `?page=1&limit=100` style |
-| `offset` | `?offset=0&limit=100` style |
-| `cursor` | Response includes `next_cursor` / `next_page_token` |
-| `link_header` | RFC 5988 `Link: <...>; rel="next"` (GitHub / Stripe style) |
+| `cursor` | 37 |
+| `offset` | 17 |
+| `offset_limit` | 16 |
+| `page` | 14 |
+| `url` | 8 |
+| `link_header` | 6 |
+| `none` | 2 |
 
-### 5. Validate the manifest
+Both tables are counted from the shipped manifests rather than from a schema
+document, so they reflect what the runtime demonstrably supports. Read a real
+manifest for the exact field names each type expects.
 
-```bash
-python -m fpulse.connectors.validate backend/fpulse/connectors/manifests/my_connector.v2.json
-```
+### 5. Load it
 
-The F0.1 validator checks every required field, type-compatibility, and runs each stream's fixtures (if present) through a dry-run.
+Restart the backend. `load_manifests()` picks up `*.json` and skips `*.v2.json`.
+There is no reload endpoint.
 
-### 6. Add fixtures for cert-matrix promotion
-
-If you want your connector to graduate from "v1 functional" to **production-certified** in the cert matrix, ship the five required fixtures:
+### 6. Fixtures, for a higher depth score
 
 ```
 backend/fpulse/connectors/fixtures/my_connector/
-├── auth_error.json       # 401 / 403 response — tester catches and surfaces it
-├── empty.json            # empty array — stream handles cleanly, no crash
-├── happy_path.json       # representative successful response
+├── auth_error.json       # 401 / 403 — the tester surfaces it
+├── empty.json            # empty array — no crash
+├── happy_path.json       # representative success
 ├── rate_limit.json       # 429 + Retry-After — backoff respected
-└── schema_drift.json     # extra field added by vendor — manifest survives
+└── schema_drift.json     # vendor adds a field — manifest survives
 ```
 
-The cert-matrix daemon picks these up automatically and bumps your connector's status.
+Fixtures feed the certification depth score reported by
+`GET /api/connectors/cert-matrix`. They do not promote a connector on their own:
+the bar for **Verified** is a live-vendor smoke test on every PR plus a stored
+fixture, and **Production** adds a 30-day green streak and a named owner.
 
 ---
 
@@ -216,6 +198,7 @@ Built something useful? Two ways to share:
 ## See also
 
 - [docs/connector-authoring.md](../connector-authoring.md) — full UI reference + all options for OpenAPI / sample modes
+- [../api-explorer.md](../api-explorer.md) — testing and assertions in full
 - [docs/connectors.md](../connectors.md) — current first-party catalog + cert-matrix status
 - [docs/vs-talend.md](../vs-talend.md) — why this framework matters vs Talend's Eclipse + Java extension model
 - [Request a connector or node](https://github.com/hybridyn/fpulse/issues/new/choose) — if your need is generic enough that we should ship it first-party

@@ -1654,7 +1654,7 @@ export const api = {
     request<any>(`/connectors/cert-matrix/${encodeURIComponent(id)}`),
 
   // ── Trust posture (Gate 4, May 4 2026) ──
-  getTrustPosture: () => request<any>('/trust/posture'),
+  getTrustPosture: () => request<any>('/trust/diagnostics'),
   getTrustEvalSummary: () => request<any>('/trust/eval-summary'),
   getSupportedModels: () => request<any>('/trust/supported-models'),
 

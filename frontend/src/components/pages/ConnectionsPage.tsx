@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
+import { takeApiConnection } from '../../utils/apiExplorerDraft';
 import { toast } from '../Toast';
 import ReadOnlyBanner from '../../auth/ReadOnlyBanner';
 import { useCan } from '../../auth/RoleGate';
@@ -1384,6 +1385,12 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   const [formCredentialFieldMap, setFormCredentialFieldMap] = useState<Record<string, string>>({});
   const [credentialFieldMenu, setCredentialFieldMenu] = useState<string | null>(null);
   const [credentials, setCredentials] = useState<CredentialOption[]>([]);
+  useEffect(() => {
+    const draft = takeApiConnection();
+    if (!draft) return;
+    setFormType('rest_api'); setFormName(draft.name); setFormConfig(draft.config);
+    setCreateStep(1); setView('create');
+  }, []);
   const [formTags, setFormTags] = useState('');
   const [formScope, setFormScope] = useState<'global' | 'project'>('global');
   const [formProjectId, setFormProjectId] = useState('');
@@ -1397,7 +1404,6 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
   // either box manually.
   const [formCanRead, setFormCanRead] = useState(true);
   const [formCanWrite, setFormCanWrite] = useState(true);
-
   useEffect(() => {
     if (!credentialFieldMenu) return;
     const closeOnOutside = (event: MouseEvent) => {
@@ -1581,6 +1587,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
     setFormEnvironment(isPlusTier ? (environment || 'dev') : 'dev');
     setFormCanRead(true);
     setFormCanWrite(true);
+    setFormCredentialId('');
   };
 
   const handleDelete = async (id: string) => {
@@ -3103,6 +3110,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
               </div>
               {/* ── End: Identity ── */}
 
+
               {fields.length > 0 && createStep === 1 && (
                 <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -3814,6 +3822,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
 
             {/* ── Right column ── */}
             <div className="space-y-6">
+
               {/* ── Card: Connection Details ── */}
               {fields.length > 0 && createStep === 1 && (
                 <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
@@ -4056,6 +4065,7 @@ export default function ConnectionsPage({ projectId, projectName: activeProjectN
       const cf = formFromCapabilities(selectedConnection.capabilities);
       setFormCanRead(cf.canRead);
       setFormCanWrite(cf.canWrite);
+      setFormCredentialId(selectedConnection.credential_id || '');
       setCreateStep(0);
       setView('edit');
     };

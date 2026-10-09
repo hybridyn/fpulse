@@ -69,6 +69,13 @@ from fpulse.nodes.registry import register
 from fpulse.security.ssrf import API_SOURCE_ALLOW_PRIVATE_ENV, check_url
 
 
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("Credentials in API URLs are not allowed")
+    return parsed.scheme.lower(), parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+
+
 class _SsrfGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Re-validate every redirect target against the SSRF policy.
 
@@ -77,6 +84,8 @@ class _SsrfGuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
     """
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102
+        if _origin(req.full_url) != _origin(newurl):
+            raise ValueError("Cross-origin API redirects are not allowed")
         check_url(newurl, allow_private_env=API_SOURCE_ALLOW_PRIVATE_ENV)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -379,6 +388,10 @@ def _build_auth_headers(manifest: RestConnectorManifest, params: dict[str, Any])
     atype = (auth.get("type") or "none").lower()
     headers: dict[str, str] = {}
 
+    if atype == "openapi":
+        from fpulse.connectors.openapi_security import build_security
+        return build_security(auth, params)[0]
+
     if atype == "none":
         return headers
 
@@ -597,12 +610,20 @@ def _execute_stream(
     #   5. stream.headers                — per-stream overrides win
     headers = {"Accept": "application/json", **(manifest.headers or {})}
     headers.update(_interpolate_dict(manifest.default_headers or {}, params))
-    headers.update(_build_auth_headers(manifest, params))
-    headers.update(_interpolate_dict(stream.get("headers", {}), params))
+    auth = stream.get("auth", manifest.auth) or {}
+    if auth.get("type") == "openapi":
+        from fpulse.connectors.openapi_security import build_security
+        auth_headers, extra_query = build_security(auth, params)
+        headers.update(_interpolate_dict(stream.get("headers", {}), params))
+        protected = {key.lower() for key in auth_headers}
+        headers = {key: value for key, value in headers.items() if key.lower() not in protected}
+        headers.update(auth_headers)
+    else:
+        headers.update(_build_auth_headers(manifest, params))
+        headers.update(_interpolate_dict(stream.get("headers", {}), params))
+        extra_query = {}
 
     # api_key in query string
-    auth = manifest.auth or {}
-    extra_query: dict[str, Any] = {}
     if (auth.get("type") or "").lower() == "api_key" and auth.get("query_param"):
         extra_query[auth["query_param"]] = params.get(auth.get("key_param", "api_key"), "")
 
@@ -648,14 +669,16 @@ def _execute_stream(
     page_size = int(pagination.get("page_size", 100))
 
     while next_url and page <= max_pages:
+        if _origin(next_url) != _origin(base):
+            raise ValueError("Cross-origin API endpoints and pagination are not allowed")
         try:
             payload, resp_headers = _http_request(
                 next_url, headers, method=method, body=body, body_text=body_text
             )
         except urllib.error.HTTPError as e:
-            raise RuntimeError(f"HTTP {e.code} from {next_url}: {e.read().decode(errors='replace')[:300]}")
-        except Exception as e:
-            raise RuntimeError(f"Request failed for {next_url}: {e}")
+            raise RuntimeError(f"API request failed (HTTP {e.code})") from None
+        except Exception:
+            raise RuntimeError("API request failed; check connectivity and connection settings") from None
 
         chunk = _dot_get(payload, data_path) if data_path else payload
         if isinstance(chunk, list):

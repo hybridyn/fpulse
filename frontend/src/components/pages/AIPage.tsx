@@ -26,8 +26,7 @@ import ProviderComparison from '../agent/ProviderComparison';
 import ActivityPage from './ActivityPage';
 import TrustPage from './TrustPage';
 import ReportsPage from './ReportsPage';
-import ConnectorAuthorPage from './ConnectorAuthorPage';
-import ConnectorGalleryPage from './ConnectorGalleryPage';
+import ApiExplorerPage from './ApiExplorerPage';
 import { getAgentStatus, type AgentStatus } from '../../api/agent';
 import { getOllamaStatus, type OllamaStatus } from '../../api/ollama';
 import { usePageContext } from '../../hooks/usePageContext';
@@ -189,23 +188,24 @@ function ActiveProviderSummary({ dark }: { dark: boolean }) {
   );
 }
 
-type AITab = 'settings' | 'activity' | 'reports' | 'trust' | 'author' | 'gallery';
+type AITab = 'settings' | 'activity' | 'reports' | 'trust' | 'author';
 
 // Each sub-tab maps to a top-level page id so clicking a tab updates the
 // URL hash. Refresh / share-URL / browser-back then preserve the tab.
 // 'settings' → 'ai' because the AI Provider tab is the default landing for
 // the Insights hub; the page id stayed 'ai' for back-compat with older deep
 // links.
-// 2026-05-29: 'gallery' added so the community-connector browse view
-// has a stable deep-link (#ai?tab=gallery). Paired with 'author' as
-// the build vs browse halves of the OSS extensibility loop.
+// 2026-09-23: the 'gallery' tab was removed. It held six links to public
+// OpenAPI specs, which is step one of the API Explorer, not a destination —
+// and its name implied a catalogue of shipped connectors, which lives on the
+// Trust tab (cert matrix) and the Connections picker. The references now sit
+// inside the Explorer; #gallery still resolves there so old links survive.
 const TAB_TO_PAGE = {
   settings: 'ai',
   activity: 'activity',
   reports: 'reports',
   trust: 'trust',
   author: 'author',
-  gallery: 'gallery',
 } as const;
 
 interface Props {
@@ -303,25 +303,12 @@ export default function AIPage({
       // to two lines in the Insights tab rail at common viewport widths)
       // to single-word "Author". The action context is already obvious
       // from the surrounding tab cluster + the subtitle below.
-      label: 'Author',
-      subtitle: 'Generate a connector definition from an OpenAPI spec or sample API responses.',
+      label: 'API Explorer',
+      subtitle: 'Test API requests and inspect responses.',
       icon: (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-        </svg>
-      ),
-    },
-    {
-      id: 'gallery',
-      label: 'Gallery',
-      subtitle: 'Browse community-built connectors and curated starting points you can deploy in 90 seconds.',
-      icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
         </svg>
       ),
     },
@@ -340,7 +327,7 @@ export default function AIPage({
         subtitle={activeTab.subtitle}
         tabs={
           <div className="flex justify-center items-center gap-0.5">
-            {TABS.map((t) => (
+            {TABS.filter(t => t.id !== 'trust').map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); navigateTo(TAB_TO_PAGE[t.id]); }}
@@ -367,16 +354,15 @@ export default function AIPage({
         {/* Cap reading-column at 1300px so Insights sections (Activity / Trust /
             Reports / Provider) feel composed on wide screens but use enough
             horizontal space to be comfortably readable on 1920px monitors. */}
-        <div className="w-full max-w-[1300px] mx-auto">
+        <div className={`w-full mx-auto ${tab === 'author' ? 'max-w-[1560px]' : 'max-w-[1300px]'}`}>
           {tab === 'activity' && <ActivityPage embedded />}
 
           {tab === 'trust' && <TrustPage embedded />}
 
           {tab === 'reports' && <ReportsPage user={user} embedded tier={tier} environment={environment} />}
 
-          {tab === 'author' && <ConnectorAuthorPage embedded />}
+          {tab === 'author' && <ApiExplorerPage embedded />}
 
-          {tab === 'gallery' && <ConnectorGalleryPage embedded />}
 
           {tab === 'settings' && (
             <div className="space-y-4">
@@ -440,7 +426,7 @@ export default function AIPage({
                     Verify this provider with the eval harness
                   </p>
                   <p className={`text-xs mt-0.5 ${dark ? 'text-emerald-200/80' : 'text-emerald-700'}`}>
-                    Run <code className={`px-1 py-0.5 rounded ${dark ? 'bg-black/30 text-emerald-200' : 'bg-white text-emerald-800'}`}>python -m fpulse.eval.run</code> to score the model on tool-use, classification, and intent across 14 cases × 5 categories. The pass-rate surfaces on the Trust tab.
+                    Recorded evaluation results are available in Settings → Security & Diagnostics.
                   </p>
                   <a
                     href="#help/docs/eval-harness.md"

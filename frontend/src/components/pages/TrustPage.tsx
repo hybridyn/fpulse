@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { api } from '../../api/client';
 import HeroCard from '../shared/HeroCard';
@@ -72,11 +73,11 @@ export default function TrustPage({ embedded = false }: { embedded?: boolean } =
             </svg>
           </div>
         )}
-        title="Trust posture"
-        subtitle="F-Pulse runs on YOUR infrastructure. Data, credentials, and pipeline IR stay on the machine unless you configure a cloud LLM provider — and even then only sanitized summaries leave."
+        title="Security & Diagnostics"
+        subtitle="Configuration, check results and recorded evidence."
         titleAccessory={(
           <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${dark ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'}`}>
-            Public
+            Diagnostics
           </span>
         )}
       />
@@ -122,7 +123,7 @@ function TrustContent({ dark }: { dark: boolean }) {
             <span className="text-xs text-slate-500">· {ARTIFACTS.length} files</span>
           </div>
           <p className={`text-xs px-5 pt-3 pb-2 ${sublabel}`}>
-            Every claim above is backed by a file in the repo. Reviewers and auditors can read these directly.
+            Reference documents describe intended behavior. Their presence does not verify this installation.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -157,17 +158,17 @@ function TrustContent({ dark }: { dark: boolean }) {
             bottom: intro → endpoints → actions. */}
         <div className={`${cardCls} overflow-hidden`}>
           <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-            <h3 className={`text-sm font-bold ${sectionLabel}`}>Verify, don't trust — audit endpoints</h3>
+            <h3 className={`text-sm font-bold ${sectionLabel}`}>Evidence endpoints</h3>
           </div>
           <div className="p-5 space-y-3">
             <p className={`text-sm ${sublabel}`}>
-              Every claim in this page is backed by a queryable endpoint. Reviewers can pull the raw audit log without reading source. The data is already on YOUR machine — these endpoints just expose it.
+              These endpoints expose recorded application data subject to access controls. Availability does not establish complete audit coverage or compliance certification.
             </p>
             <AuditEndpointRow
               dark={dark}
               title="Agent run traces"
               endpoint="GET /api/ai/agent/traces"
-              desc="Replay-safe: tool I/O hashes only, never raw values. Outcome class, latency, redactions count."
+              desc="Recorded agent decisions and outcomes. Inspect retained evidence for the run being reviewed."
             />
             <AuditEndpointRow
               dark={dark}
@@ -179,7 +180,7 @@ function TrustContent({ dark }: { dark: boolean }) {
               dark={dark}
               title="Pipeline executions + compute usage"
               endpoint="GET /api/monitor/executions"
-              desc="Each row carries metadata.peak_memory_mb, cpu_seconds, parameter_values, and the SHA-256 IR snapshot the run executed."
+              desc="Recorded execution metadata and available snapshots. Missing measurements are not evidence of zero usage."
             />
             <div className="flex flex-wrap gap-2 pt-1">
               <button
@@ -265,215 +266,78 @@ interface LiveEval {
   message?: string;
 }
 
-function LivePostureSection({
-  dark, cardCls, sectionLabel, sublabel,
-}: {
-  dark: boolean;
-  cardCls: string;
-  sectionLabel: string;
-  sublabel: string;
+function LivePostureSection({ dark, sectionLabel, sublabel }: {
+  dark: boolean; cardCls: string; sectionLabel: string; sublabel: string;
 }) {
-  const [posture, setPosture] = useState<LivePosture | null>(null);
-  const [evalSummary, setEvalSummary] = useState<LiveEval | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [posture, setPosture] = useState<any>(null);
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [errors, setErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  // 2026-05-19 (P1 #4 of PAGE_BY_PAGE_AUDIT.md): the posture section used
-  // to `return null` on fetch failure, which left compliance reviewers
-  // staring at a half-rendered page with no explanation. We now surface
-  // the failure via the shared <ErrorBanner> with a retry so the reviewer
-  // at least knows what's missing.
-  const [postureError, setPostureError] = useState<string | null>(null);
-
-  const loadPosture = () => {
-    setLoading(true);
-    setPostureError(null);
-    let cancelled = false;
-    (async () => {
-      try {
-        const [p, e] = await Promise.all([
-          api.getTrustPosture().catch((err) => { throw err; }),
-          api.getTrustEvalSummary().catch(() => null), // eval is supplementary; OK to omit
-        ]);
-        if (cancelled) return;
-        if (p) setPosture(p as LivePosture);
-        if (e) setEvalSummary(e as LiveEval);
-      } catch (err: any) {
-        if (!cancelled) setPostureError(err?.message || 'Failed to load /api/trust/posture');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  };
-
   useEffect(() => {
-    const cleanup = loadPosture();
-    return cleanup;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  if (loading) return null;
-  if (postureError) {
-    return (
-      <div className={`${cardCls} p-4`}>
-        <ErrorBanner
-          title="Live posture unavailable"
-          message={`${postureError} — the live host evidence (egress, provider, telemetry, eval pass-rate) is missing from this view. Static artifacts below still apply.`}
-          onRetry={loadPosture}
-        />
-      </div>
-    );
-  }
-  if (!posture) return null;
-
-  const sov = posture.sovereignty;
-  const passRatePct = evalSummary?.ran && evalSummary.pass_rate !== undefined ? Math.round(evalSummary.pass_rate * 100) : 0;
-  const passRateOk = !!(evalSummary?.ran && passRatePct >= 80);
-
-  // Pick a gradient per posture cell — green for "ok", amber otherwise.
-  // Mirrors the Dashboard / Pipelines / Pool HeroCard rows so the page
-  // joins the same visual family.
-  const grad = (ok: boolean) =>
-    ok ? 'from-emerald-400 to-emerald-500' : 'from-amber-400 to-orange-500';
-
+    let cancelled = false;
+    setLoading(true);
+    setErrors([]);
+    Promise.allSettled([api.getTrustPosture(), api.getTrustEvalSummary()]).then(([p, e]) => {
+      if (cancelled) return;
+      setPosture(p.status === 'fulfilled' ? p.value : null);
+      setEvaluation(e.status === 'fulfilled' ? e.value : null);
+      setErrors([
+        ...(p.status === 'rejected' ? ['Installation diagnostics unavailable.'] : []),
+        ...(e.status === 'rejected' ? ['Evaluation evidence unavailable.'] : []),
+      ]);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [attempt]);
+  const provider = posture?.sovereignty?.active_provider_summary;
+  const telemetry = posture?.sovereignty?.telemetry_currently_enabled;
+  const labels: Record<string, string> = {
+    verified: 'Verified', configured: 'Configured', not_checked: 'Not checked', failed: 'Failed',
+  };
+  const controls = posture?.security_baseline || [];
   return (
-    <div className={`${cardCls} overflow-hidden`}>
-      <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-        <h3 className={`text-sm font-bold ${sectionLabel}`}>Live posture (this host)</h3>
-        <span className={`text-xs ${dark ? 'text-slate-500' : 'text-slate-500'} ml-auto`}>
-          v{posture.posture_version} · {new Date(posture.as_of).toLocaleString()}
-        </span>
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h2 className={`text-base font-semibold ${sectionLabel}`}>Installation diagnostics</h2>
+        <button type="button" onClick={() => setAttempt(value => value + 1)} disabled={loading}
+          className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm disabled:opacity-50"
+          title="Refresh diagnostics"><RefreshCw size={16} />Refresh</button>
       </div>
-
-      <div className="p-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <HeroCard
-            gradient={grad(sov.data_stays_local_by_default)}
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
-            label="Default egress"
-            value={sov.data_stays_local_by_default ? 'None' : 'Custom'}
-          />
-          <HeroCard
-            gradient={grad(sov.active_provider_is_local)}
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg>}
-            label="AI provider"
-            value={sov.active_provider_summary.provider || 'none'}
-          />
-          <HeroCard
-            gradient={grad(!sov.telemetry_currently_enabled)}
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>}
-            label="Telemetry"
-            value={sov.telemetry_currently_enabled ? 'On' : 'Off'}
-          />
-          <HeroCard
-            gradient={grad(passRateOk)}
-            icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>}
-            label="Eval pass rate"
-            value={
-              evalSummary?.ran && evalSummary.total
-                ? `${evalSummary.passed}/${evalSummary.total}`
-                : 'Not run'
-            }
-            valueSuffix={evalSummary?.ran && evalSummary.total ? ` (${passRatePct}%)` : ''}
-            bar={evalSummary?.ran && evalSummary.total ? passRatePct : undefined}
-          />
+      {loading && <p role="status" className={sublabel}>Checking configuration...</p>}
+      {errors.map(error => <p key={error} role="alert" className="text-sm text-red-600">{error}</p>)}
+      {posture && <>
+        <p className={`text-xs ${sublabel}`}>Response generated: {new Date(posture.as_of).toLocaleString()}. This is not an audit timestamp.</p>
+        <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div><dt className={sublabel}>AI provider (current account)</dt>
+            <dd className={sectionLabel}>{provider?.provider || 'Unknown'} {provider?.model || ''}</dd>
+            <dd className={sublabel}>{labels[provider?.status] || 'Not checked'}; connection not tested here.</dd></div>
+          <div><dt className={sublabel}>AI location</dt>
+            <dd className={sectionLabel}>{provider?.is_local === true ? 'Local provider configured' : provider?.is_local === false ? 'Cloud provider configured' : 'Not checked'}</dd></div>
+          <div><dt className={sublabel}>Telemetry consent</dt>
+            <dd className={sectionLabel}>{telemetry === true ? 'Enabled' : telemetry === false ? 'Disabled' : 'Unknown'}</dd></div>
+        </dl>
+        <p className={`text-xs ${sublabel}`}>Configured means a setting was found, not that enforcement passed. Network egress has not been measured.</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead><tr className="border-b"><th className="py-2 pr-3">Control</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Evidence / scope</th><th className="py-2">Checked at</th></tr></thead>
+            <tbody>{controls.map((control: any) => <tr key={control.key} className="border-b align-top">
+              <td className="py-3 pr-3">{control.label}</td>
+              <td className="py-3 pr-3 whitespace-nowrap">{labels[control.status] || 'Not checked'}</td>
+              <td className={`py-3 pr-3 ${sublabel}`}>{control.detail}{control.evidence && <div>{control.evidence}</div>}</td>
+              <td className="py-3">{control.checked_at ? new Date(control.checked_at).toLocaleString() : 'Not checked'}</td>
+            </tr>)}</tbody>
+          </table>
         </div>
-
-        {/* Per-cell context underneath the HeroCard row — kept as a
-            compact key/value list rather than baking each hint into the
-            cards (HeroCard's `value` is meant for one short label). */}
-        <div className={`mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-xs ${sublabel}`}>
-          <div><strong className={sectionLabel}>Egress</strong> · Default config sends nothing off-box.</div>
-          <div>
-            <strong className={sectionLabel}>Provider</strong> ·{' '}
-            {sov.active_provider_is_local ? `Local: ${sov.active_provider_summary.model || '—'}` : 'Cloud opt-in: prompts leave the host'}
-          </div>
-          <div>
-            <strong className={sectionLabel}>Telemetry</strong> ·{' '}
-            {sov.telemetry_currently_enabled ? 'Admin opted in.' : 'Off by default.'}
-          </div>
-          <div>
-            <strong className={sectionLabel}>Eval</strong> ·{' '}
-            {evalSummary?.ran && evalSummary.ran_at
-              ? `Last run ${new Date(evalSummary.ran_at).toLocaleDateString()}`
-              : 'Run python -m fpulse.eval.run to populate.'}
-          </div>
-        </div>
-
-        {/* 2026-06-03 — context line for the Eval Pass Rate tile. The
-            raw "48/339 (14%)" number above is honest but optically
-            alarming; this sentence frames it correctly: the eval
-            denominator is the FULL future-coverage battery (339
-            prompts across all node types + adversarial cases), not
-            "tests that should pass at v1.0". Coverage growth is on
-            the post-1.0 reliability sprint roadmap. */}
-        {evalSummary?.ran && evalSummary.total ? (
-          <div className={`mt-2 text-xs ${dark ? 'text-slate-500' : 'text-slate-500'}`}>
-            <strong className={sectionLabel}>About the eval denominator</strong> ·{' '}
-            {evalSummary.total} is the full prompt battery (every node type, AI
-            prompts, adversarial edge cases). The {evalSummary.passed} passing
-            today are the v1.0-shipped surfaces; the rest are pending coverage
-            tracked in <code className="font-mono">docs/roadmap/reliability-sprint.md</code>.
-            Honest measurement &gt; flattering selection bias.
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex flex-wrap gap-2 text-xs">
-          <a
-            href="/api/trust/posture"
-            target="_blank"
-            rel="noreferrer"
-            className={`px-2.5 py-1 rounded font-mono ${
-              dark
-                ? 'bg-slate-900 text-emerald-300 hover:bg-slate-800'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            /api/trust/posture
-          </a>
-          <a
-            href="/api/connectors/cert-matrix"
-            target="_blank"
-            rel="noreferrer"
-            className={`px-2.5 py-1 rounded font-mono ${
-              dark
-                ? 'bg-slate-900 text-emerald-300 hover:bg-slate-800'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            /api/connectors/cert-matrix
-          </a>
-          <a
-            href="/docs/compliance.md"
-            target="_blank"
-            rel="noreferrer"
-            className={`px-2.5 py-1 rounded font-mono ${
-              dark
-                ? 'bg-slate-900 text-emerald-300 hover:bg-slate-800'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            docs/compliance.md
-          </a>
-          <a
-            href="/docs/supported-models.md"
-            target="_blank"
-            rel="noreferrer"
-            className={`px-2.5 py-1 rounded font-mono ${
-              dark
-                ? 'bg-slate-900 text-emerald-300 hover:bg-slate-800'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            docs/supported-models.md
-          </a>
-        </div>
-
-        <div className={`text-xs mt-3 ${dark ? 'text-slate-500' : 'text-slate-500'}`}>
-          Every claim above is sourced from a live endpoint a reviewer can verify
-          independently. {sov.deployment_model}.
-        </div>
+      </>}
+      <div className="border-t pt-4">
+        <h3 className={`text-sm font-semibold ${sectionLabel}`}>AI evaluation evidence</h3>
+        <p className={`text-sm ${sublabel}`}>{evaluation?.ran
+          ? `${evaluation.passed ?? 'Unknown'} / ${evaluation.total ?? 'Unknown'} passed. Last run: ${evaluation.ran_at || 'Not recorded'}.`
+          : evaluation ? 'No recorded evaluation run.' : 'Evidence unavailable.'}</p>
+        <p className={`text-xs mt-1 ${sublabel}`}>Results cover only the recorded test run, not every model, connector or workload. Failed cases are not automatically explained by roadmap coverage.</p>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -553,7 +417,7 @@ function CertMatrixSection({
     return (
       <div className={`${cardCls} px-5 py-4`}>
         <div className={`text-sm ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
-          Loading connector certification matrix…
+          Loading connector validation inventory…
         </div>
       </div>
     );
@@ -602,9 +466,9 @@ function CertMatrixSection({
   return (
     <div className={`${cardCls} overflow-hidden`}>
       <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2 flex-wrap">
-        <h3 className={`text-sm font-bold ${sectionLabel}`}>Connector certification</h3>
+        <h3 className={`text-sm font-bold ${sectionLabel}`}>Connector validation inventory</h3>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${dark ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-700 border border-emerald-300'}`}>
-          Public · No auth
+          Declared capabilities
         </span>
         <button
           type="button"
@@ -618,9 +482,8 @@ function CertMatrixSection({
 
       <div className="p-4 space-y-4">
         <p className={`text-sm ${sublabel}`}>
-          Every connector in F-Pulse runs through the F0.1 validator and gets a depth score 0–5.
-          <strong> Depth ≥ 3 means production-grade</strong> (auth, schema, retry, pagination, incremental sync, fixtures).{' '}
-          <code className={`font-mono text-xs ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>curl /api/connectors/cert-matrix</code> verifies it.
+          Catalog labels and manifest validation describe declared capabilities.
+          They do not certify credentials, live connectivity, data correctness or production readiness.
         </p>
 
         {/* Top-line counters — kept on HeroCard for layout consistency
@@ -644,7 +507,7 @@ function CertMatrixSection({
           <HeroCard
             gradient="from-emerald-100 to-emerald-200"
             icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
-            label="Production"
+            label="Declared production"
             value={String(productionCount)}
           />
           <HeroCard
@@ -678,10 +541,8 @@ function CertMatrixSection({
           <code className="font-mono">Catalog (all) = {total}</code> includes both v2 tier-rated
           connectors ({productionCount + betaCount + alphaCount + stubCount}) and
           v1 legacy entries ({v1Count}) that haven't been migrated to the new
-          tier system. The About card and readme cite "33 visible default" — the
-          user-facing subset surfaced in the palette by default (excludes
-          hidden / SMB-CRM-only manifests). Both are accurate for their
-          respective definitions; see <code className="font-mono">docs/connectors.md</code> for the full per-connector matrix.
+          tier system. These counts describe the catalog, not successful live
+          connector tests.
         </div>
 
         {/* Full per-connector matrix — folded in from the old standalone
@@ -784,7 +645,7 @@ function CertMatrixSection({
 
         {matrix.last_audited && (
           <div className={`text-xs ${dark ? 'text-slate-500' : 'text-slate-500'}`}>
-            Audited {new Date(matrix.last_audited).toLocaleString()} · re-runs on every request
+            Inventory evaluated {new Date(matrix.last_audited).toLocaleString()} · not a live connector certification
           </div>
         )}
       </div>

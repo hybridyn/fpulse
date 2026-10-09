@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePageContext } from '../../hooks/usePageContext';
-import { navigateTo, navigateToSubRoute } from '../../router';
+import { navigateTo, navigateToSubRoute, readSubRoute } from '../../router';
+import TrustPage from './TrustPage';
 import { broadcastEditorPreferencesChanged } from '../../hooks/useEditorPreferences';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { uiAlert } from '../../ui/dialog';
@@ -569,7 +570,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
   useEffect(() => {
     const onHash = () => {
       const raw = window.location.hash.replace('#', '');
-      const seg = raw.split('/')[1];
+      const seg = readSubRoute();
       if (seg === 'notifications' || seg === 'security' || seg === 'about' || seg === 'general') {
         setTab(seg);
       }
@@ -905,7 +906,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
     },
     {
-      id: 'security', label: 'Security',
+      id: 'security', label: 'Security & Diagnostics',
       icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
     },
     {
@@ -1321,106 +1322,7 @@ export default function SettingsPage({ environment = 'dev', tier = 'free' }: { e
 
             {tab === 'security' && (
               <>
-                {/* ── Security Posture (read-only, May 3 2026) ──────────
-                    Replaces the prior 4-toggle "Data Protection" group
-                    that misled users — all four toggles were either
-                    always-on baseline behavior (Fernet AES-128-CBC +
-                    HMAC-SHA256 credential encryption, SQL input
-                    sanitization) or Plus-only features (data-at-rest
-                    encryption beyond the credentials store, audit
-                    logging) that did nothing in OSS regardless of
-                    toggle state. Shows the actual posture with honest
-                    copy.
-                    2026-06-03 — corrected "PBKDF2" → "Fernet" per the
-                    pre-launch audit (docs/security/audit-2026-06-03.md
-                    finding L1). The encryptor implementation has
-                    always been Fernet; the comment + the user-visible
-                    label below mislabelled it. */}
-                <SectionHeader dark={dark}
-                  title="Security Posture"
-                  icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
-                />
-                <div className={`rounded-lg border shadow-sm px-4 divide-y ${dark ? 'bg-[#111827] border-white/[0.08] divide-white/[0.06]' : 'bg-white border-slate-200 divide-slate-100'}`}>
-                  {[
-                    {
-                      label: 'Stored credentials',
-                      status: 'Encrypted at rest',
-                      ok: true,
-                      tier: 'baseline',
-                      hint: 'Always on. Master key in ~/.fpulse/secret.key (POSIX 0600).',
-                    },
-                    {
-                      label: 'Master key file permissions',
-                      status: 'Verified at startup (fail-closed on POSIX)',
-                      ok: true,
-                      tier: 'baseline',
-                      hint: 'F-Pulse refuses to start if the master key file is not 0600 unless FPULSE_ALLOW_INSECURE_KEY_PERMS=1 is explicitly set (dev only).',
-                    },
-                    {
-                      label: 'SQL input sanitization',
-                      status: 'Always on',
-                      ok: true,
-                      tier: 'baseline',
-                      hint: 'All user-supplied inputs go through a sanitization pass before query execution. Cannot be disabled.',
-                    },
-                    {
-                      label: 'HTTP rate limiting',
-                      status: 'Per-IP sliding window',
-                      ok: true,
-                      tier: 'baseline',
-                      hint: 'Default + auth + execute route classes. Tunable via FPULSE_RATE_LIMIT_* env vars; disable with FPULSE_RATE_LIMIT_DISABLE=1.',
-                    },
-                    {
-                      label: 'Security headers',
-                      status: 'X-Frame-Options · CSP · Referrer-Policy · HSTS-on-https',
-                      ok: true,
-                      tier: 'baseline',
-                      hint: 'Applied to every HTTP response. CSP frame-ancestors configurable via FPULSE_FRAME_ANCESTORS.',
-                    },
-                    ...(isPlus ? [
-                      {
-                        label: 'Data at rest (intermediate)',
-                        status: 'Vault-encrypted',
-                        ok: true,
-                        tier: 'plus',
-                        hint: 'Intermediate pipeline data is encrypted on disk.',
-                      },
-                      {
-                        label: 'Audit log',
-                        status: 'Active with retention',
-                        ok: true,
-                        tier: 'plus',
-                        hint: 'Every authenticated action, credential access, and admin action is recorded with configurable retention.',
-                      },
-                    ] : []),
-                  ].map((item) => (
-                    <div key={item.label} className="py-3 flex items-start gap-3">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        item.ok
-                          ? (dark ? 'bg-emerald-500/20' : 'bg-emerald-100')
-                          : (dark ? 'bg-violet-500/20' : 'bg-violet-100')
-                      }`}>
-                        {item.ok ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={dark ? '#34d399' : '#16a34a'} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={dark ? '#a78bfa' : '#7c3aed'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></svg>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-medium ${dark ? 'text-slate-200' : 'text-slate-700'}`}>{item.label}</span>
-                          {false && item.tier === 'plus' && !isPlus && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">F-Pulse+</span>
-                          )}
-                          <span className={`text-xs ${item.ok ? (dark ? 'text-emerald-400' : 'text-emerald-700') : (dark ? 'text-violet-400' : 'text-violet-700')}`}>
-                            {item.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">{item.hint}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <TrustPage embedded />
 
                 {/* Authentication — Plus only. 2FA + session-timeout
                     enforcement need the auth middleware that ships in

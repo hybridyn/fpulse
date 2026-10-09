@@ -733,7 +733,7 @@ async def export_project(
         logging.getLogger(__name__).exception("project export: folders failed")
 
     return {
-        "fpulse_version": "1.0.0",
+        "fpulse_version": "1.0.1",
         "format_version": 1,
         "export_type": "project",
         "exported_at": datetime.now(timezone.utc).isoformat(),

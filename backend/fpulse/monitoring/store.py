@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+from .timing import execution_timing
 
 
 class StepLog(BaseModel):
@@ -90,6 +91,9 @@ class ExecutionRecord(BaseModel):
         specific lineage)."""
         if self.ir_sha is None and self.workflow_snapshot is not None:
             self.ir_sha = _compute_ir_sha(self.workflow_snapshot)
+        timed = execution_timing(self.model_dump())
+        self.duration_ms = timed['duration_ms']
+        self.metadata = timed['metadata']
         return self
 
     # Sprint 2 PR5 step 7 — execution budget (requested) + actuals
@@ -121,8 +125,13 @@ class ExecutionStore:
     def set_db(self, db):
         self._db = db
 
+    def _list_json(self, *args, **kwargs):
+        return [execution_timing(row) for row in self._db.list_json(*args, **kwargs)]
+
     def _save(self, execution: ExecutionRecord):
-        data = execution.model_dump(mode="json")
+        data = execution_timing(execution.model_dump(mode="json"))
+        execution.duration_ms = data['duration_ms']
+        execution.metadata = data['metadata']
         self._db.insert_json(
             "executions", execution.id, data,
             workflow_id=execution.workflow_id,
@@ -183,11 +192,11 @@ class ExecutionStore:
 
     def list_all(self, limit: int = 200, workspace_id: str | None = None) -> list[dict]:
         if workspace_id is not None:
-            return self._db.list_json(
+            return self._list_json(
                 "executions", "workspace_id = ?", (workspace_id,),
                 order_by=f"started_at DESC LIMIT {limit}",
             )
-        return self._db.list_json(
+        return self._list_json(
             "executions",
             order_by=f"started_at DESC LIMIT {limit}",
         )
@@ -199,13 +208,13 @@ class ExecutionStore:
         workspace_id: str | None = None,
     ) -> list[dict]:
         if workspace_id is not None:
-            return self._db.list_json(
+            return self._list_json(
                 "executions",
                 "workflow_id = ? AND workspace_id = ?",
                 (workflow_id, workspace_id),
                 order_by=f"started_at DESC LIMIT {limit}",
             )
-        return self._db.list_json(
+        return self._list_json(
             "executions", "workflow_id = ?", (workflow_id,),
             order_by=f"started_at DESC LIMIT {limit}",
         )
@@ -217,13 +226,13 @@ class ExecutionStore:
         workspace_id: str | None = None,
     ) -> list[dict]:
         if workspace_id is not None:
-            return self._db.list_json(
+            return self._list_json(
                 "executions",
                 "project_id = ? AND workspace_id = ?",
                 (project_id, workspace_id),
                 order_by=f"started_at DESC LIMIT {limit}",
             )
-        return self._db.list_json(
+        return self._list_json(
             "executions", "project_id = ?", (project_id,),
             order_by=f"started_at DESC LIMIT {limit}",
         )
@@ -240,11 +249,11 @@ class ExecutionStore:
 
         # Fetch recent executions
         if workspace_id is not None:
-            all_data = self._db.list_json(
+            all_data = self._list_json(
                 "executions", "workspace_id = ?", (workspace_id,)
             )
         else:
-            all_data = self._db.list_json("executions")
+            all_data = self._list_json("executions")
         recent = []
         for d in all_data:
             started = d.get("started_at", "")
@@ -308,7 +317,10 @@ class ExecutionStore:
         queued = cats["queued"]
 
         avg_duration = 0.0
-        completed = [e for e in recent if e.get("duration_ms", 0) > 0]
+        completed = [e for e in recent
+                     if e.get("status") not in ("running", "queued", "pending")
+                     and (e.get("duration_ms", 0) > 0
+                          or (e.get("metadata") or {}).get("duration_basis") == "recorded_start_to_finish")]
         if completed:
             avg_duration = sum(e["duration_ms"] for e in completed) / len(completed)
 

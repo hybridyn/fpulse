@@ -84,7 +84,7 @@ import { canAccessProd } from './auth/permissions';
 // the `as any` casts on Sidebar / Search go away.
 import type { Page } from './types';
 import { VALID_PAGES, DEFAULT_PAGE } from './types';
-import { navigateTo as routerNavigateTo, navigateToSubRoute } from './router';
+import { navigateTo as routerNavigateTo, navigateToSubRoute, readCurrentPage } from './router';
 type Environment = 'dev' | 'prod';
 type Tier = 'free' | 'plus';
 
@@ -413,7 +413,7 @@ export default function App() {
       const path = raw.split('?')[0];
       const first = path.split('/')[0];
       if (VALID_PAGES.includes(first as Page)) {
-        setPage(first as Page);
+        setPage(readCurrentPage());
       }
     };
     window.addEventListener('hashchange', onHash);
@@ -445,7 +445,7 @@ export default function App() {
 
   const navigate = useCallback((p: Page) => {
     routerNavigateTo(p);
-    setPage(p);
+    setPage(p === 'trust' || p === 'cert-matrix' ? 'settings' : p);
   }, []);
 
   // Copilot navigate-chip handler. Backend emits navigate actions with
@@ -1203,7 +1203,9 @@ export default function App() {
         {page === 'trust' && <AIPage environment={environment} tier={tier} user={user} initialTab="trust" />}
         {page === 'activity' && <AIPage environment={environment} tier={tier} user={user} initialTab="activity" />}
         {page === 'author' && <AIPage environment={environment} tier={tier} user={user} initialTab="author" />}
-        {page === 'gallery' && <AIPage environment={environment} tier={tier} user={user} initialTab="gallery" />}
+        {/* #gallery was a separate tab of six spec links; it is now step one of
+            the Explorer. Kept as a redirect so existing links still land. */}
+        {page === 'gallery' && <AIPage environment={environment} tier={tier} user={user} initialTab="author" />}
         {/* #cert-matrix folded into Insights → Trust — redirect legacy/bookmarked
             URLs to the Trust tab, where the full matrix is an expandable section. */}
         {page === 'cert-matrix' && <AIPage environment={environment} tier={tier} user={user} initialTab="trust" />}

@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from fpulse.connectors.openapi_security import normalize_security
+
 
 def _slug(s: str) -> str:
     out = re.sub(r"[^a-z0-9]+", "_", (s or "").strip().lower()).strip("_")
@@ -23,59 +25,8 @@ def _slug(s: str) -> str:
 
 
 def _auth_from_spec(spec: dict) -> tuple[dict, list[dict]]:
-    """Map the first declared security scheme to (auth_block, params) in the
-    shape rest_framework._build_auth_headers understands. Defaults to bearer."""
-    schemes = ((spec.get("components") or {}).get("securitySchemes")) or {}
-    if not schemes:  # Swagger 2
-        schemes = spec.get("securityDefinitions") or {}
-
-    bearer = (
-        {"type": "bearer", "token_param": "access_token",
-         "header_name": "Authorization", "header_template": "Bearer {token}"},
-        [{"name": "access_token", "label": "Access Token / API Key",
-          "required": True, "secret": True}],
-    )
-
-    for sch in schemes.values():
-        if not isinstance(sch, dict):
-            continue
-        t = (sch.get("type") or "").lower()
-        scheme = (sch.get("scheme") or "").lower()
-        if t == "http" and scheme == "bearer":
-            return bearer
-        if (t == "http" and scheme == "basic") or t == "basic":
-            return (
-                {"type": "basic", "username_param": "username", "password_param": "password"},
-                [{"name": "username", "label": "Username", "required": True},
-                 {"name": "password", "label": "Password", "required": True, "secret": True}],
-            )
-        if t == "apikey":
-            loc = (sch.get("in") or "header").lower()
-            name = sch.get("name") or "X-API-Key"
-            if loc == "query":
-                return (
-                    {"type": "api_key", "key_param": "api_key", "query_param": name},
-                    [{"name": "api_key", "label": f"API Key ({name})", "required": True, "secret": True}],
-                )
-            return (
-                {"type": "api_key", "key_param": "api_key", "header_name": name, "header_template": "{key}"},
-                [{"name": "api_key", "label": f"API Key ({name})", "required": True, "secret": True}],
-            )
-        if t == "oauth2":
-            token_url = ""
-            for fl in (sch.get("flows") or {}).values():
-                if isinstance(fl, dict) and fl.get("tokenUrl"):
-                    token_url = fl["tokenUrl"]
-                    break
-            token_url = token_url or sch.get("tokenUrl", "")
-            return (
-                {"type": "oauth2", "access_token_param": "access_token", "token_url": token_url,
-                 "client_id_param": "client_id", "client_secret_param": "client_secret"},
-                [{"name": "access_token", "label": "Access Token (or use client credentials below)", "required": False, "secret": True},
-                 {"name": "client_id", "label": "Client ID", "required": False},
-                 {"name": "client_secret", "label": "Client Secret", "required": False, "secret": True}],
-            )
-    return bearer
+    """Declarations alone do not require authentication; security does."""
+    return normalize_security(spec, spec.get("security", []))
 
 
 def _base_url(spec: dict) -> str:
@@ -103,6 +54,7 @@ def manifest_from_openapi(
     info = spec.get("info") or {}
     title = str(info.get("title") or "API")
     auth, params = _auth_from_spec(spec)
+    parameter_map = {p["name"]: p for p in params}
 
     streams: list[dict] = []
     seen: set[str] = set()
@@ -119,11 +71,14 @@ def manifest_from_openapi(
         if not name or name in seen:
             continue
         seen.add(name)
+        operation_auth, operation_params = normalize_security(spec, get.get("security", spec.get("security", [])))
+        parameter_map.update({p["name"]: p for p in operation_params})
         streams.append({
             "name": name,
             "label": str(get.get("summary") or name)[:60],
             "path": path,
             "method": "GET",
+            "auth": operation_auth,
             # data_path + pagination are left for the human pass — the spec
             # rarely states where the array lives or how it pages.
         })
@@ -138,6 +93,6 @@ def manifest_from_openapi(
         "tier": "generated",  # never auto-ships at Certified — needs review + test
         "base_url": (base_url or _base_url(spec)).rstrip("/"),
         "auth": auth,
-        "params": params,
+        "params": list(parameter_map.values()),
         "streams": streams,
     }

@@ -6,6 +6,7 @@ import { useEmbeddedAI, type DiagnoseResult } from '../hooks/useEmbeddedAI';
 import { useUpstreamSchema } from '../hooks/useUpstreamSchema';
 import { toast } from './Toast';
 import DynamicConfig from './DynamicConfig';
+import { securityLabel, type OpenApiSecurity } from './OpenApiSecurityReview';
 import { DataInBand, DataOutBand } from './NodeConfigFrame';
 import { buildDataIn, buildDataOut, deriveOutputColumns } from '../utils/nodeUiContract';
 import { hasSideEffect } from '../utils/nodeArity';
@@ -8820,7 +8821,7 @@ interface SaasManifest {
   description?: string;
   category?: string;
   params?: Array<{ name: string; label?: string; type?: string; required?: boolean; default?: any; secret?: boolean }>;
-  streams?: Array<{ name: string; label?: string }>;
+  streams?: Array<{ name: string; label?: string; auth?: OpenApiSecurity }>;
 }
 
 function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
@@ -8830,11 +8831,7 @@ function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/saas/manifests')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    api.get<SaasManifest[]>('/saas/manifests')
       .then((data) => {
         if (cancelled) return;
         setManifests(Array.isArray(data) ? data : []);
@@ -8851,6 +8848,13 @@ function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
   const selected = manifests.find((m) => m.id === params.connector_id);
   const streams = selected?.streams || [];
   const manifestParams = selected?.params || [];
+  const security = streams.find(s => s.name === params.stream)?.auth;
+  const choiceIndex = params.auth_alternative === '' ? -1 : Number(params.auth_alternative ?? (security?.alternatives.length === 1 ? 0 : -1));
+  const candidate = security?.alternatives[choiceIndex];
+  const choice = candidate?.supported ? candidate : undefined;
+  const activeFields = new Set(choice?.schemes.flatMap(s => Object.values(s.fields)) || []);
+  const visibleParams = security ? manifestParams.filter(p => activeFields.has(p.name)) : streams.some(s => s.auth) ? [] : manifestParams;
+  const clearAuth = () => Object.fromEntries(manifestParams.filter(p => p.secret).map(p => [p.name, '']));
 
   if (loading) {
     return <div className="text-xs text-slate-400 italic">Loading SaaS connectors…</div>;
@@ -8914,7 +8918,7 @@ function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
           onChange={(e) => {
             const id = e.target.value;
             // Reset stream + manifest params when switching connector
-            const next: Record<string, any> = { connector_id: id, stream: '' };
+            const next: Record<string, any> = { ...clearAuth(), connector_id: id, stream: '', auth_alternative: undefined };
             // Pre-fill defaults from the new manifest
             const m = manifests.find((mm) => mm.id === id);
             for (const p of m?.params || []) {
@@ -8941,7 +8945,7 @@ function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
         <Field label="Stream / Endpoint *">
           <select
             value={params.stream || ''}
-            onChange={(e) => onChange(nodeId, { stream: e.target.value })}
+            onChange={(e) => onChange(nodeId, { ...clearAuth(), stream: e.target.value, auth_alternative: undefined })}
             className="w-full px-2.5 py-1.5 text-xs text-slate-700 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-pipe-300"
           >
             <option value="">— Select a stream —</option>
@@ -8952,13 +8956,30 @@ function SaaSConnectorConfig({ params, nodeId, onChange }: ConfigProps) {
         </Field>
       )}
 
-      {selected && manifestParams.length > 0 && (
+      {security && (
+        <fieldset className="space-y-2 text-xs">
+          <legend className="font-semibold mb-2">Authentication</legend>
+          {security.alternatives.map((option, index) => (
+            <label key={index} className="flex items-start gap-2">
+              <input type="radio" name={`auth-${nodeId}`} disabled={!option.supported}
+                checked={choice === option}
+                onChange={() => onChange(nodeId, { ...clearAuth(), auth_alternative: index })} />
+              <span>{securityLabel(option)}{!option.supported && ' - Unsupported'}
+                {option.schemes.filter(s => s.reason).map(s => <span key={s.name} className="block mt-1">{s.reason}</span>)}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      {selected && visibleParams.length > 0 && (
         <div className="mt-2 pt-2 border-t border-slate-100">
           <div className="text-[9px] uppercase tracking-wider text-slate-400 mb-1.5 font-semibold">Connector Parameters</div>
-          {manifestParams.map((p) => (
-            <Field key={p.name} label={`${p.label || p.name}${p.required ? ' *' : ''}`}>
+          {visibleParams.map((p) => (
+            <Field key={p.name} label={`${p.label || p.name}${p.required || activeFields.has(p.name) ? ' *' : ''}`}>
               <input
                 type={p.secret ? 'password' : 'text'}
+                aria-label={p.label || p.name}
                 value={params[p.name] ?? ''}
                 onChange={(e) => onChange(nodeId, { [p.name]: e.target.value })}
                 placeholder={p.default !== undefined ? String(p.default) : ''}

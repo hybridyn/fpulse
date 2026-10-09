@@ -7,8 +7,8 @@ Run your first F-Pulse pipeline in 5 minutes.
 ### Option 1: Docker (recommended)
 
 ```bash
-git clone https://github.com/hybridyn/hybridyn-f-pulse-oss.git
-cd hybridyn-f-pulse-oss
+git clone https://github.com/hybridyn/fpulse.git
+cd fpulse
 docker compose up -d
 ```
 
@@ -37,8 +37,8 @@ folder to your user `PATH`.
 
 **Linux/macOS:**
 ```bash
-git clone https://github.com/hybridyn/hybridyn-f-pulse-oss.git
-cd hybridyn-f-pulse-oss
+git clone https://github.com/hybridyn/fpulse.git
+cd fpulse
 pip install -e .
 python -m fpulse open
 ```
@@ -47,8 +47,8 @@ python -m fpulse open
 
 **Windows:**
 ```powershell
-git clone https://github.com/hybridyn/hybridyn-f-pulse-oss.git
-cd hybridyn-f-pulse-oss
+git clone https://github.com/hybridyn/fpulse.git
+cd fpulse
 .\start.ps1
 ```
 

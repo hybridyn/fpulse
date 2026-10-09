@@ -124,7 +124,7 @@ const EXEC_COLUMNS: TColumn[] = [
   { key: 'env',       label: 'Env',       default: true,  group: 'core' },
   { key: 'trigger',   label: 'Trigger',   default: true,  group: 'core' },
   { key: 'started',   label: 'Started',   default: true,  group: 'core' },
-  { key: 'duration',  label: 'Duration',  default: true,  group: 'core' },
+  { key: 'duration',  label: 'Elapsed',  default: true,  group: 'core' },
   { key: 'steps',     label: 'Steps',     default: true,  group: 'core' },
   // Detail columns (optional)
   { key: 'id',        label: 'Run ID',       default: false, group: 'details' },
@@ -1120,7 +1120,7 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                 <HeroCard
                   gradient={environment === 'prod' ? 'from-violet-500 to-purple-600' : 'from-violet-400 to-purple-500'}
                   icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
-                  label="Avg Duration"
+                  label="Avg Elapsed"
                   value={formatDuration(currentStats.avg_duration_ms)}
                 />
               </div>
@@ -1379,7 +1379,7 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                     {isVisible('env') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Env</th>}
                     {isVisible('trigger') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Trigger</th>}
                     {isVisible('started') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Started</th>}
-                    {isVisible('duration') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Duration</th>}
+                    {isVisible('duration') && <th title="Server-recorded start to finish, including run finalization. Browser/network delay before admission is not recorded." className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Elapsed</th>}
                     {isVisible('steps') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Steps</th>}
                     {isVisible('id') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Run ID</th>}
                     {isVisible('completed') && <th className="px-4 py-2.5 text-left text-xs font-bold text-amber-300 uppercase tracking-wider">Completed</th>}
@@ -1460,8 +1460,18 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                       )}
                       {isVisible('started') && <td className="px-4 py-3"><TimeAgo value={exec.started_at} className="text-xs !text-slate-500" /></td>}
                       {isVisible('duration') && (
-                        <td className="px-4 py-3 text-slate-500 text-xs font-mono" title={durationTitle(exec)}>
+                        <td
+                          className="px-4 py-3 text-slate-500 text-xs font-mono"
+                          title={`${durationTitle(exec)}${
+                            exec.metadata?.duration_basis === 'recorded_start_to_finish'
+                              ? ' · Recorded start to finish, including server-side run finalization.'
+                              : exec.metadata?.duration_basis === 'legacy_reported'
+                                ? ' · Legacy reported duration; complete start/finish timing is unavailable.'
+                                : ''
+                          }`}
+                        >
                           {formatDuration(exec.duration_ms)}
+                          {exec.metadata?.duration_basis === 'legacy_reported' ? ' (reported)' : ''}
                         </td>
                       )}
                       {isVisible('steps') && (
@@ -1798,7 +1808,7 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                 stats bar rather than a row of floating grey text. */}
             <div className="mt-3 flex items-stretch gap-2 flex-wrap">
               {([
-                { label: 'Duration', value: formatDuration(selectedExec.duration_ms), mono: true },
+                { label: 'Elapsed', value: formatDuration(selectedExec.duration_ms), mono: true },
                 { label: 'Started', value: formatTime(selectedExec.started_at) },
                 { label: 'Trigger', value: selectedExec.triggered_by || 'manual', cap: true },
                 {
@@ -1809,7 +1819,7 @@ export default function ExecutionsPage({ projectId, projectName = '', onClearPro
                   mono: true,
                 },
                 {
-                  label: 'Snapshot',
+                  label: 'Definition snapshot',
                   value: selectedExec.workflow_snapshot ? 'Captured' : 'Legacy',
                   tone: selectedExec.workflow_snapshot ? 'emerald' : 'muted',
                 },

@@ -38,7 +38,7 @@ $DATA     = Join-Path $ROOT 'data'
 
 Write-Host ""
 Write-Host "  ======================================================" -ForegroundColor DarkCyan
-Write-Host "   F-Pulse v1.0.0 - Open Source Pipeline Builder" -ForegroundColor Cyan
+Write-Host "   F-Pulse v1.0.1 - Open Source Pipeline Builder" -ForegroundColor Cyan
 Write-Host "   by Hybridyn Data Labs" -ForegroundColor DarkCyan
 Write-Host "  ======================================================" -ForegroundColor DarkCyan
 Write-Host ""
@@ -131,6 +131,19 @@ if (-not $python -or -not (Test-Path $python)) {
 
 # Ensure data directory exists.
 if (-not (Test-Path $DATA)) { New-Item -ItemType Directory -Path $DATA -Force | Out-Null }
+
+# --- Numeric thread caps (prevent OpenBLAS import-time allocation failure) ---
+# NumPy's bundled OpenBLAS allocates a per-thread work buffer sized to the
+# machine's core count the first time pandas/numpy is imported. On many-core
+# or memory-constrained Windows boxes that can fail with:
+#   "OpenBLAS error: Memory allocation still failed after 10 retries, giving up."
+# F-Pulse's workload is ETL (pandas group/merge/IO), not dense linear algebra,
+# so a single BLAS thread costs nothing here. Set BEFORE the dependency probe
+# and before spawning the backend, so both the preflight import and the uvicorn
+# child (which inherits this environment) get the cap. Advanced users can
+# override by exporting these before launch.
+if (-not $env:OPENBLAS_NUM_THREADS) { $env:OPENBLAS_NUM_THREADS = "1" }
+if (-not $env:OMP_NUM_THREADS)      { $env:OMP_NUM_THREADS      = "1" }
 
 # --- Step 4: dependencies ---
 

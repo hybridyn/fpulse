@@ -1,0 +1,43 @@
+name: fpulse-multi-system-demo
+services:
+  sqlserver:
+    profiles: ["sqlserver"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DEMO_PASSWORD:?Run demo.py prepare first}
+    ports: ["127.0.0.1:21433:1433"]
+    volumes: ["sqlserver-data:/var/opt/mssql"]
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: ${DEMO_PASSWORD}
+      POSTGRES_DB: fpulse_demo
+    ports: ["127.0.0.1:25432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+  mysql:
+    image: mysql:8.4
+    # F-Pulse's warehouse writer emits ANSI double-quoted identifiers.
+    command: --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,ANSI_QUOTES
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEMO_PASSWORD}
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: ${DEMO_PASSWORD}
+      MYSQL_DATABASE: fpulse_demo
+    ports: ["127.0.0.1:23306:3306"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: fpulse_demo
+      MINIO_ROOT_PASSWORD: ${DEMO_PASSWORD}
+    ports: ["127.0.0.1:29000:9000", "127.0.0.1:29001:9001"]
+    volumes: ["minio-data:/data"]
+volumes:
+  sqlserver-data:
+  postgres-data:
+  mysql-data:
+  minio-data:

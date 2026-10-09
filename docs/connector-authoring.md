@@ -1,66 +1,82 @@
-# Author a connector with AI
+# Authoring a connector
 
-> Add support for any external API in **under 90 seconds**, without
-> hand-writing JSON.
+F-Pulse ships 45 manifest files in `backend/fpulse/connectors/manifests/` —
+37 v1 runtime manifests plus 8 v2 certification specs. The long tail of
+internal APIs and niche SaaS tools means you will eventually need one we do not
+ship. The **API Explorer** turns an OpenAPI spec, or a response you just tested,
+into a connector definition.
 
-F-Pulse ships with ~37 manifests in the catalog, but the long tail of
-internal APIs and niche SaaS tools means you'll always need one we
-don't ship. The **Author Connector** feature turns any OpenAPI spec
-or sample response into a working v2 manifest skeleton, runs it
-through the F0.1 validator, and hands you a downloadable
-`<connector>.v2.json` file you can drop into the manifests directory.
+The generator is deterministic. No LLM call is involved, and no AI provider
+needs to be configured.
 
-The generator is deterministic — no LLM call is required. The
-deterministic core is what makes the demo land in 90 seconds.
+**Where:** Insights → API Explorer (`#author`).
 
 ---
 
-## Where to find it
+## v1 runtime vs v2 certification — read this first
 
-**Insights → Author Connector** (sidebar nav). Pairs with **Insights → Gallery**, the browse-side of the same loop where you can pick from curated starting points or jump to the community board.
+This distinction decides whether what you generate actually runs.
 
-Two input modes:
-
-| Mode | Use when | Input |
+| | `<id>.json` (v1) | `<id>.v2.json` (v2) |
 |---|---|---|
-| **OpenAPI spec** *(recommended)* | You have an OpenAPI 3.x / Swagger 2 spec | A public URL **or** paste / upload the spec file (JSON or YAML) |
-| **Sample responses** | No spec exists at all | Paste 1–5 raw JSON responses from `curl` |
+| Purpose | The **runtime** manifest | The **certification** spec (F0.1) |
+| Loaded by the SaaS Connector node | **Yes** | **No** — `load_manifests()` explicitly skips `*.v2.json` |
+| Produced by | `/from-openapi` (as `runtime_manifest`), `/from-openapi-runtime` | `/from-openapi`, `/from-samples` |
+| Effect of shipping it | The connector works | Sitting beside a v1 file, it promotes that connector's tier to *certified* |
 
-The OpenAPI path produces dramatically better output because it gets
-free signals: auth scheme, every paginated endpoint, response shapes.
-Use it when you can.
+A v2 file on its own is **not runnable**. If you want a connector you can use,
+you need the v1 runtime manifest — which is what the Explorer's **Save as Beta
+connector** button persists.
 
-### No public URL? Paste or upload the spec
+---
 
-Many vendors gate their API spec behind a customer login and never publish it
-at a public URL — **FactoHR** is a typical example. In OpenAPI mode, switch the
-toggle from **From URL** to **Paste / upload spec** and drop in the JSON or YAML
-your vendor gave you (or click **Upload file…**). The spec is parsed
-server-side, so both JSON and YAML work and nothing leaves your instance — the
-whole flow is offline. Everything downstream (streams, auth, pagination
-inference, Save as Beta) is identical to the URL path.
+## The three steps
 
-If the vendor gave you no spec at all — only example responses — use
-**Sample responses** mode instead.
+### 1. Choose an endpoint
 
-### Common starting points (one-click pre-fill)
+In the **Start here** card:
 
-In OpenAPI mode the Basics step shows a small gallery of curated
-starting points — six popular vendors with publicly published OpenAPI
-specs (Stripe, GitHub, Slack, Twilio, DigitalOcean, Plaid). Click any
-card → the connector ID, display name, and OpenAPI URL pre-fill
-themselves. From there you go Continue → Generate and have a working
-manifest in ~90 seconds without having to think up an example URL.
+- **Start from a known API** — six references with publicly published specs
+  (Stripe, GitHub, Slack, Twilio, Plaid, DigitalOcean). *Load specification*
+  downloads the spec server-side from a fixed allowlist and lists its endpoints.
+- **Paste or upload a specification** — OpenAPI JSON or YAML, parsed server-side
+  so you need no YAML dependency in the browser.
+- **Type any URL** — no specification required.
 
-The same six cards appear (with credit lines for the source repos) on
-the Insights → Gallery tab, where each one links back here pre-filled
-via `prefill_id` + `prefill_url` URL parameters. Adding more starting
-points is a one-line edit to `STARTING_POINTS` in
-`frontend/src/components/pages/ConnectorAuthorPage.tsx`.
+Only catalog IDs are accepted from the route (`#author?reference=stripe`).
+Arbitrary spec URLs passed as route parameters are rejected by design.
+
+### 2. Test it
+
+Choose authentication, fill parameters, and send one request. Writes
+(POST/PUT/PATCH/DELETE) require explicit confirmation. Inspect the response as
+collapsible JSON, a typed record table, a structure listing, or headers — and
+assert on it in the **Tests** tab (status, response time, a header, a JSON path,
+or body text).
+
+This step exists because a spec's *declared* authentication is not evidence that
+your credentials work against the live API.
+
+### 3. Generate a connector
+
+Two inputs, which are **not** equivalent:
+
+| Source | Endpoint | Returns | Savable |
+|---|---|---|---|
+| Imported OpenAPI spec | `/from-openapi` | v2 manifest **+ v1 runtime manifest** | Yes |
+| The response you just tested | `/from-samples` | v2 manifest only | No |
+
+Review the generated authentication per endpoint, then **Save as Beta
+connector**. Saving requires an admin account, writes to the user manifest
+store, and takes effect immediately — no restart and no filesystem access.
+Saved connectors are listed by `GET /api/connectors/author/saved` and removable
+by `DELETE /api/connectors/author/saved/{id}`.
+
+---
 
 ### See also — `docs/extend/build-a-connector.md`
 
-The Author Connector UI is one of four first-class paths covered by
+The API Explorer is one of four first-class paths covered by
 the end-to-end tutorial at [docs/extend/build-a-connector.md](extend/build-a-connector.md):
 
 1. **Fast path — From OpenAPI** (this UI, OpenAPI mode) — ~90 seconds
@@ -82,25 +98,22 @@ manifest in your `backend/fpulse/connectors/manifests/` directory).
 | What it reads | What it produces |
 |---|---|
 | `info.title` | `connector.display_name` |
-| `servers[0].url` | `connector.homepage` |
-| `components.securitySchemes` | `auth.schemes[*]` (jwt_bearer / api_key / basic / oauth2) |
-| `paths` — every `GET` returning an array | One stream per resource |
-| Stream's response JSON Schema | `streams[*].schema` |
-| Stream's `id` / `_id` / `*_id` field | `streams[*].primary_key` |
-| Stream's `updated_at` / `created_at` / `created` | `streams[*].incremental_field` |
-| Query parameters (`starting_after`, `cursor`, `page`, `offset`, `limit`) | `streams[*].pagination.{strategy,*_param,page_size}` |
-| Hard-coded sensible defaults | `rate_limit.{default,retry}` (60 rpm, exp backoff, retry on 429/5xx) |
+| `servers[0].url` | Base URL |
+| `components.securitySchemes` | `auth` block |
+| `paths` — GET operations | One stream per resource |
+| Response JSON Schema | Stream schema |
+| `id` / `_id` / `*_id` | `primary_key` |
+| `updated_at` / `created_at` / `created` | `incremental_field` |
+| Query parameters | `pagination` config |
 
 Pagination heuristic:
 
-- `starting_after`, `cursor`, `after`, `next_token`, `page_token` → **cursor** strategy
-- `offset` or `skip` → **offset** strategy
-- `page` → **page_token** strategy (page-number based)
-- None of the above → **none** with a `_note` flagging it for review
+- `starting_after`, `cursor`, `after`, `next_token`, `page_token` → **cursor**
+- `offset` or `skip` → **offset**
+- `page` → page-number based
+- none of the above → **none**, flagged for review
 
 ### From sample responses
-
-Schema is inferred per-field from the actual data:
 
 | Sample value | Inferred type |
 |---|---|
@@ -113,152 +126,56 @@ Schema is inferred per-field from the actual data:
 | `[...]` | `array` (item type from first element) |
 | `{...}` | nested `object` |
 
-Wrapped responses (`{ data: [...] }`, `{ results: [...] }`,
-`{ items: [...] }`, `{ records: [...] }`) get unwrapped automatically;
-schema is inferred from a single row, not the wrapper.
+Wrapped responses (`{ data: [...] }`, `{ results: [...] }`, `{ items: [...] }`,
+`{ records: [...] }`) are unwrapped automatically; the schema is inferred from a
+row, not the wrapper.
 
 ---
 
-## Output
+## What you still have to do
 
-Every generated manifest:
+A generated manifest is a **starting point**, not a finished connector. It ships
+at depth-score 1 with a `known_issues` list, marked beta. Before relying on it:
 
-- **Validates** through `manifest_v2.py`'s F0.1 validator
-- **Ships at depth-score 1** by default (auto-generated → minimum depth)
-- **Carries a `known_issues` list** with explicit TODOs for the pieces
-  that need human review (cursor-field correctness, rate limits,
-  fixture files for higher depth scores)
-- **Marked `status: beta`, `owner: community`** so it's clearly distinct
-  from F-Pulse-maintained certified connectors
+1. Confirm the inferred pagination field exists in the real response.
+2. Verify the auth scheme matches what the API actually expects — some APIs
+   declare `bearer` but want a custom header.
+3. Exercise it against a real account.
+4. Add fixtures if you want a higher depth score (see
+   [extend/build-a-connector.md](extend/build-a-connector.md)).
 
-The output is a **starter, not a finished product.** You still need to:
-
-1. Confirm the inferred pagination cursor field actually exists in the
-   API's response (the generator stubs it as `next_cursor`)
-2. Verify the auth scheme matches the API's real expectation (some
-   APIs declare `bearer` but want a custom header)
-3. Add the 5 fixture files (`happy_path`, `empty`, `auth_error`,
-   `rate_limit`, `schema_drift`) to reach depth ≥ 3
-4. Test it against a real account before promoting beyond depth 1
+If no endpoint has a supported authentication option, the Explorer says so —
+the definition can still be saved, but execution will not work.
 
 ---
 
-## Example: Stripe in 60 seconds
+## HTTP API
 
-1. Open **Insights → Author Connector**
-2. Mode: **OpenAPI spec**
-3. Connector ID: `stripe_demo`
-4. OpenAPI URL: `https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json`
-5. Click **Generate manifest**
-
-Expected output:
-- ~10 streams (`customers`, `charges`, `invoices`, `subscriptions`, …)
-- Auth scheme: `basic` (Stripe uses HTTP Basic with API key as username)
-- Pagination: `cursor` with `starting_after`
-- Primary key: `["id"]` per stream
-- Incremental field: `created` (unix_seconds format)
-- Validation passes; depth score 1/5 with TODOs in `known_issues`
-
-Click **Download .v2.json**, drop the file in
-`backend/fpulse/connectors/manifests/`, restart the backend — your
-new connector appears in the catalog.
-
----
-
-## Example: from a single curl response
-
-You don't have a spec? Paste one response:
-
-```json
-[
-  {
-    "id": "ord_123",
-    "customer_id": "cus_456",
-    "total_cents": 4999,
-    "currency": "USD",
-    "status": "paid",
-    "created_at": "2026-05-06T10:00:00Z"
-  }
-]
-```
-
-Mode: **Sample responses**, paste the JSON, click Generate.
-
-Output:
-- One stream named `items` (rename via `stream_name` if you know better)
-- Inferred schema: 6 properties, primary key `["id"]`,
-  incremental field `created_at` (iso8601)
-- Pagination: `none` with a `_note` reminding you to wire it up
-- Auth: `custom` placeholder — TODO
-
----
-
-## API endpoints
-
-The same generators are reachable via HTTP for scripting:
+The generators are reachable directly for scripting:
 
 ```bash
-# OpenAPI mode
+# v2 cert manifest + v1 runtime manifest
 curl -X POST http://localhost:8001/api/connectors/author/from-openapi \
   -H "Content-Type: application/json" \
-  -d '{
-    "connector_id": "stripe_demo",
-    "openapi_url": "https://api.stripe.com/openapi.json"
-  }'
+  -d '{"connector_id": "acme", "openapi_url": "https://api.acme.com/openapi.json"}'
 
-# Samples mode
+# v2 only, inferred from real payloads
 curl -X POST http://localhost:8001/api/connectors/author/from-samples \
   -H "Content-Type: application/json" \
-  -d '{
-    "connector_id": "internal_orders",
-    "samples": [{"id": "1", "total": 49.99, "created_at": "2026-05-06T00:00:00Z"}]
-  }'
-```
+  -d '{"connector_id": "acme", "samples": [{"id": "1", "created_at": "2026-05-06T00:00:00Z"}]}'
 
-`from-openapi` and `from-samples` both return:
-
-```json
-{
-  "manifest": { ... },
-  "validation": {
-    "connector_id": "stripe_demo",
-    "valid": true,
-    "declared_depth_score": 1,
-    "computed_depth_score": 1,
-    "effective_depth_score": 1,
-    "errors": [],
-    "warnings": [...],
-    "streams_evaluated": ["customers", "charges", ...]
-  },
-  "mode": "openapi"
-}
-```
-
-### Runtime (v1) manifest — immediately usable
-
-The two generators above produce a **v2 certification** manifest meant for
-review and curation. If you just want a connector you can run *right now*,
-call the runtime variant — it returns a **v1 runtime manifest** that the
-SaaS Connector node loads directly (paths, methods, and pagination inferred
-from the spec):
-
-```bash
+# v1 runtime manifest alone
 curl -X POST http://localhost:8001/api/connectors/author/from-openapi-runtime \
   -H "Content-Type: application/json" \
-  -d '{
-    "connector_id": "my_api",
-    "openapi_url": "https://api.example.com/openapi.json"
-  }'
+  -d '{"connector_id": "acme", "openapi_url": "https://api.acme.com/openapi.json"}'
 ```
 
-Provide the spec any of three ways (precedence: `openapi_spec` > `openapi_text`
-> `openapi_url`):
+All three accept `openapi_spec` (a parsed dict) or `openapi_text` (raw JSON or
+YAML) instead of `openapi_url`; precedence is spec > text > url. The URL fetch
+is SSRF-guarded — private and internal addresses are rejected with `400`.
 
-- `openapi_url` — a public URL the server fetches (SSRF-guarded — internal /
-  private-IP URLs are rejected with `400`).
-- `openapi_text` — the raw spec as JSON **or** YAML text (what the Author
-  page's Paste / upload box sends). Parsed server-side.
-- `openapi_spec` — an already-parsed dict, to skip parsing entirely.
+`from-openapi` and `from-samples` return `{ manifest, validation, mode }`, with
+`runtime_manifest` added on the OpenAPI path.
 
 Runtime-generated connectors appear at the **Generated** tier in the picker
 until a curated `<id>.v2.json` cert manifest promotes them to **Certified**.
@@ -334,15 +251,21 @@ anywhere — there's nothing on the web to find; paste the spec instead.
 
 ---
 
-## Roadmap
+## Limits and guards
 
-The deterministic generator is the foundation. Planned enhancements:
+- Pasted or uploaded specs: 2 MB. Remote JSON from the reference allowlist:
+  32 MB. Discovery returns at most 5,000 operations and says when it truncates.
+- Spec downloads: 30-second deadline, verified TLS, DNS-pinned addresses, no
+  redirects, no forwarded app credentials.
+- Test requests need developer rank; saving a connector needs admin.
+- Response bodies are capped at 256 KB and arrays sampled to 100 entries;
+  sensitive field names and supplied auth values are redacted.
+- Nothing from the Explorer is persisted except a connector you explicitly save.
 
-- **AI polish** — LLM rewrites pagination heuristics, suggests better
-  primary keys, fills in stream-level `description` fields
-- **Live test fetch** — preview a real `GET` against the inferred
-  endpoint with the user's credentials before save
-- **Save action** — drop the manifest into the local manifests
-  directory in one click, with a "scan for new connectors" trigger
-- **Diff against existing manifest** — re-generating with new sample
-  data shows a structured diff so you don't lose hand-edits
+---
+
+## See also
+
+- [extend/build-a-connector.md](extend/build-a-connector.md) — end-to-end tutorial, including hand-authoring
+- [api-explorer.md](api-explorer.md) — the Explorer surface in full
+- [connectors.md](connectors.md) — the shipped catalog and cert-matrix status

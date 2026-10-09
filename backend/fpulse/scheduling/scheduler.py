@@ -703,6 +703,7 @@ class PipelineScheduler:
             exe = ExecutionRecord(
                 workflow_id=workflow_id,
                 workflow_name=schedule_name or "(scheduled run)",
+                started_at=datetime.fromtimestamp(start, timezone.utc),
                 workspace_id=workspace_id,
                 steps_total=0,
                 triggered_by="schedule",
@@ -1030,6 +1031,13 @@ class PipelineScheduler:
                     )
                 except Exception as exc:
                     logger.warning("Alert trigger failed (non-fatal): %s", exc)
+
+            if exe is not None and execution_store is not None:
+                try:
+                    exe.completed_at = datetime.now(timezone.utc)
+                    execution_store.record(exe)
+                except Exception as exc:
+                    logger.warning("Could not persist final execution timing: %s", exc)
 
     def _trigger_alerts(
         self,

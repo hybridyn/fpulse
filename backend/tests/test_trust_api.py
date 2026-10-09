@@ -59,7 +59,7 @@ class TestPosture:
         result = trust_mod.trust_posture()
         # Privacy-first failure mode: when we can't confirm telemetry is on,
         # we report it as off so the posture page never lies.
-        assert result["sovereignty"]["telemetry_currently_enabled"] is False
+        assert result["sovereignty"]["telemetry_currently_enabled"] is None
 
 
 # ── Supported-models endpoint ────────────────────────────────────────

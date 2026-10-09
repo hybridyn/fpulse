@@ -36,7 +36,10 @@ interface OutputPayload {
   step_type: string;
   label: string;
   status: string;
-  row_count: number;
+  row_count: number | null;
+  missing?: boolean;
+  availability?: 'available' | 'empty' | 'not_captured' | 'expired';
+  capture_source?: string;
   sample_rows: Record<string, any>[];
   sample_truncated: boolean;
   sample_pruned: boolean;
@@ -47,7 +50,7 @@ interface OutputPayload {
 interface InputSource {
   source_step_id: string;
   label: string;
-  row_count: number;
+  row_count: number | null;
   sample_rows: Record<string, any>[];
   sample_truncated: boolean;
   sample_pruned: boolean;
@@ -91,7 +94,8 @@ function formatDurationMs(ms?: number): string {
   return `${(ms / 60_000).toFixed(1)}m`;
 }
 
-function formatRowCount(n: number): string {
+function formatRowCount(n: number | null): string {
+  if (n == null) return 'Not recorded';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
@@ -127,7 +131,9 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
   const [inputs, setInputs] = useState<InputSource[] | null>(null);
   const [activeInputIdx, setActiveInputIdx] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [outputError, setOutputError] = useState<string | null>(null);
+  const [inputError, setInputError] = useState<string | null>(null);
+  const error = direction === 'output' ? outputError : inputError;
   const [exporting, setExporting] = useState(false);
   // Panel height — null = use default (55vh capped at 560px). User
   // can drag the top edge to resize; the chosen height persists until
@@ -192,22 +198,20 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
     if (!open || !executionId || !stepId) return;
     let cancelled = false;
     setLoading(true);
-    setError(null);
-    Promise.all([
-      api.getStepOutput(executionId, stepId).catch((e) => {
-        if (String(e).includes('404')) return null;
-        throw e;
-      }),
-      api.getStepInput(executionId, stepId).catch(() => null),
+    setOutputError(null);
+    setInputError(null);
+    setOutput(null);
+    setInputs(null);
+    Promise.allSettled([
+      api.getStepOutput(executionId, stepId),
+      api.getStepInput(executionId, stepId),
     ])
       .then(([out, ins]) => {
         if (cancelled) return;
-        setOutput(out as OutputPayload | null);
-        setInputs(ins ? ins.inputs : null);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(String(e?.message || e));
+        if (out.status === 'fulfilled') setOutput(out.value as OutputPayload);
+        else setOutputError(String(out.reason?.message || 'Output request failed'));
+        if (ins.status === 'fulfilled') setInputs(ins.value.inputs);
+        else setInputError(String(ins.reason?.message || 'Input request failed'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -220,7 +224,7 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
   const active: {
     rows: Record<string, any>[];
     schema: SchemaCol[];
-    rowCount: number;
+    rowCount: number | null;
     truncated: boolean;
     pruned: boolean;
     missing: boolean;
@@ -233,7 +237,7 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
         rowCount: output.row_count,
         truncated: output.sample_truncated,
         pruned: output.sample_pruned,
-        missing: false,
+        missing: !!output.missing,
       };
     }
     if (!inputs || inputs.length === 0) return null;
@@ -293,7 +297,7 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
   // missing entirely).
   const headerStepType = output?.step_type || stepInfo?.step_type || '';
   const headerStatus = output?.status || stepInfo?.status || 'pending';
-  const headerRowCount = output?.row_count ?? stepInfo?.rows_processed ?? 0;
+  const headerRowCount = output?.row_count ?? stepInfo?.rows_processed ?? null;
   const headerDurationMs = stepInfo?.duration_ms;
   const statusStyle = STATUS_STYLES[headerStatus] || STATUS_STYLES.pending;
 
@@ -532,17 +536,17 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
         {!loading && !error && !active && (
           <div className="text-center py-12 text-slate-400 text-sm">
             {direction === 'output'
-              ? 'No output captured for this step. The pipeline may pre-date the replay capture or the sample may have aged out.'
+              ? 'No historical output is available for this step.'
               : 'This step has no captured inputs (root step, or upstream capture not available).'}
           </div>
         )}
 
-        {!loading && active && (
+        {!loading && !error && active && (
           <>
-            {active.missing && (
+            {active.missing && !active.pruned && (
               <div className="mb-3">
                 <Banner tone="warn">
-                  Upstream capture not available — showing structural placeholder only.
+                  Sample not captured for this run. Recorded counts do not include a copy of the transferred rows.
                 </Banner>
               </div>
             )}
@@ -554,7 +558,10 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
                 </Banner>
               </div>
             )}
-            {!active.pruned && active.rows.length < active.rowCount && active.rows.length > 0 && (
+            {direction === 'output' && output?.capture_source === 'step_log' && !active.pruned && !active.missing && (
+              <Banner tone="info">Historical sample recovered from this run's step log. Column types were not recorded.</Banner>
+            )}
+            {!active.pruned && active.rowCount != null && active.rows.length < active.rowCount && active.rows.length > 0 && (
               <div className="mb-3">
                 <Banner tone="info">
                   Showing {active.rows.length} of {formatRowCount(active.rowCount)} rows
@@ -612,7 +619,7 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
               <div className="border border-slate-200 rounded-md overflow-auto" style={{ maxHeight: '40vh' }}>
                 {filteredRows.length === 0 ? (
                   <div className="text-center py-10 text-sm text-slate-400">
-                    {search ? 'No rows match the search.' : 'No sample rows captured.'}
+                    {search ? 'No rows match the search.' : active.pruned ? 'Sample expired after 30 days.' : active.missing ? 'No sample was captured.' : active.rowCount === 0 ? 'This step produced zero rows.' : 'No sample rows available.'}
                   </div>
                 ) : (
                   <table className="w-full text-sm">
@@ -660,7 +667,7 @@ export default function StepIODrawer({ open, executionId, stepId, stepLabel, ste
 
       {output && (
         <div className="flex items-center justify-between gap-2 px-4 py-1.5 border-t border-slate-200 bg-slate-50 shrink-0 text-[11px] text-slate-500">
-          <div>Captured {new Date(output.captured_at).toLocaleString()}</div>
+          <div>{output.missing && !output.sample_pruned ? 'Sample not captured' : `Captured ${new Date(output.captured_at).toLocaleString()}`}</div>
           {exporting && <div className="text-pipe-700 font-medium">Exporting…</div>}
         </div>
       )}

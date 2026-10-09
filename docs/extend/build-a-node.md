@@ -8,7 +8,7 @@ This page covers the **OSS path**: nodes added directly to your local install. F
 
 You probably need a connector, not a node, if:
 
-- You're integrating with an external system (database / API / file format) → use [Author Connector](build-a-connector.md) instead. Connectors are the right abstraction for "talk to System X."
+- You're integrating with an external system (database / API / file format) → use [API Explorer](build-a-connector.md) instead. Connectors are the right abstraction for "talk to System X."
 - You need to ingest from / write to a place F-Pulse doesn't reach yet → connector.
 
 You probably need a node if:
