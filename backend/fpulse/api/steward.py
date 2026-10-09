@@ -156,7 +156,7 @@ def _workspace_dir(workspace_id: str) -> Path:
     # no-op; it is here so the "one path segment" guarantee is explicit at the
     # join rather than implied by a regex several lines up.
     #
-    # CodeQL suppression, with the reasoning in full because a suppressed
+    # CodeQL/LGTM suppression, with the reasoning in full because a suppressed
     # path-injection alert deserves it. py/path-injection does not model
     # allow-list validation as a sanitiser, so it reports this join whichever
     # way it is written -- sanitising (the first attempt), validate-and-refuse,
@@ -170,7 +170,7 @@ def _workspace_dir(workspace_id: str) -> Path:
     # "default", and no input produces a path outside the root.
     # If the validation above is ever loosened, DELETE this suppression and
     # re-run CodeQL rather than trusting this comment.
-    ws_dir = (base / os.path.basename(wsid)).resolve()  # codeql[py/path-injection]
+    ws_dir = (base / os.path.basename(wsid)).resolve()  # lgtm[py/path-injection]
     try:
         ws_dir.relative_to(base)
     except ValueError:
