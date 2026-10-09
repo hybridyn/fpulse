@@ -124,29 +124,35 @@ def _steward_dir() -> Path:
     return base
 
 
-_WORKSPACE_ID_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
+# A workspace id reaches the filesystem, so it is constrained to one safe path
+# segment: letters, digits, dot, underscore, hyphen, up to 128 chars.
+_WORKSPACE_ID_OK = re.compile(r"[A-Za-z0-9._-]{1,128}")
 
 
 def _workspace_dir(workspace_id: str) -> Path:
     """The per-workspace steward directory, for a workspace id that is NOT trusted.
 
     `workspace_id` arrives from the request, so it must never be joined into a
-    filesystem path verbatim: an id of "../.." walks straight out of the
-    steward directory and every store built on this helper (suppressions,
-    memory, PII findings, null-rate samples) inherits the problem. Reduce the
-    id to one safe path segment, then confirm the result is still contained
-    before creating anything.
+    filesystem path unchecked: an id of "../.." walks straight out of the
+    steward directory, and every store built on this helper (suppressions,
+    memory, PII findings, null-rate samples) inherits the problem.
+
+    The id is VALIDATED and refused, not rewritten. Rewriting was the first fix
+    here and it is worse in a way that matters: mapping unsafe characters to
+    "_" silently collides distinct ids onto one directory, so "tenant/a" and
+    "tenant_a" would share one workspace's steward data. Refusing an id that
+    cannot be represented safely keeps workspaces disjoint and makes the failure
+    visible instead of silently merging two tenants' findings.
+
+    The containment check behind it is belt and braces: if the pattern is ever
+    loosened, the path still has to resolve inside the steward root.
     """
-    safe = _WORKSPACE_ID_UNSAFE.sub("_", (workspace_id or "").strip()) or "default"
-    if safe in {".", ".."}:
-        safe = "default"
+    wsid = (workspace_id or "").strip() or "default"
+    if not _WORKSPACE_ID_OK.fullmatch(wsid) or wsid in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid workspace id")
     base = _steward_dir().resolve()
-    ws_dir = (base / safe).resolve()
+    ws_dir = (base / wsid).resolve()
     try:
-        # Canonical containment check: resolve both sides, then prove the
-        # result sits under the steward root. Belt and braces over the
-        # character filter above -- if either one is ever weakened, this still
-        # refuses to touch a path outside the root.
         ws_dir.relative_to(base)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid workspace id") from None
