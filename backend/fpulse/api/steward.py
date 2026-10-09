@@ -155,7 +155,22 @@ def _workspace_dir(workspace_id: str) -> Path:
     # os.path.basename on an id that already matched the pattern above is a
     # no-op; it is here so the "one path segment" guarantee is explicit at the
     # join rather than implied by a regex several lines up.
-    ws_dir = (base / os.path.basename(wsid)).resolve()
+    #
+    # CodeQL suppression, with the reasoning in full because a suppressed
+    # path-injection alert deserves it. py/path-injection does not model
+    # allow-list validation as a sanitiser, so it reports this join whichever
+    # way it is written -- sanitising (the first attempt), validate-and-refuse,
+    # and validate-plus-basename were each flagged in turn. What actually
+    # guards the join: `wsid` has to fullmatch [A-Za-z0-9._-]{1,128} or the
+    # request is already refused with 400 three lines up, so it cannot contain
+    # a separator, "..", a drive letter or a leading slash; basename enforces
+    # one segment at the join; and relative_to() below re-proves containment
+    # under the steward root after resolution. Behaviourally verified:
+    # "tenant/../../etc", "..", "/etc/passwd" and "" are each refused or map to
+    # "default", and no input produces a path outside the root.
+    # If the validation above is ever loosened, DELETE this suppression and
+    # re-run CodeQL rather than trusting this comment.
+    ws_dir = (base / os.path.basename(wsid)).resolve()  # codeql[py/path-injection]
     try:
         ws_dir.relative_to(base)
     except ValueError:
