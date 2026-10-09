@@ -530,19 +530,20 @@ function CertMatrixSection({
           />
         </div>
 
-        {/* 2026-06-03 — count-definition explainer. Until this turn the
-            Trust "Total" silently included v1 legacy entries, so users
-            comparing it to the About card ("33 Connectors") or the
-            readme ("33 first-party visible default") would see a
-            mismatch. This sentence reconciles the numbers in one
-            line, sourced from the live cert-matrix. */}
+        {/* 2026-10-06 — count-definition explainer. The tier labels are
+            NOT a partition of the catalog: every row carries a v1 base
+            label and some ALSO carry a v2 tier (e.g. Beta), so the per-tier
+            counts overlap and must not be presented as summing to the
+            total (the old copy claimed "total = v2 + v1 legacy", which
+            was arithmetically false). This line states the overlap plainly,
+            sourced from the live cert-matrix. */}
         <div className={`text-xs ${dark ? 'text-slate-500' : 'text-slate-500'}`}>
           <strong className={sectionLabel}>How to read these counts</strong> ·{' '}
-          <code className="font-mono">Catalog (all) = {total}</code> includes both v2 tier-rated
-          connectors ({productionCount + betaCount + alphaCount + stubCount}) and
-          v1 legacy entries ({v1Count}) that haven't been migrated to the new
-          tier system. These counts describe the catalog, not successful live
-          connector tests.
+          <code className="font-mono">Catalog (all) = {total}</code> is the number of
+          connectors with a validation entry. The tier cards count how many carry
+          each label — a connector can hold more than one (e.g. a v1 entry also
+          rated Beta), so the tiers overlap and do not sum to the total. These
+          counts describe the catalog, not successful live connector tests.
         </div>
 
         {/* Full per-connector matrix — folded in from the old standalone

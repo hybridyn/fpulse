@@ -170,7 +170,7 @@ const palette = {
     inkMuted: 'text-slate-500',
     accent: 'text-blue-600',
     accentBg: 'bg-blue-600 hover:bg-blue-700',
-    greetingBg: 'bg-gradient-to-br from-blue-50 via-white to-indigo-50 border-blue-100',
+    greetingBg: 'bg-white border-slate-200',
     ok: 'text-emerald-600',  okBg: 'bg-emerald-500',
     warn: 'text-amber-600',  warnBg: 'bg-amber-500',
     bad: 'text-red-600',     badBg: 'bg-red-500',
@@ -186,7 +186,7 @@ const palette = {
     // (it's the production environment) without going full-dark like
     // the old slate-900 treatment. Matches the light canvas underneath
     // and keeps the greeting welcoming rather than somber.
-    greetingBg: 'bg-gradient-to-br from-white via-rose-50/40 to-slate-50 border-slate-200',
+    greetingBg: 'bg-white border-slate-200',
     ok: 'text-emerald-600',  okBg: 'bg-emerald-500',
     warn: 'text-amber-600',  warnBg: 'bg-amber-500',
     bad: 'text-red-600',     badBg: 'bg-red-500',
@@ -245,10 +245,8 @@ function HeroKPI({
   // Text colour branches on `lighter`: DEV (lighter gradients) gets black
   // text for crisp readability; PROD (richer 500-600 gradients) keeps
   // white for contrast — black on PROD's darker emerald/red would muddy.
-  const darkText = !!lighter;
-  const tone = darkText
-    ? (trend?.tone === 'ok' ? 'text-emerald-900' : trend?.tone === 'bad' ? 'text-rose-900' : 'text-slate-700')
-    : (trend?.tone === 'ok' ? 'text-emerald-100' : trend?.tone === 'bad' ? 'text-rose-100' : 'text-white/80');
+  // Card standard: neutral white surface — colour lives only on the value.
+  const tone = trend?.tone === 'ok' ? 'text-emerald-600' : trend?.tone === 'bad' ? 'text-rose-600' : 'text-slate-500';
   const hasSpark = sparkline && sparkline.length > 0 && sparkline.some(v => v > 0);
   // Shift shades one step lighter for DEV. Done via regex on the gradient
   // string so callers don't have to maintain two parallel palettes.
@@ -261,15 +259,23 @@ function HeroKPI({
         .replace(/-500\b/g, '-400')
     : gradient;
   const glow = glowFor(finalGradient);
-  // Map the gradient color family to a matching darker border so each KPI
-  // card carries its accent color on the edge as well as the fill.
-  const borderClass =
-    finalGradient.includes('emerald') ? 'border-emerald-600' :
-    finalGradient.includes('rose') || finalGradient.includes('red') ? 'border-rose-600' :
-    finalGradient.includes('amber') || finalGradient.includes('orange') ? 'border-orange-500' :
-    finalGradient.includes('indigo') || finalGradient.includes('blue') ? 'border-indigo-600' :
-    finalGradient.includes('violet') || finalGradient.includes('purple') ? 'border-purple-600' :
-    finalGradient.includes('slate') ? 'border-slate-500' : 'border-slate-400';
+  // Card standard: the surface stays neutral white — the accent colour maps
+  // onto the VALUE (and its sparkline), never a background fill. Derive the
+  // value's text colour + sparkline hex from the caller's gradient family.
+  const accentText =
+    finalGradient.includes('emerald') ? 'text-emerald-600' :
+    finalGradient.includes('rose') || finalGradient.includes('red') ? 'text-rose-600' :
+    finalGradient.includes('amber') || finalGradient.includes('orange') ? 'text-amber-600' :
+    finalGradient.includes('indigo') || finalGradient.includes('blue') ? 'text-blue-600' :
+    finalGradient.includes('violet') || finalGradient.includes('purple') ? 'text-violet-600' :
+    finalGradient.includes('slate') ? 'text-slate-700' : 'text-slate-800';
+  const accentHex =
+    finalGradient.includes('emerald') ? '#059669' :
+    finalGradient.includes('rose') || finalGradient.includes('red') ? '#E11D48' :
+    finalGradient.includes('amber') || finalGradient.includes('orange') ? '#D97706' :
+    finalGradient.includes('indigo') || finalGradient.includes('blue') ? '#2563EB' :
+    finalGradient.includes('violet') || finalGradient.includes('purple') ? '#7C3AED' :
+    finalGradient.includes('slate') ? '#334155' : '#1E293B';
   const Cmp: any = onClick ? 'button' : 'div';
   return (
     <Cmp
@@ -281,18 +287,15 @@ function HeroKPI({
       // - thinned border to 1px so the card feels lighter
       // Status color is still carried by the gradient fill + border
       // accent; loss of glow doesn't reduce information density.
-      className={`relative overflow-hidden rounded-lg border ${borderClass} bg-gradient-to-br ${finalGradient} px-4 py-3 transition-all duration-200 hover:-translate-y-0.5 ${onClick ? 'cursor-pointer text-left w-full' : ''}`}
-      style={{
-        boxShadow: '0 2px 6px -2px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.14)',
-      }}
+      className={`relative overflow-hidden rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${onClick ? 'cursor-pointer text-left w-full' : ''}`}
     >
       {/* Content stack — centered. Text colour follows `darkText`: DEV
           cards use slate-900, PROD uses white for readability on the
           richer gradient backgrounds. */}
-      <div className={`relative text-xs font-bold uppercase tracking-wide text-center ${darkText ? 'text-slate-900' : 'text-white/95'}`}>{label}</div>
+      <div className="relative text-xs font-bold uppercase tracking-wide text-center text-slate-500">{label}</div>
       <div className="relative mt-0.5 flex items-baseline justify-center gap-1.5">
-        <span className={`text-2xl font-extrabold tabular-nums leading-none ${darkText ? 'text-slate-900' : 'text-white drop-shadow-sm'}`}>{value}</span>
-        {suffix && <span className={`text-sm font-semibold ${darkText ? 'text-slate-800' : 'text-white/85'}`}>{suffix}</span>}
+        <span className={`text-2xl font-extrabold tabular-nums leading-none ${accentText}`}>{value}</span>
+        {suffix && <span className="text-sm font-semibold text-slate-400">{suffix}</span>}
       </div>
       {trend && (
         <div className={`relative mt-1 text-xs font-semibold text-center ${tone}`}>
@@ -300,7 +303,7 @@ function HeroKPI({
         </div>
       )}
       {hasSpark && (
-        <div className="relative mt-1.5 -mx-1"><Sparkline data={sparkline!} color="#ffffff" fill height={22} /></div>
+        <div className="relative mt-1.5 -mx-1"><Sparkline data={sparkline!} color={accentHex} fill height={22} /></div>
       )}
     </Cmp>
   );
@@ -371,7 +374,9 @@ function FlatKPI({
   };
   const Cmp: any = onClick ? 'button' : 'div';
   const isStriped = variant === 'striped';
-  const bgClass = isStriped ? 'bg-white' : `bg-gradient-to-br ${wash[accent]}`;
+  // Card standard: neutral white surface, no accent wash — colour goes on
+  // the value below, not the card body.
+  const bgClass = 'bg-white';
   const pad = isStriped ? 'p-3 pl-4' : 'p-3';
   // N2 (2026-05-23): a11y — clickable cards get a real <button> with
   // an aria-label describing the action ("Open Connections — 5 saved
@@ -399,14 +404,14 @@ function FlatKPI({
           {icon}
         </div>
       )}
-      <div className={`text-xs font-bold uppercase tracking-wide text-center ${accentColor}`}>{label}</div>
+      <div className="text-xs font-bold uppercase tracking-wide text-center text-slate-500">{label}</div>
       <div className="mt-1 flex items-baseline justify-center gap-1" aria-hidden={loading ? 'true' : undefined}>
         {loading ? (
           // K2: pulsing skeleton bar so the user sees "loading", not "0".
           <span className="inline-block h-7 w-14 rounded-md bg-slate-200/80 animate-pulse" />
         ) : (
           <>
-            <span className="text-2xl font-extrabold tabular-nums text-slate-900 leading-none">{value}</span>
+            <span className={`text-2xl font-extrabold tabular-nums ${accentColor} leading-none`}>{value}</span>
             {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
           </>
         )}
@@ -1498,7 +1503,7 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
           const show = failedList.length > 0 || showPoolWarning || showApprovals;
           if (!show) return null;
           return (
-            <section className="rounded-lg border border-amber-200 bg-amber-50/40 shadow-sm overflow-hidden">
+            <section className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
               <button
                 type="button"
                 onClick={toggleAttention}
@@ -1655,7 +1660,7 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
             useless on day 0; show concrete next-step CTAs instead.
             Added 2026-05-25. */}
         {!loading && stats && (stats.pipelines === 0) && !isProd ? (
-          <section className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-sm p-6">
+          <section className="rounded-lg border border-slate-200 bg-white shadow-sm p-6">
             <h2 className="text-base font-bold text-slate-800 mb-1">Get F-Pulse moving in 3 steps</h2>
             <p className="text-sm text-slate-600 mb-4">No pipelines yet. Pick the entry point that matches what you have in hand.</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -2330,7 +2335,7 @@ export default function DashboardPage({ onNavigate, userName, environment = 'dev
             on Plus tier. Restored to the Dashboard by request as the bottom
             banner; the PROD toggle remains the other F-Pulse+ touchpoint. */}
         {!prodCardDismissed && tier !== 'plus' && (
-        <section className="relative rounded-2xl overflow-hidden border border-amber-200 shadow-sm bg-gradient-to-br from-amber-50 via-white to-orange-50">
+        <section className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
           {/* Accent stripe — amber/gold matches the F-Pulse brand mark */}
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
 
