@@ -19,6 +19,24 @@ from tests.conftest_fixtures_v2 import (  # noqa: F401
 )
 
 
+@pytest.fixture(autouse=True)
+def _really_anonymous(client: TestClient):
+    """Guarantee the client in THIS module is actually anonymous.
+
+    Every assertion here is of the form "an unauthenticated caller must be
+    refused", so the whole file is worthless if the client carries a session.
+    It silently did: `admin_token` used to log in through this same
+    module-scoped `client`, which left `fpulse_session` on its cookie jar, so
+    these tests passed or failed depending on whether an authenticated fixture
+    had been instantiated first. The fixture no longer does that, and this
+    guard keeps the file honest if anything reintroduces it -- a security test
+    should fail loudly when its own premise breaks, not quietly assert nothing.
+    """
+    client.cookies.clear()
+    client.headers.pop("Authorization", None)
+    yield
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Regression: every protected endpoint must 401 for anonymous callers
 # ─────────────────────────────────────────────────────────────────────────
