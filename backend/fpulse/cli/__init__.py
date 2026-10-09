@@ -1237,6 +1237,34 @@ def cmd_restore(args):
     print("Start the F-Pulse server pointing FPULSE_DATA_DIR at this directory.")
 
 
+def cmd_verify_connector(args):
+    """Verify a connector's signed 'Verified' attestation, fully offline.
+
+    The signature is checked against the public key embedded in the attestation
+    (and, if --pubkey / FPULSE_ATTEST_PUBLIC_KEY is set, pinned to that trusted
+    issuer). Exit 0 = valid, 1 = invalid/untrusted, 2 = no attestation found.
+    """
+    from fpulse.connectors.attest import verify_connector as _vc
+    ok, reason, env = _vc(
+        args.connector_id,
+        path=getattr(args, "file", None),
+        trusted_public_key=getattr(args, "pubkey", None),
+    )
+    if env is None:
+        print(reason, file=sys.stderr)
+        sys.exit(2)
+    b = env.get("attestation", {})
+    s = env.get("signature", {})
+    print(f"Connector:  {b.get('connector')}")
+    print(f"CAT level:  {b.get('cat_level')}  (failed={b.get('failed')})")
+    print(f"Manifest:   sha256:{str(b.get('manifest_sha256', ''))[:16]}…")
+    print(f"Fixtures:   {len(b.get('fixture_sha256') or {})} pinned")
+    print(f"Issued:     {b.get('issued_at')}")
+    print(f"Key id:     {s.get('key_id')}")
+    print(f"Result:     {'✓ VALID — ' if ok else '✗ '}{reason}")
+    sys.exit(0 if ok else 1)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="fpulse",
@@ -1483,6 +1511,14 @@ def main():
         help="Show whether the supervised F-Pulse service is running",
     )
 
+    p_verify_conn = subparsers.add_parser(
+        "verify-connector",
+        help="Verify a connector's signed 'Verified' attestation (offline)",
+    )
+    p_verify_conn.add_argument("connector_id", help="Connector id, e.g. github")
+    p_verify_conn.add_argument("--file", help="Attestation file path (default: bundled)")
+    p_verify_conn.add_argument("--pubkey", help="Trusted public key hex to pin")
+
     args = parser.parse_args()
 
     if args.url:
@@ -1522,6 +1558,7 @@ def main():
         "install-service": cmd_install_service,
         "uninstall-service": cmd_uninstall_service,
         "service-status": cmd_service_status,
+        "verify-connector": cmd_verify_connector,
     }
 
     if args.command in commands:

@@ -1,0 +1,12 @@
+{
+  "connectors": {
+    "github": {
+      "cat_level": "verified",
+      "failed": 0,
+      "manifest_sha256": "1a64d1dbde2a160d1efa22e1510a73baf35a7b3312487106ca0839b486b90be4",
+      "passed": 4,
+      "run_at": "2026-10-08T14:19:00.455209+00:00"
+    }
+  },
+  "generated_at": "2026-10-08T14:19:00.475215+00:00"
+}

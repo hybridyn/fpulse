@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "connector_id": "github",
+  "stream": "repos",
+  "params": {
+    "owner": "octo",
+    "personal_access_token": "[REDACTED]"
+  },
+  "calls": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "https://api.github.com/users/octo/repos?per_page=100",
+        "headers": {
+          "Accept": "application/vnd.github+json",
+          "Authorization": "[REDACTED]",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        "body": null,
+        "body_text": null
+      },
+      "response": {
+        "payload": [],
+        "headers": {
+          "Link": ""
+        }
+      }
+    }
+  ]
+}
