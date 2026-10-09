@@ -23,6 +23,7 @@ That positioning is the whole reason this module exists; see
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from pathlib import Path
@@ -151,7 +152,10 @@ def _workspace_dir(workspace_id: str) -> Path:
     if not _WORKSPACE_ID_OK.fullmatch(wsid) or wsid in {".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid workspace id")
     base = _steward_dir().resolve()
-    ws_dir = (base / wsid).resolve()
+    # os.path.basename on an id that already matched the pattern above is a
+    # no-op; it is here so the "one path segment" guarantee is explicit at the
+    # join rather than implied by a regex several lines up.
+    ws_dir = (base / os.path.basename(wsid)).resolve()
     try:
         ws_dir.relative_to(base)
     except ValueError:
