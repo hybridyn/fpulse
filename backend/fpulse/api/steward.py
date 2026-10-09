@@ -142,8 +142,14 @@ def _workspace_dir(workspace_id: str) -> Path:
         safe = "default"
     base = _steward_dir().resolve()
     ws_dir = (base / safe).resolve()
-    if ws_dir != base and base not in ws_dir.parents:
-        raise HTTPException(status_code=400, detail="Invalid workspace id")
+    try:
+        # Canonical containment check: resolve both sides, then prove the
+        # result sits under the steward root. Belt and braces over the
+        # character filter above -- if either one is ever weakened, this still
+        # refuses to touch a path outside the root.
+        ws_dir.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid workspace id") from None
     ws_dir.mkdir(parents=True, exist_ok=True)
     return ws_dir
 
