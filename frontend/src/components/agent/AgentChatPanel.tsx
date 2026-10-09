@@ -785,17 +785,11 @@ export default function AgentChatPanel() {
           + `Power users: set FPULSE_AGENT_WALL_CLOCK_S=600 (max 600) in the backend env and restart for a longer cap.`
         );
       } else if (response.outcome === 'llm_failure') {
-        // 2026-05-21: when the provider is a too-small local Ollama,
-        // the failure is almost always the model returning empty text
-        // or skipping the tool call. Call it out explicitly so users
-        // stop guessing.
-        displayText = isBelowFloor
-          ? (`[LLM failure.] ${currentModel} returned no usable response.\n\n`
-             + `This model is BELOW the reliable tool-use floor (~7B). Small models like 0.5b/1.5b/3b advertise tool support but in practice return greetings or empty text instead of calling tools — exactly the failure you're seeing.\n\n`
-             + `Fix: pull ${OLLAMA_CPU_RECOMMENDATION} (or llama3.1:8b / phi-4) via Settings → AI Provider, then retry. Expect ~6 GB RAM and 30–60 s per turn on CPU at the floor.`)
-          : (`[LLM failure.] ${currentModel || 'The selected model'} returned no usable response.\n\n`
-             + `Free / smaller cloud models often advertise tool support but don't reliably complete tool loops — they return empty text or stall mid-call, which is what happened here.\n\n`
-             + `Fix: switch to a stronger model in Insights → AI Provider — Claude Haiku, GPT-4o-mini, or DeepSeek V3 / Llama 3.3 70B (OpenRouter) all close tool loops reliably — then retry.`);
+        // Report the recorded failure without inferring model capability.
+        const failure = response.steps.find(step => step.outcome === 'llm_failure');
+        displayText = `[AI request failed.] ${currentModel || 'The selected model'} could not complete this request.\n\n`
+          + (failure?.decision_reason || 'No diagnostic was returned. Check the request trace and provider configuration.')
+          + '\n\nA successful connection test does not validate every chat or tool request.';
       } else if (response.outcome === 'tool_failure') {
         displayText = `[Tool failure.] One of the agent's tool calls errored. Check the trace below for the specific tool and reason.`;
       } else if (response.outcome === 'policy_block') {

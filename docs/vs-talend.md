@@ -31,7 +31,7 @@ A frank, side-by-side comparison for teams evaluating F-Pulse OSS as a replaceme
 | **Multi-user / RBAC** | Single-user | Workspaces, RBAC, deploy / rollback |
 | **Long-job restart from failure** | Start from zero | Checkpoint-aware (resumes from last successful step) |
 | **First-party connector count** | 1000+ tXxx components | 37 first-party manifests today |
-| **Framework to add new connectors** | tXxx custom component → Eclipse + Java + custom code → Maven build | OpenAPI URL OR sample responses → working connector in 90 seconds, no compile step |
+| **Framework to add new connectors** | tXxx custom component → Eclipse + Java + custom code → Maven build | OpenAPI URL OR a response you tested → reviewed connector draft, no compile step, no restart |
 | **AI-assisted authoring** | Not in TOS itself (Talend's commercial products include AI/Copilot features that are out of scope for this comparison) | OpenAPI / sample-response generators ship in the box |
 | **Cross-pipeline reliability watcher** | Not in Talend Open Studio's local-desktop scope — TOS produces per-job logs only. (Talend's commercial cloud / management console adds richer monitoring; out of scope for this TOS comparison.) | **F-Pulse Steward** (OSS): duplicate-source / duplicate-pipeline detection, time-clamped severity escalation, rebound detection, dismiss-with-reason + secret-sanitizer, **F-Pulse Memory Layer** (durable approved lessons), notification-bell with strict de-dup, per-workspace isolation, corrupt-journal resilience. See [steward/overview.md](steward/overview.md) |
 | **Durable team-knowledge surface** | Tribal — engineers keep runbooks in wikis or worse | **F-Pulse Memory Layer**: typed lessons with propose → approve → revalidate workflow + lesson-search API today (auto-invocation on failure ships in 1.2). See [steward/memory-layer.md](steward/memory-layer.md) |
@@ -56,7 +56,7 @@ The processing engine wins on speed, the operational layer wins on developer tim
 Honest gaps. We're not going to pretend these aren't real:
 
 1. **Obscure-enterprise connector breadth.** SAP IDocs, AS/400, JDE, Tibco, IBM MQ, Oracle E-Business proprietary auth — TOS has tXxx components for systems F-Pulse doesn't ship out of the box. If your pipelines touch this kind of system, either:
-   - Use the **Author Connector** UI to generate one from the vendor's OpenAPI spec (works for most modern enterprise REST surfaces)
+   - Use the **API Explorer** UI to generate one from the vendor's OpenAPI spec (works for most modern enterprise REST surfaces)
    - [Open a connector request](https://github.com/hybridyn/fpulse/issues/new/choose) — tell us what you need, paste the API docs, we'll prioritise
    - Use TOS for that one pipeline, F-Pulse for the other 80%
 2. **tMap expression builder.** Talend's expression composer for joins / lookups / per-row formulas is genuinely powerful and F-Pulse's transform UX (derived-column / aggregate / pivot nodes) is more click-heavy. We're closing this gap; today it's a real difference for power-users who lived in tMap.
@@ -71,8 +71,8 @@ Four first-class paths:
 
 | Path | Time | Use when |
 |---|---|---|
-| **`Insights → Author Connector → from OpenAPI`** | 90 seconds | Vendor publishes an OpenAPI 3.x spec |
-| **`Insights → Author Connector → from samples`** | ~10 minutes | No spec; you have 1–5 sample API responses from curl/Postman |
+| **`Insights → API Explorer` → from OpenAPI** | Minutes | Vendor publishes an OpenAPI 3.x spec |
+| **`Insights → API Explorer → from samples`** | ~10 minutes | No spec; you have 1–5 sample API responses from curl/Postman |
 | **Manifest by hand** | ~30 minutes | You want full control over auth / pagination / streams |
 | **Derive from Talend's own source** | ~1 day | Legacy enterprise system (SAP, Oracle EBS, JDE, Workday SOAP) where Talend's code already encodes 15 years of vendor-specific quirks |
 
@@ -104,5 +104,5 @@ If your workload is *truly* multi-TB-per-run on raw files, both Talend Big Data 
 - [docs/vs-airbyte.md](vs-airbyte.md) — companion comparison for teams evaluating against Airbyte
 - [docs/connectors.md](connectors.md) — full connector catalog + cert matrix
 - [docs/extend/build-a-connector.md](extend/build-a-connector.md) — 30-minute tutorial
-- [docs/connector-authoring.md](connector-authoring.md) — Author Connector UI reference
+- [docs/connector-authoring.md](connector-authoring.md) — API Explorer UI reference
 - [Request a connector or node](https://github.com/hybridyn/fpulse/issues/new/choose) — pre-filled issue templates

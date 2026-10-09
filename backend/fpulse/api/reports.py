@@ -533,9 +533,9 @@ _DOC_CATALOG: list[dict] = [
     # the connector-gap weakness into a strength.
     {
         "path": "extend/build-a-connector.md",
-        "title": "Build your own connector (30 min)",
+        "title": "Build your own connector",
         "audience": "All users",
-        "summary": "Three first-class paths to add any connector F-Pulse doesn't ship: 90-second OpenAPI generator, 10-minute sample-response generator, or a 30-minute hand-authored manifest. End-to-end tutorial with the existing /api/connectors/author/* path.",
+        "summary": "Three paths to add a connector F-Pulse doesn't ship: generate a runnable v1 manifest from an OpenAPI spec, infer a schema draft from a response you tested, or hand-author the manifest. Covers the v1-runtime vs v2-certification distinction and the /api/connectors/author/* endpoints.",
         "admin_only": False,
         "plus_only": False,
     },

@@ -86,6 +86,14 @@ from .foreseer import (
 # (CADENCE_MISS, DATA level). Threshold-free companion to quality's
 # FRESHNESS_MISS, over the same CostEvent timestamps. No new ingestion.
 from .cadence import detect_cadence_misses
+# 2026-09-27 — null_rate: automatic learned-baseline per-column null-rate
+# anomaly (NULL_RATE_ANOMALY). Rides the not_null counts runners already send.
+from .null_rate import (
+    NullRateSample,
+    NullRateSampleStore,
+    detect_null_rate_anomalies,
+    samples_from_report,
+)
 from .memory import StewardMemory, new_scan_id, apply_learning, sanitize_user_note
 from .pii import (
     PIIFindingStore,
@@ -201,6 +209,10 @@ __all__ = [
     "summarise_by_source",
     "detect_volume_anomalies",
     "detect_cadence_misses",
+    "detect_null_rate_anomalies",
+    "samples_from_report",
+    "NullRateSample",
+    "NullRateSampleStore",
     "modified_zscore",
     "PIIFindingStore",
     "check_columns_for_pii",

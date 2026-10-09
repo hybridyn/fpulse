@@ -292,7 +292,7 @@ fpulse = [
     "docs/*.md", "docs/**/*.md", "docs/**/*.txt", "docs/**/*.jsonl",
     "static/**/*",
     "connectors/manifests/*.json", "connectors/manifests/**/*.json",
-    "connectors/ci/*.yml", "connections/*.json",
+    "connectors/ci/*.yml", "connectors/ci/*.json", "connections/*.json",
     "seed_data/*.csv", "eval/*.csv", "eval/*.md",
 ]
 

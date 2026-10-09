@@ -10,7 +10,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import sqlite3
 from datetime import datetime, timezone
 from copy import deepcopy
 
@@ -298,35 +297,16 @@ class WorkflowStore:
         # Pulled in v15: also surface the latest version's content_hash so
         # listings (Admin Deployments tab, dashboards) can display the
         # signed-artifact short prefix without a second round-trip per row.
-        # 2026-05-28 — added two correlated subqueries against
-        # execution_logs so the Pipelines page's "Last Run" column has
-        # the timestamp + status it expects. Previously the column was
-        # always dashed because the list endpoint didn't join on the
-        # execution log at all. Correlated subqueries are O(N) over
-        # workflows but N is small for OSS (single-node, typically
-        # tens-to-hundreds of workflows); upgrade to a window-function
-        # join when the Plus scale gets us into the thousands.
-        #
-        # 2026-05-28 (later) — execution_logs is created lazily by
-        # ExecutionLogger.__init__ rather than by the main TABLES /
-        # migrations block. In production the lifespan always
-        # instantiates ExecutionLogger before any list_all call, so
-        # the JOIN works. In tests + admin tools that hit
-        # WorkflowStore.list_all on a fresh DB without booting the
-        # full app, the table doesn't exist and the JOIN crashes
-        # with "no such table: execution_logs". Defensive: try the
-        # enriched query first; on OperationalError fall back to a
-        # plain query that emits last_run / last_run_status as NULL.
-        # The frontend already handles those as "—".
+        # Read the same canonical records as Execution History, never the
+        # optional engine logger. Scope both subqueries to the workflow tenant.
         last_run_sql = (
-            "(SELECT started_at FROM execution_logs "
-            " WHERE workflow_id = wv.workflow_id "
-            " ORDER BY started_at DESC LIMIT 1) AS last_run, "
-            "(SELECT status FROM execution_logs "
-            " WHERE workflow_id = wv.workflow_id "
-            " ORDER BY started_at DESC LIMIT 1) AS last_run_status"
+            "(SELECT started_at FROM executions "
+            " WHERE workflow_id = wv.workflow_id AND workspace_id = wv.workspace_id "
+            " ORDER BY julianday(started_at) DESC, id DESC LIMIT 1) AS last_run, "
+            "(SELECT status FROM executions "
+            " WHERE workflow_id = wv.workflow_id AND workspace_id = wv.workspace_id "
+            " ORDER BY julianday(started_at) DESC, id DESC LIMIT 1) AS last_run_status"
         )
-        null_run_sql = "NULL AS last_run, NULL AS last_run_status"
 
         def _run(select_extra: str) -> list:
             if workspace_id is None:
@@ -351,17 +331,7 @@ class WorkflowStore:
                 (workspace_id,),
             )
 
-        try:
-            rows = _run(last_run_sql)
-        except sqlite3.OperationalError as exc:
-            # Most common cause: execution_logs hasn't been created
-            # yet because ExecutionLogger wasn't instantiated (tests,
-            # admin tools, fresh installs hit before the lifespan
-            # boot). Any other OperationalError re-raises so we don't
-            # mask a real schema bug.
-            if "execution_logs" not in str(exc):
-                raise
-            rows = _run(null_run_sql)
+        rows = _run(last_run_sql)
         result = []
         for row in rows:
             data = json.loads(row["data"])

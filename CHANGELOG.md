@@ -13,6 +13,39 @@ require a major bump and a deprecation window of at least one minor.
 
 ## [Unreleased]
 
+### Added
+- **API Explorer** (`Insights → API Explorer`) — load an OpenAPI 3.x / Swagger 2
+  spec from a curated reference, a pasted or uploaded file, or any URL; send one
+  authenticated request; inspect the response as JSON, a typed record table, a
+  structure listing or headers; assert on status, response time, a header, a JSON
+  path or body text; then generate a connector from the spec and save it as Beta.
+  Writes (POST/PUT/PATCH/DELETE) require explicit confirmation.
+  Replaces the separate Author Connector and Connector Gallery pages.
+- **OpenAPI security review** — classifies an imported spec's authentication
+  schemes per endpoint so you see what a connector will actually need before you
+  generate it.
+- **Execution contracts** — a declarative contract for a run (schema, service,
+  receipt chain) with offline verification, a `verify_contract` CLI and a worked
+  `examples/execution-contracts/timesheet-monthly.json`.
+- **Steward: null-rate detector** (`NULL_RATE_ANOMALY`) — learned per-column
+  null-rate baseline that flags a break from a column's own history, riding the
+  `not_null` counts runners already report.
+- **Run timing and step history** — per-step timing captured during execution,
+  elapsed reporting on the Executions list (with the duration basis stated, so a
+  legacy reported duration is never shown as a measured one) and step history in
+  the IO drawer.
+- **Security diagnostics** endpoint and `docs/security-diagnostics.md`.
+- **Update-available banner** in the app shell.
+- **`samples/multi-system-demo`** — five pipelines across SQL Server, Postgres,
+  MySQL, S3 and a sample API, with compose file, fixtures and exports.
+- Docs: `docs/api-explorer.md`, `docs/execution-timing.md`,
+  `docs/security-diagnostics.md`.
+
+### Changed
+- **Settings → Security** now embeds the Trust page, so the security posture is
+  read from the live trust API instead of a hardcoded list that can drift.
+- Connector authoring docs rewritten around the API Explorer, including the v1
+  runtime manifest versus v2 certification spec distinction — only v1 runs.
 ## [1.0.1] — 2026-09-23
 
 Patch release. Dependency fix only — no functional changes to the engine,

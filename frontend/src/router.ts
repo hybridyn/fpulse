@@ -50,13 +50,16 @@ function _parseHash(raw: string): { page: string; subRoute: string | null; query
 export function readCurrentPage(): Page {
   const raw = typeof window !== 'undefined' ? window.location.hash : '';
   const { page } = _parseHash(raw);
+  if (page === 'trust' || page === 'cert-matrix') return 'settings';
   return (VALID_PAGES as readonly string[]).includes(page) ? (page as Page) : DEFAULT_PAGE;
 }
 
 /** Read a sub-route (e.g. `/<id>` after the page name). */
 export function readSubRoute(): string | null {
   const raw = typeof window !== 'undefined' ? window.location.hash : '';
-  return _parseHash(raw).subRoute;
+  const parsed = _parseHash(raw);
+  if (parsed.page === 'trust' || parsed.page === 'cert-matrix') return 'security';
+  return parsed.subRoute;
 }
 
 /**

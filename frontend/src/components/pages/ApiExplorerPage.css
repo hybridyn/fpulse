@@ -1,0 +1,433 @@
+/*
+ * API Explorer — request/response workbench.
+ *
+ * Light-only by design: OSS Free ships with dark mode removed (see
+ * hooks/useDarkMode.ts), so these are flat light tokens rather than a
+ * theme-switched palette.
+ */
+
+/*
+ * Tokens mirror the shell's Tailwind conventions so this page reads as part of
+ * the app rather than a bolted-on tool: cards are `rounded-lg border-slate-200
+ * shadow-sm bg-white`, primary actions are `bg-pipe-600`, muted text is
+ * slate-500. Change these here, not per-rule.
+ */
+:root {
+  --api-border: #e2e8f0;          /* slate-200 — the shell's universal border */
+  --api-surface: #ffffff;
+  --api-surface-muted: #f8fafc;   /* slate-50 */
+  --api-text-muted: #64748b;      /* slate-500 */
+  --api-accent: #2e6bc4;          /* pipe-600 */
+  --api-radius: 8px;              /* rounded-lg */
+  --api-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);  /* shadow-sm */
+}
+
+/* ── Toolbar above the workbench ─────────────────────────────────────── */
+
+.api-explorer-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 12px;
+}
+
+
+
+
+.api-request-hint {
+  font-size: 12px; line-height: 1.5; color: #475569;
+  padding: 0 20px 12px; background: var(--api-surface-muted);
+  border-bottom: 1px solid var(--api-border);
+}
+.api-toolbar-button {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: #1e5aaf;
+  border: 1px solid var(--api-border); background: var(--api-surface);
+  border-radius: var(--api-radius); padding: 8px 12px;
+}
+.api-toolbar-button:hover { background: #f1f5f9; }
+
+.api-history { position: relative; }
+.api-history-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  width: min(460px, 78vw); max-height: 320px; overflow: auto;
+  background: var(--api-surface); border: 1px solid var(--api-border);
+  border-radius: var(--api-radius); box-shadow: 0 12px 28px rgb(15 23 42 / 12%); padding: 4px;
+}
+.api-history-menu button {
+  display: grid; grid-template-columns: 44px 56px minmax(0, 1fr); grid-template-rows: auto auto;
+  gap: 2px 8px; width: 100%; text-align: left; padding: 8px; border-radius: 6px; font-size: 12px;
+}
+.api-history-menu button:hover { background: #f1f5f9; }
+.api-history-status { grid-row: span 2; align-self: center; justify-self: start;
+  font-weight: 700; font-size: 11px; padding: 3px 6px; border-radius: 5px; }
+.api-history-method { font-weight: 700; color: #1e5aaf; }
+.api-history-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
+.api-history-time { grid-column: 2 / -1; color: var(--api-text-muted); font-size: 11px; }
+
+/* ── OpenAPI import panel ────────────────────────────────────────────── */
+
+/* Card chrome copied from the shell convention (see TrustPage): rounded-lg,
+   slate-200 border, shadow-sm, a px-5 py-3 header bar, body padding of 20px. */
+.api-card {
+  border: 1px solid var(--api-border); border-radius: var(--api-radius);
+  background: var(--api-surface); box-shadow: var(--api-shadow); overflow: hidden;
+}
+.api-card.is-leading { border-color: #bfdbfe; }
+
+/* The shell's signature card header — the dark navy gradient with an amber
+   hairline used on the Pipelines / Connections / Pool tables (18 occurrences).
+   A white header with a grey rule read as unfinished next to those. */
+.api-card-head {
+  padding: 10px 20px;
+  background: linear-gradient(to right, #0f172a, #172554, #0f172a);
+  border-bottom: 1px solid rgb(251 191 36 / 20%);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.api-card-head h3 { font-size: 13px; font-weight: 700; color: #fff; letter-spacing: .01em; }
+.api-card-meta { font-size: 12px; font-weight: 500; color: rgb(255 255 255 / 88%); }
+.api-card-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+
+/* Brand monogram on a starting-point card. */
+.api-ref-mark {
+  width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+}
+/* HTTP method — colour carries the side-effect, so a DELETE never looks like a GET. */
+.api-method {
+  width: 100%; min-width: 0; border-radius: var(--api-radius); padding: 8px 10px;
+  font-size: 13px; font-weight: 700; border: 1px solid var(--api-border); background: var(--api-surface);
+}
+.api-method.is-read { color: #15803d; border-color: #bbf7d0; background: #f0fdf4; }
+.api-method.is-create { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+.api-method.is-update { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+.api-method.is-delete { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+.api-history-method.is-read { color: #15803d; }
+.api-history-method.is-create { color: #1d4ed8; }
+.api-history-method.is-update { color: #b45309; }
+.api-history-method.is-delete { color: #b91c1c; }
+.api-refs-note { font-size: 11px; line-height: 1.6; color: #475569; margin-top: 8px; }
+.api-refs-note a { color: #1e5aaf; text-decoration: underline; }
+
+/* ── Workbench shell ─────────────────────────────────────────────────── */
+
+/* Two tall cards: everything you configure on the left, everything the API
+   returned on the right. Each is a full card in the shell's idiom rather than
+   two halves sharing one border. */
+.api-panes {
+  display: grid; grid-template-columns: minmax(360px, 0.82fr) minmax(0, 1.5fr);
+  gap: 16px; align-items: stretch;
+}
+.api-pane { display: flex; flex-direction: column; min-width: 0; min-height: 460px; }
+.api-panes.is-idle { opacity: 0.82; }
+
+/* Send drops to its own full-width row: inside a column-width card a
+   three-across bar squeezed the URL field down to a few characters. */
+.api-request-bar {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px;
+  padding: 14px 20px; border-bottom: 1px solid var(--api-border); background: var(--api-surface-muted);
+}
+.api-request-bar > button { grid-column: 1 / -1; justify-content: center; }
+/* One scrolling form. Sections are separated by a rule rather than tabs, so
+   the whole request is visible and the card fills naturally. */
+.api-request-panel {
+  padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 18px;
+  flex: 1; overflow-y: auto; max-height: 620px;
+}
+.api-form-section { display: flex; flex-direction: column; gap: 10px; }
+.api-form-section + .api-form-section { border-top: 1px solid var(--api-border); padding-top: 16px; }
+.api-form-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: #475569;
+}
+.api-form-label span {
+  font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  background: #e2e8f0; color: #475569;
+}
+.api-form-note { font-size: 12px; color: #64748b; }
+.api-panel-note {
+  margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--api-border);
+  font-size: 11px; line-height: 1.5; color: var(--api-text-muted);
+}
+.api-panel-placeholder {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--api-text-muted); font-size: 13px; text-align: center;
+}
+.api-auth-hint {
+  display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--api-text-muted);
+  background: var(--api-surface-muted); border: 1px solid var(--api-border);
+  border-radius: var(--api-radius); padding: 10px 12px;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+
+.api-workbench-tabs {
+  display: flex; border-bottom: 1px solid var(--api-border); padding: 0 8px;
+  min-height: 42px; flex-wrap: wrap; background: var(--api-surface);
+}
+/* HubTabs — the shell's canonical tab strip — renders unselected tabs as
+   `text-slate-900 font-bold`. These were 12px slate-500 at 40% opacity when
+   disabled, which was genuinely hard to read. */
+.api-workbench-tabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; padding: 11px 12px;
+  border-bottom: 2px solid transparent; color: #334155;
+}
+.api-workbench-tabs button:hover:not(:disabled) { color: #0f172a; }
+.api-workbench-tabs button[aria-selected='true'] { border-bottom-color: #2e6bc4; color: #1e5aaf; font-weight: 700; }
+/* slate-500, not slate-400: a disabled tab still has to be readable. At
+   #94a3b8 these measured 2.56:1 on white, well under the 4.5:1 AA floor. */
+.api-workbench-tabs button:disabled { color: #64748b; }
+.api-tab-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
+  background: #e2e8f0; color: #475569;
+}
+.api-tab-badge.is-pass { background: #dcfce7; color: #15803d; }
+.api-tab-badge.is-fail { background: #fee2e2; color: #b91c1c; }
+
+/* ── Response status ─────────────────────────────────────────────────── */
+
+.api-status-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.api-status-badge {
+  font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.01em;
+}
+.api-status-badge.is-success { background: #dcfce7; color: #15803d; }
+.api-status-badge.is-redirect { background: #dbeafe; color: #1d4ed8; }
+.api-status-badge.is-client-error { background: #fef3c7; color: #b45309; }
+.api-status-badge.is-server-error { background: #fee2e2; color: #b91c1c; }
+.api-history-status.is-success { background: #dcfce7; color: #15803d; }
+.api-history-status.is-redirect { background: #dbeafe; color: #1d4ed8; }
+.api-history-status.is-client-error { background: #fef3c7; color: #b45309; }
+.api-history-status.is-server-error { background: #fee2e2; color: #b91c1c; }
+/* Translucent on the navy header so the bar reads as one piece; white chips
+   punched holes in it. */
+.api-status-meta {
+  font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: rgb(255 255 255 / 90%); background: rgb(255 255 255 / 12%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  padding: 3px 8px; border-radius: 6px;
+}
+
+/* ── Response body ───────────────────────────────────────────────────── */
+
+.api-response-content { flex: 1; min-height: 340px; display: flex; flex-direction: column; }
+.api-response-inner { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.api-response-empty {
+  min-height: 300px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; color: var(--api-text-muted); text-align: center; padding: 32px 24px;
+  background: linear-gradient(to bottom, #f8fafc, #fff);
+}
+.api-empty-mark {
+  width: 56px; height: 56px; border-radius: 999px; display: inline-flex;
+  align-items: center; justify-content: center;
+  background: #eff6ff; color: #60a5fa; border: 1px solid #dbeafe;
+}
+.api-empty-title { font-size: 15px; font-weight: 600; color: #334155; }
+.api-response-hint { font-size: 12px; color: #64748b; max-width: 320px; line-height: 1.6; }
+/* Previewing what arrives turns a blank pane into a statement of value. */
+.api-empty-preview {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 380px; margin-top: 4px;
+}
+.api-empty-preview li {
+  font-size: 11px; color: #475569; background: var(--api-surface);
+  border: 1px solid var(--api-border); border-radius: 999px; padding: 3px 10px;
+}
+.api-response-warning {
+  font-size: 11px; color: #b45309; background: #fffbeb;
+  border-bottom: 1px solid #fde68a; padding: 8px 16px;
+}
+.api-response-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--api-border); background: var(--api-surface-muted);
+}
+.api-response-filter {
+  flex: 1; min-width: 0; border: 1px solid var(--api-border); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px; background: var(--api-surface);
+}
+.api-record-path { padding: 10px 12px; border-bottom: 1px solid var(--api-border); background: var(--api-surface-muted); }
+.api-response-data { flex: 1; overflow: auto; max-height: 460px; background: var(--api-surface); }
+.api-response-pre { font-size: 12px; padding: 12px; white-space: pre-wrap; word-break: break-word; }
+.api-response-footer { padding: 12px 16px; border-top: 1px solid var(--api-border); background: var(--api-surface-muted); }
+
+/* ── Structure list ──────────────────────────────────────────────────── */
+
+.api-structure-list { font-size: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.api-structure-list li { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.api-structure-list code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; color: #334155; }
+.api-type-chip {
+  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+  background: #f1f5f9; color: #475569; flex-shrink: 0;
+}
+.api-type-chip.is-string { background: #ecfdf5; color: #047857; }
+.api-type-chip.is-number { background: #eff6ff; color: #1d4ed8; }
+.api-type-chip.is-boolean { background: #f5f3ff; color: #6d28d9; }
+.api-type-chip.is-array { background: #fff7ed; color: #c2410c; }
+.api-type-chip.is-object { background: #f1f5f9; color: #475569; }
+.api-type-chip.is-null { background: #f8fafc; color: #94a3b8; }
+
+/* ── Response table ──────────────────────────────────────────────────── */
+
+.api-response-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.api-response-table thead th {
+  position: sticky; top: 0; z-index: 1; text-align: left; padding: 8px 10px;
+  background: var(--api-surface-muted); border-bottom: 1px solid var(--api-border);
+  font-weight: 600; color: #334155; white-space: nowrap;
+}
+.api-response-table tr.api-table-types th {
+  top: 33px; font-weight: 500; font-size: 10px; color: #64748b;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 10px 6px;
+}
+.api-response-table td {
+  padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top;
+  max-width: 260px; overflow-wrap: anywhere;
+}
+.api-table-index { color: #94a3b8; font-variant-numeric: tabular-nums; width: 44px; }
+.api-cell.is-number { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #1d4ed8; font-variant-numeric: tabular-nums; }
+.api-cell.is-boolean { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #6d28d9; }
+.api-cell.is-null { color: #94a3b8; font-style: italic; }
+.api-cell.is-object, .api-cell.is-array {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #c2410c; cursor: help;
+}
+
+/* ── Request field rows ──────────────────────────────────────────────── */
+
+.api-field-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.25fr) 28px; gap: 6px; align-items: center; }
+.api-field-input {
+  width: 100%; min-width: 0; border: 1px solid var(--api-border); border-radius: 6px;
+  padding: 8px; font-size: 12px; background: var(--api-surface);
+}
+.api-field-input:focus-visible { outline: 2px solid #93c5fd; outline-offset: -1px; border-color: #93c5fd; }
+.api-icon-button {
+  width: 28px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--api-text-muted); border-radius: 4px;
+}
+.api-icon-button:hover { background: #f1f5f9; color: #334155; }
+
+/* ── Tests tab ───────────────────────────────────────────────────────── */
+
+.api-assert { display: flex; flex-direction: column; gap: 12px; }
+.api-assert-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.api-assert-idle { font-size: 12px; color: var(--api-text-muted); }
+.api-assert-allpass { font-size: 12px; font-weight: 700; color: #15803d; }
+.api-assert-somefail { font-size: 12px; font-weight: 700; color: #b91c1c; }
+.api-assert-add {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+  color: #1e5aaf; border: 1px solid var(--api-border); border-radius: var(--api-radius); padding: 6px 10px;
+}
+.api-assert-add:hover { background: #f1f5f9; }
+.api-assert-add:disabled { opacity: 0.4; }
+.api-assert-empty {
+  font-size: 12px; line-height: 1.6; color: var(--api-text-muted);
+  background: var(--api-surface-muted); border: 1px dashed var(--api-border);
+  border-radius: var(--api-radius); padding: 14px;
+}
+.api-assert-list { display: flex; flex-direction: column; gap: 10px; }
+.api-assert-row {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) 28px; gap: 8px; align-items: start;
+  padding: 10px; border: 1px solid var(--api-border); border-radius: var(--api-radius); background: var(--api-surface);
+}
+.api-assert-state {
+  width: 22px; height: 22px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  margin-top: 4px;
+}
+.api-assert-state.is-idle { background: #f1f5f9; color: #94a3b8; }
+.api-assert-state.is-pass { background: #dcfce7; color: #15803d; }
+.api-assert-state.is-fail { background: #fee2e2; color: #b91c1c; }
+.api-assert-fields { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.api-assert-fields > * { flex: 1 1 130px; min-width: 0; }
+.api-assert-actual {
+  grid-column: 2 / -1; font-size: 11px; color: #b91c1c; margin-top: 2px; overflow-wrap: anywhere;
+}
+.api-assert-actual code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.api-assert-muted { color: var(--api-text-muted); }
+
+/* ── Connector draft (step two) ──────────────────────────────────────── */
+
+.api-draft { display: flex; flex-direction: column; gap: 14px; }
+.api-draft-empty {
+  font-size: 12px; line-height: 1.6; color: var(--api-text-muted);
+  background: var(--api-surface-muted); border: 1px dashed var(--api-border);
+  border-radius: var(--api-radius); padding: 14px;
+}
+.api-draft-lead { font-size: 12px; line-height: 1.6; color: #475569; }
+
+.api-draft-source { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.api-draft-source button {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px;
+  border: 1px solid var(--api-border); border-radius: var(--api-radius); background: var(--api-surface);
+}
+.api-draft-source button strong { font-size: 12px; color: #1e293b; }
+.api-draft-source button span { font-size: 11px; line-height: 1.5; color: var(--api-text-muted); }
+.api-draft-source button.is-active { border-color: #3b82f6; background: #eff6ff; box-shadow: inset 0 0 0 1px #3b82f6; }
+.api-draft-source button:disabled { opacity: 0.5; }
+
+.api-draft-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.api-draft-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #334155; }
+
+.api-draft-generate {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px;
+  background: #2e6bc4; color: #fff; font-size: 13px; font-weight: 600;
+  border-radius: var(--api-radius); padding: 9px 16px;
+}
+.api-draft-generate:disabled { opacity: 0.5; }
+
+.api-draft-error { font-size: 12px; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--api-radius); padding: 10px; }
+.api-draft-saved { font-size: 12px; color: #15803d; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: var(--api-radius); padding: 10px; }
+
+.api-draft-result {
+  display: flex; flex-direction: column; gap: 12px;
+  border-top: 1px solid var(--api-border); padding-top: 14px;
+}
+.api-draft-result-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.api-draft-verdict { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+.api-draft-verdict.is-ok { background: #dcfce7; color: #15803d; }
+.api-draft-verdict.is-warn { background: #fef3c7; color: #b45309; }
+.api-draft-meta { font-size: 11px; color: var(--api-text-muted); }
+
+.api-draft-findings { display: flex; flex-direction: column; gap: 6px; }
+.api-draft-findings li { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; line-height: 1.5; }
+.api-draft-findings li.is-error { color: #b91c1c; }
+.api-draft-findings li.is-warning { color: #b45309; }
+
+.api-draft-json summary { font-size: 12px; font-weight: 600; cursor: pointer; color: #334155; }
+.api-draft-json pre {
+  margin-top: 8px; font-size: 11px; line-height: 1.6; padding: 12px; border-radius: var(--api-radius);
+  background: var(--api-surface-muted); color: #334155; max-height: 320px; overflow: auto;
+}
+.api-draft-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* Primary action colour follows the shell (bg-pipe-600); green stays reserved
+   for the success message, so colour means outcome rather than button type. */
+.api-draft-save {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+  background: var(--api-accent); color: #fff; border-radius: var(--api-radius); padding: 8px 12px;
+}
+.api-draft-save:disabled { opacity: 0.55; }
+.api-draft-note { font-size: 11px; color: var(--api-text-muted); max-width: 320px; line-height: 1.5; }
+
+/* ── JSON viewer ─────────────────────────────────────────────────────── */
+
+.jv-root { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 12px; line-height: 1.7; }
+.jv-row { display: flex; align-items: baseline; gap: 6px; overflow-wrap: anywhere; }
+.jv-branch { cursor: pointer; border-radius: 4px; }
+.jv-branch:hover { background: #f8fafc; }
+.jv-branch:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }
+.jv-caret { display: inline-flex; align-items: center; color: #94a3b8; flex-shrink: 0; }
+.jv-key { color: #334155; font-weight: 600; flex-shrink: 0; }
+.jv-summary { color: #94a3b8; }
+.jv-string { color: #047857; }
+.jv-number { color: #1d4ed8; }
+.jv-boolean { color: #6d28d9; }
+.jv-null { color: #94a3b8; font-style: italic; }
+.jv-empty, .jv-nomatch { color: var(--api-text-muted); font-style: italic; }
+.jv-nomatch { padding: 16px; font-size: 12px; }
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .api-panes { grid-template-columns: minmax(0, 1fr); }
+  .api-pane { min-height: 0; }
+}
+@media (max-width: 520px) {
+  .api-request-bar { grid-template-columns: 92px minmax(0, 1fr); padding: 12px; }
+  .api-assert-fields > * { flex-basis: 100%; }
+}

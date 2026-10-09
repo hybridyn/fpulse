@@ -19,6 +19,7 @@ import time
 from typing import Any
 
 import httpx
+from fpulse.ai.tls import ai_ssl_context
 
 
 # ---------------------------------------------------------------------------
@@ -494,7 +495,7 @@ async def _call_claude(api_key: str, model: str, messages: list[dict]) -> tuple[
     """
     user_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -523,7 +524,7 @@ async def _call_openai(api_key: str, model: str, messages: list[dict]) -> tuple[
     for m in messages:
         oai_messages.append({"role": m["role"], "content": m["content"]})
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.openai.com/v1/chat/completions",
             headers={
@@ -560,7 +561,7 @@ async def _call_openrouter(api_key: str, model: str, messages: list[dict]) -> tu
     referer = os.environ.get("FPULSE_OPENROUTER_REFERER", "https://hybridyn.example/fpulse")
     title = os.environ.get("FPULSE_OPENROUTER_TITLE", "F-Pulse")
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -597,7 +598,7 @@ async def _call_ollama(base_url: str, model: str, messages: list[dict]) -> tuple
 
     url = base_url.rstrip("/") + "/api/chat"
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, verify=ai_ssl_context()) as client:
         resp = await client.post(
             url,
             json={
@@ -739,7 +740,7 @@ async def ai_generate_json(
 
 async def _call_text_claude(api_key, model, system_prompt, messages):
     user_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -768,7 +769,7 @@ async def _call_text_openai(api_key, model, system_prompt, messages):
     oai_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
         oai_messages.append({"role": m["role"], "content": m["content"]})
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -797,7 +798,7 @@ async def _call_text_openrouter(api_key, model, system_prompt, messages):
         oai_messages.append({"role": m["role"], "content": m["content"]})
     referer = os.environ.get("FPULSE_OPENROUTER_REFERER", "https://hybridyn.example/fpulse")
     title = os.environ.get("FPULSE_OPENROUTER_TITLE", "F-Pulse")
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -828,7 +829,7 @@ async def _call_text_ollama(base_url, model, system_prompt, messages):
     for m in messages:
         ollama_messages.append({"role": m["role"], "content": m["content"]})
     url = base_url.rstrip("/") + "/api/chat"
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, verify=ai_ssl_context()) as client:
         resp = await client.post(
             url,
             json={
@@ -954,7 +955,7 @@ async def ai_generate_text(
 
 async def _call_plain_claude(api_key, model, system_prompt, messages, max_tokens):
     user_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -983,7 +984,7 @@ async def _call_plain_openai(api_key, model, system_prompt, messages, max_tokens
     oai_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
         oai_messages.append({"role": m["role"], "content": m["content"]})
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -1011,7 +1012,7 @@ async def _call_plain_openrouter(api_key, model, system_prompt, messages, max_to
         oai_messages.append({"role": m["role"], "content": m["content"]})
     referer = os.environ.get("FPULSE_OPENROUTER_REFERER", "https://hybridyn.example/fpulse")
     title = os.environ.get("FPULSE_OPENROUTER_TITLE", "F-Pulse")
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=60, verify=ai_ssl_context()) as client:
         resp = await client.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -1041,7 +1042,7 @@ async def _call_plain_ollama(base_url, model, system_prompt, messages, max_token
     ollama_messages = [{"role": "system", "content": system_prompt}]
     for m in messages:
         ollama_messages.append({"role": m["role"], "content": m["content"]})
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, verify=ai_ssl_context()) as client:
         resp = await client.post(
             f"{base_url}/api/chat",
             json={

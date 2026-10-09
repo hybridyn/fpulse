@@ -864,6 +864,13 @@ async def run_workflow(
         if sem is not None:
             sem.release()
         # Release worker pool slot
+        # Final elapsed time includes result capture and run finalization.
+        if exe.status not in ("running", "queued", "pending"):
+            try:
+                exe.completed_at = datetime.now(timezone.utc)
+                exe_store.record(exe)
+            except Exception:
+                logger.warning("Could not persist final execution timing", exc_info=True)
         if _pool and _pool_job:
             try:
                 duration_ms = (time.time() - start) * 1000
@@ -1197,6 +1204,7 @@ async def replay_execution(
         exe.status = "error"
         exe.duration_ms = round(duration, 1)
         exe.error_message = f"{type(e).__name__}: {str(e)[:300]}"
+        exe.completed_at = datetime.now(timezone.utc)
         try:
             exe_store_obj.record(exe)
         except Exception:
@@ -1548,10 +1556,11 @@ async def get_step_output(
     workspace_id: str = Depends(_safe_workspace_id),
 ):
     """Captured output sample + schema + counts for one step in one execution."""
-    _require_execution(execution_id, workspace_id)
-    record = get_step_output_store().get_step(execution_id, step_id)
+    from fpulse.engine.history_output import historical_output
+    exe = _require_execution(execution_id, workspace_id)
+    record = historical_output(exe, step_id, get_step_output_store())
     if record is None:
-        raise HTTPException(404, f"No output captured for step {step_id!r}")
+        raise HTTPException(404, 'Step not found in this execution')
     return record
 
 
@@ -1575,32 +1584,53 @@ async def get_step_input(
     upstream_ids = [c.get("from_step") for c in connections if c.get("to_step") == step_id]
 
     store = get_step_output_store()
+    from fpulse.engine.history_output import historical_output
+
+    # Existence is a property of the RUN'S GRAPH, not of having produced a
+    # capture. A root step, a step whose sample was TTL-pruned, and a step that
+    # has not run yet all exist and all have a well-defined (possibly empty)
+    # input list -- gating this endpoint on historical_output() 404'd every one
+    # of them. A step id that appears nowhere in the run is still a 404, so an
+    # unknown id is never silently reported as a root step with no inputs.
+    known_step_ids = set()
+    for s in (snapshot.get("steps") or []):
+        if isinstance(s, dict):
+            known_step_ids.add(s.get("id") or s.get("step_id"))
+    for c in connections:
+        known_step_ids.add(c.get("from_step"))
+        known_step_ids.add(c.get("to_step"))
+    known_step_ids.discard(None)
+    if step_id not in known_step_ids and historical_output(exe, step_id, store) is None:
+        raise HTTPException(status_code=404, detail="Step not found in execution")
+
     inputs = []
     for upstream_id in upstream_ids:
         if not upstream_id:
             continue
-        upstream = store.get_step(execution_id, upstream_id)
+        upstream = historical_output(exe, upstream_id, store)
         if upstream is None:
             inputs.append({
                 "source_step_id": upstream_id,
                 "label": upstream_id,
-                "row_count": 0,
+                "row_count": None,
                 "sample_rows": [],
                 "sample_truncated": False,
                 "sample_pruned": False,
                 "schema": [],
                 "missing": True,
+                "availability": "not_captured",
             })
             continue
         inputs.append({
             "source_step_id": upstream_id,
             "label": upstream.get("label") or upstream_id,
-            "row_count": upstream.get("row_count", 0),
+            "row_count": upstream.get("row_count"),
             "sample_rows": upstream.get("sample_rows", []),
             "sample_truncated": upstream.get("sample_truncated", False),
             "sample_pruned": upstream.get("sample_pruned", False),
             "schema": upstream.get("schema", []),
-            "missing": False,
+            "missing": upstream.get('missing', False),
+            "availability": upstream.get('availability'),
         })
 
     return {
@@ -1659,10 +1689,15 @@ async def export_step_output(
     """
     from fastapi.responses import Response
 
-    _require_execution(execution_id, workspace_id)
-    record = get_step_output_store().get_step(execution_id, step_id)
+    from fpulse.engine.history_output import historical_output
+    exe = _require_execution(execution_id, workspace_id)
+    record = historical_output(exe, step_id, get_step_output_store())
     if record is None:
-        raise HTTPException(404, f"No output captured for step {step_id!r}")
+        raise HTTPException(404, 'Step not found in this execution')
+    if record.get('sample_pruned'):
+        raise HTTPException(410, 'Historical sample expired after 30 days')
+    if record.get('missing'):
+        raise HTTPException(404, 'No historical sample was captured for this step')
 
     rows = record.get("sample_rows", []) or []
     schema = record.get("schema", []) or []

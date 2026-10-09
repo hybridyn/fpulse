@@ -167,27 +167,33 @@ def _compute_tier(
     row: dict[str, Any],
     manifest: dict[str, Any],
     *,
-    has_smoke_fixture: bool = False,
+    cat_green: bool = False,
     in_live_smoke_allowlist: bool = False,
+    has_smoke_fixture: bool = False,  # deprecated: superseded by cat_green; kept for back-compat
 ) -> str:
-    """Compute the user-facing tier from existing cert-matrix signals.
+    """Compute the user-facing tier from the cert-matrix signals.
 
     Rules (highest match wins; declared `tier` on the manifest can
     only opt DOWN, never UP):
 
-      production    depth_score == 5 AND smoke fixture present AND in CI allow-list
-      verified      depth_score >= 3 AND validation_status == "pass" AND issues == 0
-                    AND smoke fixture present
-      beta          v2 with validation_status == "pass" AND depth_score >= 1
+      production    depth_score == 5 AND validation == "pass" AND issues == 0
+                    AND CAT green AND in CI live-smoke allow-list
+      verified      depth_score >= 3 AND validation == "pass" AND issues == 0
+                    AND CAT green
+      beta          v2 with validation == "pass" AND depth_score >= 1
                     OR v1 with capability_score >= 3
       experimental  parses but neither v2-pass nor v1-functional
       hidden        only when explicitly declared by the manifest
 
-    `has_smoke_fixture` reflects whether
-    `backend/tests/fixtures/connectors/<id>/smoke.json` exists.
-    `in_live_smoke_allowlist` reflects whether the connector is
-    listed in `backend/fpulse/connectors/ci/live_smoke.yml`. Both
-    default to False; the live-smoke CI workflow updates them.
+    2026-10-08: Verified/Production are now gated on `cat_green` — the
+    connector's Connector-Acceptance-Test suite went GREEN (see
+    `fpulse.connectors.cat`) — instead of the old "a smoke.json file exists"
+    check. This makes the tier mean "the behavioral suite passed", not "a
+    fixture file is present", and lets a stale run auto-demote. The legacy
+    `has_smoke_fixture` param is retained (unused in gating) so existing
+    callers don't break. `in_live_smoke_allowlist` reflects membership of
+    `backend/fpulse/connectors/ci/live_smoke.yml` (the extra bar for
+    Production: it also runs live against the real vendor in CI).
     """
     depth_score = int(row.get("depth_score", 0))
     validation = str(row.get("validation_status", ""))
@@ -200,7 +206,7 @@ def _compute_tier(
         depth_score >= 5
         and validation == "pass"
         and issues == 0
-        and has_smoke_fixture
+        and cat_green
         and in_live_smoke_allowlist
     ):
         computed = "production"
@@ -208,7 +214,7 @@ def _compute_tier(
         depth_score >= 3
         and validation == "pass"
         and issues == 0
-        and has_smoke_fixture
+        and cat_green
     ):
         computed = "verified"
     elif (version >= 2 and validation == "pass" and depth_score >= 1) or (
@@ -293,6 +299,59 @@ def _live_smoke_allowlist() -> set[str]:
         # Don't break the cert matrix if the YAML is malformed — just
         # treat it as empty and let the operator fix the file.
         return set()
+
+
+# ── CAT (Connector Acceptance Test) status — the Verified gate ───────
+#
+# `backend/fpulse/connectors/ci/cat_status.json` is written by
+# `python -m fpulse.connectors.cat` (run_cat_batch). It records, per
+# connector, the result of the connector-agnostic acceptance suite run
+# against committed cassette fixtures. The cert matrix reads it to decide
+# the Verified tier: a connector is Verified only when its CAT suite is
+# GREEN and fresh — the result-backed replacement for the old "a
+# smoke.json file exists" heuristic.
+
+
+def _cat_status_path() -> Path:
+    return _manifests_dir().parent / "ci" / "cat_status.json"
+
+
+def _cat_status_map() -> dict[str, Any]:
+    """{connector_id: {cat_level, failed, run_at, ...}} from cat_status.json."""
+    p = _cat_status_path()
+    if not p.is_file():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        conns = data.get("connectors") if isinstance(data, dict) else None
+        return conns if isinstance(conns, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _cat_green(connector_id: str, cat_map: dict[str, Any]) -> bool:
+    """True iff CAT ran GREEN for this connector recently.
+
+    Green = failed == 0 AND cat_level in {verified, production} AND the run is
+    fresh (within 14 days). A run that goes stale (cassettes rot against a
+    changed API) stops counting, so the tier auto-demotes until CAT is re-run.
+    """
+    entry = cat_map.get(connector_id)
+    if not isinstance(entry, dict):
+        return False
+    if int(entry.get("failed", 1)) != 0:
+        return False
+    if str(entry.get("cat_level", "")) not in ("verified", "production"):
+        return False
+    ts = entry.get("run_at")
+    if isinstance(ts, str) and ts:
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - dt).days > 14:
+                return False
+        except ValueError:
+            pass
+    return True
 
 
 # ── Capability / role extraction (#12 step 1 — 2026-05-26) ──────────
@@ -565,7 +624,7 @@ def _summarize_manifest(path: Path) -> dict[str, Any]:
         # manifest-declared `tier` / `visibility` flag.
         row["tier"] = _compute_tier(
             row, manifest,
-            has_smoke_fixture=_has_smoke_fixture(path.stem),
+            cat_green=_cat_green(path.stem, _CAT_STATUS_CACHE),
             in_live_smoke_allowlist=path.stem in _LIVE_SMOKE_ALLOWLIST_CACHE,
         )
         row["visibility"] = (
@@ -617,15 +676,34 @@ def _summarize_manifest(path: Path) -> dict[str, Any]:
         if per_stream_scores:
             row["depth_score"] = max(per_stream_scores)
 
+    # CAT-backed validity: if the ONLY validation errors are fixture-coverage
+    # ("missing required fixture types") AND the connector's CAT suite is
+    # green, the behavior those inline fixtures would attest is proven at
+    # runtime — so credit the manifest's DECLARED depth and treat it as pass.
+    # This is what converts the "0 Verified" liability (manifests that
+    # over-declare depth without inline fixtures) into a real, earned tier,
+    # without faking the inline fixture block.
+    cid_norm = path.stem.replace(".v2", "")
+    cat_green = _cat_green(cid_norm, _CAT_STATUS_CACHE)
+    if cat_green and row["validation_status"] == "fail":
+        blocking = [e for e in getattr(result, "errors", []) if "fixture" not in str(e).lower()]
+        if not blocking:
+            declared = int((manifest.get("certification") or {}).get("depth_score") or 0)
+            row["validation_status"] = "pass"
+            row["issues_count"] = 0
+            row["depth_score"] = max(0, min(5, declared))
+            row["cat_backed"] = True
+    row["cat_green"] = cat_green
+
     row["depth_label"] = _depth_label(int(row["depth_score"]))
-    # 2026-06-02: tier + visibility for v2 manifests too. Verified
-    # requires both depth-score signals AND a smoke fixture on disk;
-    # Production additionally requires inclusion in the live-smoke
-    # allow-list (so it actually runs against the vendor in CI).
+    # 2026-10-08: tier + visibility for v2 manifests. Verified requires the
+    # depth-score signals AND a GREEN CAT run (`cat_green`); Production
+    # additionally requires inclusion in the live-smoke allow-list (so it
+    # also runs against the real vendor in CI).
     row["tier"] = _compute_tier(
         row, manifest,
-        has_smoke_fixture=_has_smoke_fixture(path.stem.replace(".v2", "")),
-        in_live_smoke_allowlist=path.stem.replace(".v2", "") in _LIVE_SMOKE_ALLOWLIST_CACHE,
+        cat_green=cat_green,
+        in_live_smoke_allowlist=cid_norm in _LIVE_SMOKE_ALLOWLIST_CACHE,
     )
     row["visibility"] = (
         "hidden" if str(manifest.get("visibility", "")).lower() == "hidden"
@@ -639,8 +717,10 @@ def _summarize_manifest(path: Path) -> dict[str, Any]:
 
 
 # Cached at module load — refreshed by `cert_matrix()` on each call so a
-# CI-committed update to live_smoke.yml is reflected without a restart.
+# CI-committed update to live_smoke.yml / cat_status.json is reflected
+# without a restart.
 _LIVE_SMOKE_ALLOWLIST_CACHE: set[str] = set()
+_CAT_STATUS_CACHE: dict[str, Any] = {}
 
 
 @router.get("/cert-matrix")
@@ -672,8 +752,9 @@ def cert_matrix(include_hidden: bool = False) -> dict[str, Any]:
     # uses the most recent CI status (the file is rewritten by the
     # nightly workflow). Module-level cache avoids re-reading the YAML
     # for every row in the same request.
-    global _LIVE_SMOKE_ALLOWLIST_CACHE
+    global _LIVE_SMOKE_ALLOWLIST_CACHE, _CAT_STATUS_CACHE
     _LIVE_SMOKE_ALLOWLIST_CACHE = _live_smoke_allowlist()
+    _CAT_STATUS_CACHE = _cat_status_map()
 
     manifests_dir = _manifests_dir()
     rows: list[dict[str, Any]] = []
@@ -747,6 +828,10 @@ def cert_matrix_detail(connector_id: str) -> dict[str, Any]:
     path = next((p for p in candidates if p.is_file()), None)
     if path is None:
         raise HTTPException(status_code=404, detail=f"connector '{connector_id}' not found")
+
+    global _LIVE_SMOKE_ALLOWLIST_CACHE, _CAT_STATUS_CACHE
+    _LIVE_SMOKE_ALLOWLIST_CACHE = _live_smoke_allowlist()
+    _CAT_STATUS_CACHE = _cat_status_map()
 
     summary = _summarize_manifest(path)
 

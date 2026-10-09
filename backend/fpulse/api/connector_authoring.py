@@ -29,6 +29,8 @@ from fpulse.connectors.ai_authoring import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/connectors/author", tags=["connector-authoring"])
+from fpulse.api.api_explorer import router as explorer_router
+router.include_router(explorer_router)
 
 
 # ── Request / response schemas ────────────────────────────────────────
@@ -88,6 +90,7 @@ class AuthorResponse(BaseModel):
     manifest: dict
     validation: dict
     mode: str
+    runtime_manifest: dict | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -114,7 +117,15 @@ async def author_from_openapi(req: FromOpenApiRequest) -> AuthorResponse:
         logger.exception("openapi → manifest generation failed")
         raise HTTPException(500, "generation failed") from exc
 
-    return AuthorResponse(**result)
+    from fpulse.connectors.openapi_import import manifest_from_openapi
+    try:
+        runtime = manifest_from_openapi(spec, connector_id=req.connector_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if req.display_name:
+        runtime["name"] = req.display_name
+    runtime["category"] = req.category
+    return AuthorResponse(**result, runtime_manifest=runtime)
 
 
 @router.post("/from-samples", response_model=AuthorResponse)

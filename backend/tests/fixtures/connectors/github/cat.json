@@ -1,0 +1,8 @@
+{
+  "_comment": "Maps a runtime (v1) stream name to its v2 cert-manifest stream for CAT schema-conformance. The github runtime manifest calls the stream 'repos'; the v2 cert manifest calls it 'repositories'. This sidecar binds them so CAT validates recorded rows against the right schema.",
+  "stream_map": {
+    "repos": "repositories",
+    "issues": "issues",
+    "pulls": "pull_requests"
+  }
+}

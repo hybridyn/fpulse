@@ -146,10 +146,8 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   // ── Connections group: All Connections / Credentials ──
-  // Same hover-dropdown pattern. On PROD, Credentials is hidden
-  // (devOnly), which collapses the group to a single visible child —
-  // the render falls back to a flat button with no dropdown so the
-  // PROD nav stays uncluttered.
+  // Same hover-dropdown pattern. Credentials is the OSS secret store and
+  // stays visible in every environment (OSS has no Vault to supersede it).
   {
     page: 'connections',
     label: 'Connections',
@@ -169,16 +167,12 @@ const NAV_ITEMS: NavItem[] = [
           </svg>
         ),
       },
-      // Credentials lives in DEV for every tier. Free tier: it's the
-      // only secret store they have. Plus tier DEV: kept for the
-      // legacy-transition period so developers can see / migrate old
-      // credentials. On PROD + Plus, the entry is hidden because Vault
-      // is the clean, audited, rotation-capable replacement — and PROD
-      // shouldn't expose two parallel stores.
+      // Credentials is the only secret store in OSS, so it is always
+      // shown — never env-gated. (In Plus, Vault supersedes it; that
+      // hiding lives in the Plus build, not here.)
       {
         page: 'credentials',
         label: 'Credentials',
-        devOnly: true,
         icon: (
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />

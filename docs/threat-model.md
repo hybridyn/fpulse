@@ -149,7 +149,7 @@ attention because they touch user-supplied URLs / file paths / SQL:
 
 | Surface | Status |
 |---|---|
-| **OpenAPI Author Connector fetch** (`ai_authoring.py:_ssrf_check_url`) | **Strong** — scheme allowlist, DNS resolution check, blocks 169.254/16 + RFC1918 + loopback, resolved-IP fetch to defeat DNS rebinding, redirect re-validation, 2MB response cap. Opt-in escape via `FPULSE_OPENAPI_FETCH_ALLOW_PRIVATE=1` for trusted internal networks. |
+| **OpenAPI API Explorer fetch** (`ai_authoring.py:_ssrf_check_url`) | **Strong** — scheme allowlist, DNS resolution check, blocks 169.254/16 + RFC1918 + loopback, resolved-IP fetch to defeat DNS rebinding, redirect re-validation, 2MB response cap. Opt-in escape via `FPULSE_OPENAPI_FETCH_ALLOW_PRIVATE=1` for trusted internal networks. |
 | **`api_source` node HTTP fetch** (`nodes/activities.py`) | **Strong** (since 2026-06-03 — H2 closed) — every `urllib.request.urlopen()` site (initial + pagination) wraps `fpulse.security.ssrf.check_url()` first. Same defence as OpenAPI fetch. Operators with internal API catalogs can opt in via `FPULSE_API_SOURCE_ALLOW_PRIVATE=1`. |
 | **`http_request` action node** | Strong — uses the same `_do_request` path as `api_source`, inherits the SSRF guard. |
 | **Webhook trigger** | Inbound, not outbound — receives signed POSTs. HMAC verification per-trigger using `signing_secret`. |

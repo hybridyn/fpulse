@@ -1,23 +1,16 @@
 /**
- * HeroCard — Dashboard-style KPI card.
+ * HeroCard — KPI card (neutral-surface standard).
  *
- * Bold gradient background, centred content, SVG icon at top, big value,
- * optional valueSuffix, footer line, optional progress bar. Visual shape
- * follows DashboardPage's HeroKPI so every page using this component
- * (Dashboard, Pool, Executions) feels like one visual family.
+ * 2026-10-06 redesign: per the house card-color standard, the card itself
+ * is a NEUTRAL white surface with a thin border — colour lives ONLY in the
+ * value (and its matching icon), not in a filled gradient background. The
+ * old bold gradient-fill look was dropped; the `gradient` prop is kept for
+ * backward compatibility (every call site still passes it) and is now used
+ * only to derive the accent colour of the value from its colour family.
  *
- * Text is BLACK (slate-900 / slate-800) — design choice, per
- * feedback that white-on-gradient was less legible on darker shades.
- * Works on light-to-mid gradients (X-400 to X-600 range); don't push
- * the gradient darker than 700 or black text starts to struggle.
- *
- * Conventions:
- *   - DEV view: lighter gradients (X-400 → X-500)
- *   - PROD view: richer gradients (X-500 → X-600)
- *
- * Example:
+ * Example (unchanged call site — just renders neutral now):
  *   <HeroCard
- *     gradient="from-emerald-400 to-emerald-500"
+ *     gradient="from-emerald-400 to-emerald-500"  // → emerald accent on value
  *     icon={<MyIcon />}
  *     label="Succeeded"
  *     value="42"
@@ -30,7 +23,8 @@
 import type { ReactNode } from 'react';
 
 interface HeroCardProps {
-  /** Tailwind gradient classes, e.g. "from-emerald-400 to-emerald-500". */
+  /** Legacy gradient classes, e.g. "from-emerald-400 to-emerald-500". Only
+   *  the colour family (emerald/indigo/…) is read, to tint the value. */
   gradient: string;
   /** SVG icon (or any node) centered at top of the card. */
   icon: ReactNode;
@@ -52,6 +46,27 @@ interface HeroCardProps {
   dense?: boolean;
 }
 
+/* Accent colour per family — literal class names so Tailwind's content
+   scanner keeps them (never build these strings dynamically). The value
+   gets the text colour; the progress bar gets the matching fill. slate is
+   the neutral fallback for muted metrics (e.g. Archived). */
+const ACCENT_TEXT: Record<string, string> = {
+  indigo: 'text-indigo-600', emerald: 'text-emerald-600', blue: 'text-blue-600',
+  sky: 'text-sky-600', violet: 'text-violet-600', purple: 'text-purple-600',
+  amber: 'text-amber-600', rose: 'text-rose-600', red: 'text-red-600',
+  teal: 'text-teal-600', cyan: 'text-cyan-600', green: 'text-green-600',
+  orange: 'text-orange-600', fuchsia: 'text-fuchsia-600', pink: 'text-pink-600',
+  slate: 'text-slate-700',
+};
+const ACCENT_BAR: Record<string, string> = {
+  indigo: 'bg-indigo-500', emerald: 'bg-emerald-500', blue: 'bg-blue-500',
+  sky: 'bg-sky-500', violet: 'bg-violet-500', purple: 'bg-purple-500',
+  amber: 'bg-amber-500', rose: 'bg-rose-500', red: 'bg-red-500',
+  teal: 'bg-teal-500', cyan: 'bg-cyan-500', green: 'bg-green-500',
+  orange: 'bg-orange-500', fuchsia: 'bg-fuchsia-500', pink: 'bg-pink-500',
+  slate: 'bg-slate-400',
+};
+
 export default function HeroCard({
   gradient,
   icon,
@@ -65,59 +80,51 @@ export default function HeroCard({
 }: HeroCardProps) {
   const Element: any = onClick ? 'button' : 'div';
 
+  const family = (gradient.match(/from-([a-z]+)-\d/)?.[1]) || 'slate';
+  const accentText = ACCENT_TEXT[family] || 'text-slate-700';
+  const accentBar = ACCENT_BAR[family] || 'bg-slate-400';
+
   return (
     <Element
       onClick={onClick}
-      className={`relative overflow-hidden rounded-lg bg-gradient-to-br ${gradient} ${
+      className={`relative overflow-hidden rounded-lg bg-white border border-slate-200 shadow-sm ${
         dense ? 'px-3 py-2' : 'px-4 py-2.5'
-      } transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg ${
+      } transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         onClick ? 'cursor-pointer text-left w-full' : ''
       }`}
-      style={{
-        boxShadow:
-          '0 4px 10px -2px rgba(15,23,42,0.12), 0 12px 28px -6px rgba(15,23,42,0.25), inset 0 1px 0 rgba(255,255,255,0.18)',
-      }}
     >
-      {/* Decorative corner blooms for visual depth. Smaller now since the
-          card itself is tighter — preserves the polished feel without
-          dominating a low-density card. */}
-      <div className="pointer-events-none absolute -top-4 -right-4 w-14 h-14 rounded-full bg-white/20 blur-xl" />
-      <div className="pointer-events-none absolute -bottom-5 -left-3 w-16 h-16 rounded-full bg-white/10 blur-2xl" />
-
-      {/* Top row: icon + label inline, side by side. Saves vertical space
-          vs. the previous stacked layout while keeping both visible. */}
-      <div className="relative flex items-center justify-center gap-1.5 text-slate-900">
+      {/* Top row: icon + label inline — both neutral, so the value is the
+          only coloured element on the card. */}
+      <div className="relative flex items-center justify-center gap-1.5 text-slate-500">
         <span className="shrink-0">{icon}</span>
         <span className="text-xs font-bold uppercase tracking-wider">
           {label}
         </span>
       </div>
 
-      {/* Value — bigger and bolder so the number is the visual anchor of
-          the card, not the gradient backdrop. */}
+      {/* Value — the one place colour lives (card-colour standard). */}
       <div className="relative mt-1 flex items-baseline justify-center gap-1.5">
-        <span className={`${dense ? 'text-2xl' : 'text-3xl'} font-extrabold tabular-nums leading-none text-slate-900`}>
+        <span className={`${dense ? 'text-2xl' : 'text-3xl'} font-extrabold tabular-nums leading-none ${accentText}`}>
           {value}
         </span>
         {valueSuffix && (
-          <span className="text-xs font-semibold text-slate-800">{valueSuffix}</span>
+          <span className="text-xs font-semibold text-slate-500">{valueSuffix}</span>
         )}
       </div>
 
-      {/* Optional progress bar — dark fill on a subtle dark track for
-          on-black-text consistency. */}
+      {/* Optional progress bar — accent fill on a light neutral track. */}
       {typeof bar === 'number' && (
-        <div className="relative w-full h-1 bg-slate-900/15 rounded-full mt-1.5 overflow-hidden">
+        <div className="relative w-full h-1 bg-slate-100 rounded-full mt-1.5 overflow-hidden">
           <div
-            className="h-full rounded-full bg-slate-900/85 transition-all"
+            className={`h-full rounded-full ${accentBar} transition-all`}
             style={{ width: `${Math.max(0, Math.min(100, bar))}%` }}
           />
         </div>
       )}
 
-      {/* Footer line — supporting text, still legible. */}
+      {/* Footer line — supporting text, neutral. */}
       {footer && (
-        <div className="relative text-xs font-medium text-slate-800 mt-1 text-center">
+        <div className="relative text-xs font-medium text-slate-500 mt-1 text-center">
           {footer}
         </div>
       )}

@@ -1,0 +1,143 @@
+{
+  "name": "20 - API order report: api to sqlserver",
+  "description": "Seven-node cross-system demo with synthetic data. Six input rows become two region totals: North 275, South 150. Requires the multi-system-demo setup. Reruns replace only dedicated demo outputs.",
+  "steps": [
+    {
+      "id": "n0",
+      "type": "source",
+      "label": "Read api",
+      "params": {
+        "connector_type": "rest_api",
+        "connection_id": "Demo api",
+        "path": "/orders",
+        "pagination": "none",
+        "max_retries": 0
+      },
+      "position": {
+        "x": 100,
+        "y": 120
+      }
+    },
+    {
+      "id": "n1",
+      "type": "filter",
+      "label": "Approved positive quantities",
+      "params": {
+        "condition": "status = 'approved' AND quantity > 0 AND unit_price >= 0"
+      },
+      "position": {
+        "x": 380,
+        "y": 120
+      }
+    },
+    {
+      "id": "n2",
+      "type": "transform",
+      "label": "Remove exact duplicate records",
+      "params": {
+        "expression": "SELECT DISTINCT * FROM source_table"
+      },
+      "position": {
+        "x": 660,
+        "y": 120
+      }
+    },
+    {
+      "id": "n3",
+      "type": "transform",
+      "label": "Calculate line amount",
+      "params": {
+        "expression": "SELECT region, quantity * unit_price AS amount FROM source_table"
+      },
+      "position": {
+        "x": 940,
+        "y": 120
+      }
+    },
+    {
+      "id": "n4",
+      "type": "aggregate",
+      "label": "Total by region",
+      "params": {
+        "group_by": [
+          "region"
+        ],
+        "functions": [
+          {
+            "column": "amount",
+            "function": "SUM",
+            "alias": "total_amount"
+          }
+        ]
+      },
+      "position": {
+        "x": 1220,
+        "y": 120
+      }
+    },
+    {
+      "id": "n5",
+      "type": "sort",
+      "label": "Largest region first",
+      "params": {
+        "sort_by": [
+          "total_amount DESC",
+          "region ASC"
+        ]
+      },
+      "position": {
+        "x": 1500,
+        "y": 120
+      }
+    },
+    {
+      "id": "n6",
+      "type": "destination",
+      "label": "Write sqlserver",
+      "params": {
+        "connector_type": "warehouse",
+        "connection_id": "Demo sqlserver",
+        "table": "fpulse_demo_20_summary",
+        "schema": "dbo",
+        "mode": "create"
+      },
+      "position": {
+        "x": 1780,
+        "y": 120
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_step": "n0",
+      "to_step": "n1"
+    },
+    {
+      "from_step": "n1",
+      "to_step": "n2"
+    },
+    {
+      "from_step": "n2",
+      "to_step": "n3"
+    },
+    {
+      "from_step": "n3",
+      "to_step": "n4"
+    },
+    {
+      "from_step": "n4",
+      "to_step": "n5"
+    },
+    {
+      "from_step": "n5",
+      "to_step": "n6"
+    }
+  ],
+  "metadata": {
+    "sample": true,
+    "required_connections": [
+      "Demo api",
+      "Demo sqlserver"
+    ]
+  }
+}

@@ -16,7 +16,7 @@
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/status-1.0.1-blue" alt="Status: 1.0.1"></a>
 </p>
 
-Single-binary, local-first data pipeline engine. `pip install fpulse`, `python -m fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 40 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
+Local-first data pipeline engine. `pip install fpulse`, `python -m fpulse open` — backend boots on loopback, browser opens, you're in. Vectorised DuckDB engine, built-in scheduler + alerts + run history, 44 node types, embedded AI assistance with a privacy-preserving local default, and an open connector framework you can extend in minutes. Apache 2.0 forever; predictable seat pricing for teams via F-Pulse+.
 
 > **Status:** 1.0.1 stable. Tested with Python 3.11/3.12 · Docker 25+ · DuckDB 1.1.3 · Postgres 16. See [CHANGELOG.md](CHANGELOG.md) for the full tested-with matrix and known gaps.
 >
@@ -52,6 +52,8 @@ Need a connector that is not shipped yet?
 | Paste sample API responses | The API has no public spec, but you have example payloads. |
 | Hand-author a manifest | The API needs custom paging, auth or field mapping. |
 | Request or contribute | The connector should become part of the OSS catalog. |
+
+The first three paths all live in **Insights → API Explorer**: load a spec (or any URL), send one authenticated request, assert on the response, then generate and save the connector — no restart, no compile step, no LLM.
 
 No connector is Plus-gated. Every OSS manifest, node and extension path remains
 open. See [docs/extend/build-a-connector.md](docs/extend/build-a-connector.md)
@@ -235,6 +237,45 @@ python -m fpulse install-service       # re-register after an update
 Building these installers yourself (CI / private builds): see
 [`installer/readme.md`](installer/readme.md).
 
+### PyPI install
+
+**Requires Python 3.11+.** Check first — an older Python fails with `No matching
+distribution found`: `py --version` (Windows) or `python3 --version` (macOS/Linux).
+
+```powershell
+# Windows: the py launcher avoids Python Scripts/PATH shortcut issues
+py -m pip install --upgrade fpulse
+py -m fpulse open
+```
+
+```bash
+# macOS / Linux — modern macOS ships python3, not python
+python3 -m pip install --upgrade fpulse
+python3 -m fpulse open
+```
+
+If PowerShell says `fpulse` is not recognized but running
+`C:\...\Scripts\fpulse.exe open` works, F-Pulse installed correctly. The
+generated shortcut is just not on `PATH`; keep using `py -m fpulse open` or
+add Python's `Scripts` folder to your user `PATH`.
+
+On Homebrew/Debian Python you may hit `error: externally-managed-environment` —
+install into a virtualenv instead: `python3 -m venv ~/fpulse-venv && source
+~/fpulse-venv/bin/activate && pip install --upgrade fpulse`. Full install
+troubleshooting is in [docs/quickstart.md](docs/quickstart.md).
+
+**Intel Macs (x86_64).** `cryptography` 49+ publishes macOS wheels for Apple
+Silicon only, so pip falls back to a source build that needs Rust and OpenSSL
+headers and fails with `openssl-sys: Could not find directory of OpenSSL
+installation`. F-Pulse caps that dependency to the last Intel-compatible
+release on this platform. If you installed a build from before the cap
+(`fpulse` 1.0.0 or earlier), pull the working version first:
+
+```bash
+python3 -m pip install "cryptography<49"
+python3 -m pip install --upgrade fpulse
+```
+
 ### Docker Compose
 
 ```bash
@@ -275,7 +316,7 @@ docker run -d --name fpulse \
   -p 8001:8001 \
   -v fpulse_data:/data \
   -e FPULSE_DATA_DIR=/data \
-  hybridyn/fpulse:1.0.0
+  hybridyn/fpulse:1.0.1
 ```
 
 Then open <http://localhost:8001>.

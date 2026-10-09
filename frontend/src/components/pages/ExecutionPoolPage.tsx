@@ -1571,7 +1571,7 @@ export default function ExecutionPoolPage({
           )}
 
           {/* Capacity notes — single-node engine, vertical scaling primer. */}
-          <div className="rounded-lg border border-violet-200 shadow-sm bg-gradient-to-br from-violet-50 to-indigo-50 p-5">
+          <div className="rounded-lg border border-slate-200 shadow-sm bg-white p-5">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-violet-200 flex items-center justify-center shrink-0">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>

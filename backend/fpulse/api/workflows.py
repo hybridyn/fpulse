@@ -2937,7 +2937,7 @@ async def export_pipeline(
     )
 
     return {
-        "fpulse_version": "1.0.0",
+        "fpulse_version": "1.0.1",
         # Bumped 2026-05-22 — parameters/folder/schedules/alerts contract.
         "format_version": 2,
         "export_type": "pipeline",

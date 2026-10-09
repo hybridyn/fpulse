@@ -302,7 +302,7 @@ export default function ReportsPage({
             the same report. The actual document generator lives in the
             REPORT OPTIONS card below — these are inline-answer
             shortcuts that open the Copilot dock instead. */}
-        <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50/40 p-6 shadow-sm">
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-3 mb-4">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 shrink-0">
               <Icon name="zap" size={16} />

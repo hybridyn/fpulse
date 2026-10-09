@@ -23,6 +23,8 @@ That positioning is the whole reason this module exists; see
 from __future__ import annotations
 
 import json
+import os
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -66,6 +68,9 @@ from fpulse.steward import (
     detect_schema_drift,
     detect_volume_anomalies,
     detect_cadence_misses,
+    detect_null_rate_anomalies,
+    samples_from_report,
+    NullRateSampleStore,
     evaluate_rules,
     load_rules,
     new_scan_id,
@@ -120,8 +125,56 @@ def _steward_dir() -> Path:
     return base
 
 
+# A workspace id reaches the filesystem, so it is constrained to one safe path
+# segment: letters, digits, dot, underscore, hyphen, up to 128 chars.
+_WORKSPACE_ID_OK = re.compile(r"[A-Za-z0-9._-]{1,128}")
+
+
 def _workspace_dir(workspace_id: str) -> Path:
-    ws_dir = _steward_dir() / workspace_id
+    """The per-workspace steward directory, for a workspace id that is NOT trusted.
+
+    `workspace_id` arrives from the request, so it must never be joined into a
+    filesystem path unchecked: an id of "../.." walks straight out of the
+    steward directory, and every store built on this helper (suppressions,
+    memory, PII findings, null-rate samples) inherits the problem.
+
+    The id is VALIDATED and refused, not rewritten. Rewriting was the first fix
+    here and it is worse in a way that matters: mapping unsafe characters to
+    "_" silently collides distinct ids onto one directory, so "tenant/a" and
+    "tenant_a" would share one workspace's steward data. Refusing an id that
+    cannot be represented safely keeps workspaces disjoint and makes the failure
+    visible instead of silently merging two tenants' findings.
+
+    The containment check behind it is belt and braces: if the pattern is ever
+    loosened, the path still has to resolve inside the steward root.
+    """
+    wsid = (workspace_id or "").strip() or "default"
+    if not _WORKSPACE_ID_OK.fullmatch(wsid) or wsid in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid workspace id")
+    base = _steward_dir().resolve()
+    # os.path.basename on an id that already matched the pattern above is a
+    # no-op; it is here so the "one path segment" guarantee is explicit at the
+    # join rather than implied by a regex several lines up.
+    #
+    # CodeQL/LGTM suppression, with the reasoning in full because a suppressed
+    # path-injection alert deserves it. py/path-injection does not model
+    # allow-list validation as a sanitiser, so it reports this join whichever
+    # way it is written -- sanitising (the first attempt), validate-and-refuse,
+    # and validate-plus-basename were each flagged in turn. What actually
+    # guards the join: `wsid` has to fullmatch [A-Za-z0-9._-]{1,128} or the
+    # request is already refused with 400 three lines up, so it cannot contain
+    # a separator, "..", a drive letter or a leading slash; basename enforces
+    # one segment at the join; and relative_to() below re-proves containment
+    # under the steward root after resolution. Behaviourally verified:
+    # "tenant/../../etc", "..", "/etc/passwd" and "" are each refused or map to
+    # "default", and no input produces a path outside the root.
+    # If the validation above is ever loosened, DELETE this suppression and
+    # re-run CodeQL rather than trusting this comment.
+    ws_dir = (base / os.path.basename(wsid)).resolve()  # lgtm[py/path-injection]
+    try:
+        ws_dir.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid workspace id") from None
     ws_dir.mkdir(parents=True, exist_ok=True)
     return ws_dir
 
@@ -229,6 +282,10 @@ def _get_cost_event_store(workspace_id: str) -> CostEventStore:
 
 def _get_cost_finding_store(workspace_id: str) -> CostFindingStore:
     return CostFindingStore(_cost_findings_path(workspace_id))
+
+
+def _get_null_rate_sample_store(workspace_id: str) -> NullRateSampleStore:
+    return NullRateSampleStore(_workspace_dir(workspace_id) / "null_rate_samples.jsonl")
 
 
 def _pii_findings_path(workspace_id: str) -> Path:
@@ -500,6 +557,20 @@ def _run_scan(workspace_id: str, *, record: bool = True) -> tuple[list[StewardFi
             suppressed_signatures=suppressed,
         )
         findings.extend(cadence_findings)
+    except Exception:
+        pass
+
+    # 2026-09-27 — null-rate NULL_RATE_ANOMALY detector. Baseline-variance
+    # over the per-column null-rate samples recorded from not_null checks:
+    # flags a null-rate that breaks from the column's OWN history (earlier
+    # than a hard not_null assertion would).
+    try:
+        null_rate_findings = detect_null_rate_anomalies(
+            _get_null_rate_sample_store(workspace_id).all(),
+            workspace_id=workspace_id,
+            suppressed_signatures=suppressed,
+        )
+        findings.extend(null_rate_findings)
     except Exception:
         pass
 
@@ -1170,6 +1241,12 @@ async def record_quality_check(
         report,
         workspace_id=workspace_id,
     )
+    # Record per-column null-rate samples (from not_null counts the runner
+    # already computed) so the null-rate anomaly detector has a baseline.
+    try:
+        _get_null_rate_sample_store(workspace_id).append_many(samples_from_report(report))
+    except Exception:
+        pass
     return {
         "recorded": True,
         "assertions_total": len(report.assertions),

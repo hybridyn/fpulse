@@ -1,0 +1,185 @@
+{
+  "fpulse_version": "1.0.0",
+  "format_version": 2,
+  "export_type": "pipeline",
+  "exported_at": "2026-09-18T06:28:05.866996+00:00",
+  "pipeline": {
+    "id": "multidemo_20",
+    "name": "20 - API order report: api to sqlserver",
+    "description": "Seven-node cross-system demo with synthetic data. Six input rows become two region totals: North 275, South 150. Requires the multi-system-demo setup. Reruns replace only dedicated demo outputs.",
+    "folder_id": null,
+    "parameters": [],
+    "steps": [
+      {
+        "id": "n0",
+        "type": "source",
+        "label": "Read api",
+        "params": {
+          "connector_type": "rest_api",
+          "connection_id": "multidemo_api",
+          "path": "/orders",
+          "pagination": "none",
+          "max_retries": 0
+        },
+        "position": {
+          "x": 100.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n1",
+        "type": "filter",
+        "label": "Approved positive quantities",
+        "params": {
+          "condition": "status = 'approved' AND quantity > 0 AND unit_price >= 0"
+        },
+        "position": {
+          "x": 380.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n2",
+        "type": "transform",
+        "label": "Remove exact duplicate records",
+        "params": {
+          "expression": "SELECT DISTINCT * FROM source_table"
+        },
+        "position": {
+          "x": 660.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n3",
+        "type": "transform",
+        "label": "Calculate line amount",
+        "params": {
+          "expression": "SELECT region, quantity * unit_price AS amount FROM source_table"
+        },
+        "position": {
+          "x": 940.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n4",
+        "type": "aggregate",
+        "label": "Total by region",
+        "params": {
+          "group_by": [
+            "region"
+          ],
+          "functions": [
+            {
+              "column": "amount",
+              "function": "SUM",
+              "alias": "total_amount"
+            }
+          ]
+        },
+        "position": {
+          "x": 1220.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n5",
+        "type": "sort",
+        "label": "Largest region first",
+        "params": {
+          "sort_by": [
+            "total_amount DESC",
+            "region ASC"
+          ]
+        },
+        "position": {
+          "x": 1500.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      },
+      {
+        "id": "n6",
+        "type": "destination",
+        "label": "Write sqlserver",
+        "params": {
+          "connector_type": "warehouse",
+          "connection_id": "multidemo_sqlserver",
+          "table": "fpulse_demo_20_summary",
+          "schema": "dbo",
+          "mode": "create"
+        },
+        "position": {
+          "x": 1780.0,
+          "y": 120.0
+        },
+        "risk": "low",
+        "proposed_by": null
+      }
+    ],
+    "connections": [
+      {
+        "from_step": "n0",
+        "to_step": "n1",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      },
+      {
+        "from_step": "n1",
+        "to_step": "n2",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      },
+      {
+        "from_step": "n2",
+        "to_step": "n3",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      },
+      {
+        "from_step": "n3",
+        "to_step": "n4",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      },
+      {
+        "from_step": "n4",
+        "to_step": "n5",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      },
+      {
+        "from_step": "n5",
+        "to_step": "n6",
+        "from_port": "output",
+        "to_port": "input",
+        "alias": null
+      }
+    ],
+    "metadata": {
+      "sample": true,
+      "required_connections": [
+        "Demo api",
+        "Demo sqlserver"
+      ]
+    },
+    "execution_settings": {}
+  }
+}

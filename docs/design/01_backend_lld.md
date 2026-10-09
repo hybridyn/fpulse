@@ -44,7 +44,7 @@ backend/fpulse/
 │   ├── manifest_v2.py             # F0.1 cert validator + depth scorer
 │   ├── manifests/*.json           # SaaS manifests (Salesforce, HubSpot, ...)
 │   ├── jdbc.py, cdc.py, openapi_source.py, vector_db.py
-│   └── ai_authoring.py            # "Author Connector from OpenAPI" + SSRF guard
+│   └── ai_authoring.py            # "API Explorer from OpenAPI" + SSRF guard
 │
 ├── engine/                        # Execution layer
 │   ├── executor.py                # WorkflowExecutor

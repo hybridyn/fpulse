@@ -903,7 +903,7 @@ _EDITIONS: tuple[Topic, ...] = (
         ),
         body=(
             "**F-Pulse OSS** is the free, open-source, single-user, single-tenant "
-            "build. Includes: visual pipeline editor, 40 node types, 33 "
+            "build. Includes: visual pipeline editor, 40 node types, 66 "
             "connectors, scheduling, alerts (pipeline-level), templates, the "
             "Copilot with full 23-tool surface, basic eval harness, vertical "
             "scaling up to ~500 GB / single node, telemetry opt-in, and a Help "

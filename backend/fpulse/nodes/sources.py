@@ -545,7 +545,7 @@ class S3SourceNode(BaseNode):
     @staticmethod
     def _read_file(ctx: ExecutionContext, local_path: str, key: str,
                     file_format: str) -> duckdb.DuckDBPyRelation:
-        """Read a local file based on format (auto-detect from extension)."""
+        """Materialize a download before the caller removes its temp file."""
         if file_format == "auto":
             ext = os.path.splitext(key)[-1].lower()
             fmt_map = {
@@ -555,12 +555,21 @@ class S3SourceNode(BaseNode):
             file_format = fmt_map.get(ext, "csv")
 
         if file_format == "parquet":
-            return ctx.conn.read_parquet(local_path)
+            relation = ctx.conn.read_parquet(local_path)
         elif file_format == "json":
-            return ctx.conn.read_json(local_path)
+            relation = ctx.conn.read_json(local_path)
         else:
             delimiter = "\t" if key.endswith(".tsv") else ","
-            return ctx.conn.read_csv(local_path, delimiter=delimiter, header=True)
+            relation = ctx.conn.read_csv(local_path, delimiter=delimiter, header=True)
+
+        # DuckDB file relations are lazy. Both download paths unlink the
+        # temporary file in finally, so a returned file scan cannot be used
+        # by the next node. Give each download its own materialized table;
+        # the execution connection owns its lifetime and spill behaviour.
+        import uuid
+        table = f"__s3_download_{uuid.uuid4().hex}"
+        relation.create(table)
+        return ctx.conn.table(table)
 
     @staticmethod
     def default_params() -> dict[str, Any]:

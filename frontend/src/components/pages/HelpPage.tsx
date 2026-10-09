@@ -1575,7 +1575,7 @@ export default function HelpPage({
         {tab === 'getting-started' && (
           <div className="space-y-4">
             {/* Welcome banner */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-2xl p-6 mb-2">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 mb-2">
               <h2 className="text-lg font-bold text-slate-800 mb-1">Welcome to F-Pulse OSS</h2>
               <p className="text-sm text-slate-600 mb-4 max-w-[75ch]">
                 Build data pipelines visually — connect sources, transforms, and outputs without writing code.

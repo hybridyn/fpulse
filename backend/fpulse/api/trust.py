@@ -32,7 +32,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
+from fpulse.auth.deps import require_auth, current_workspace_id
 
 router = APIRouter(prefix="/api/trust", tags=["trust"])
 logger = logging.getLogger(__name__)
@@ -122,20 +123,25 @@ _SUPPORTED_MODELS = {
 # ── Posture builder ──────────────────────────────────────────────────
 
 
-def _read_telemetry_consent() -> bool:
+def _read_telemetry_consent() -> bool | None:
     """Best-effort read of the persisted telemetry consent flag.
 
-    Default is OFF (privacy-first). Failing to read returns False so the
-    posture surface never claims telemetry is on when we can't confirm it.
+    Missing settings default to off. Read failures remain unknown.
     """
     try:
-        from fpulse.telemetry.consent import is_telemetry_enabled
-        return bool(is_telemetry_enabled())
+        from fpulse.main import app_state
+        db = app_state.get("db")
+        if db is None:
+            return None
+        row = db.fetchone("SELECT data FROM settings WHERE id = 'admin_settings'")
+        settings = json.loads(row["data"]) if row else {}
+        value = settings.get("telemetry_enabled", False)
+        return value if isinstance(value, bool) else None
     except Exception:  # noqa: BLE001
-        return False
+        return None
 
 
-def _provider_status() -> dict[str, Any]:
+def _provider_status(user_id=None, workspace_id=None) -> dict[str, Any]:
     """Summarise the active AI provider WITHOUT leaking config details.
 
     Public endpoint, so we never return base_url, account, key prefixes,
@@ -144,12 +150,14 @@ def _provider_status() -> dict[str, Any]:
     """
     try:
         from fpulse.planner.ai_client import resolve_provider
-        provider, model, _meta = resolve_provider()
+        provider, _key, model, _base = resolve_provider(user_id=user_id, workspace_id=workspace_id)
     except Exception:  # noqa: BLE001
-        return {"available": False, "is_local": True, "provider": "none", "model": ""}
-    is_local = provider == "ollama"
+        return {"available": False, "is_local": None, "provider": "unknown", "model": "", "status": "failed"}
+    available = bool(provider and provider != "none")
+    is_local = (True if provider == "ollama" else None if provider in ("none", "custom") else False)
     return {
-        "available": bool(provider),
+        "available": available,
+        "status": "configured" if available else "not_checked",
         "provider": provider or "none",
         "model": model or "",
         "is_local": is_local,
@@ -157,44 +165,26 @@ def _provider_status() -> dict[str, Any]:
 
 
 def _security_baseline() -> list[dict[str, Any]]:
-    """The honest baseline list mirroring the Settings → Security Posture
-    card. Wired here so external compliance review tools can scrape one
-    endpoint instead of parsing the UI."""
+    """Declared controls are not evidence of a successful security audit."""
+    controls = [
+        ("credential_encryption", "Stored credential encryption", "Storage coverage and existing records have not been audited by this check."),
+        ("master_key_perms", "Master key permissions", "Filesystem permissions and Windows ACLs have not been inspected by this check."),
+        ("sql_input_sanitization", "SQL input handling", "Connector and query paths require dedicated security testing."),
+        ("rate_limiting", "HTTP rate limiting", "Enforcement has not been exercised by this check."),
+        ("security_headers", "HTTP security headers", "Deployed HTTP responses have not been inspected by this check."),
+        ("data_at_rest_encryption", "Intermediate data encryption", "Edition or configuration alone does not prove data is encrypted."),
+        ("audit_log", "Audit retention", "Persistence, retention and event coverage have not been exercised by this check."),
+    ]
     return [
-        {"key": "credential_encryption",
-         "label": "Stored credentials + AI provider API keys",
-         "status": "ok",
-         "detail": "Fernet (AES-128-CBC + HMAC-SHA256). Master key at ~/.fpulse/secret.key; chmod 600; fail-closed on POSIX permission check at startup. Always-on for both Free and Plus."},
-        {"key": "master_key_perms",
-         "label": "Master key file permissions",
-         "status": "ok",
-         "detail": "Verified at startup; fail-closed on POSIX."},
-        {"key": "sql_input_sanitization",
-         "label": "SQL input sanitization",
-         "status": "ok",
-         "detail": "Always on — part of the security baseline, cannot be disabled."},
-        {"key": "rate_limiting",
-         "label": "HTTP rate limiting",
-         "status": "ok",
-         "detail": "Per-IP sliding window."},
-        {"key": "security_headers",
-         "label": "Security headers",
-         "status": "ok",
-         "detail": "X-Frame-Options · CSP · Referrer-Policy · HSTS-on-https."},
-        {"key": "data_at_rest_encryption",
-         "label": "Data at rest (intermediate pipeline data)",
-         "status": "plus_only",
-         "detail": "Encrypted-at-rest is a F-Pulse+ feature."},
-        {"key": "audit_log",
-         "label": "Audit log",
-         "status": "plus_only",
-         "detail": "Persistent audit log with retention is F-Pulse+."},
+        {"key": key, "label": label, "status": "not_checked", "detail": detail,
+         "checked_at": None, "evidence": None}
+        for key, label, detail in controls
     ]
 
 
-def _sovereignty() -> dict[str, Any]:
+def _sovereignty(user_id=None, workspace_id=None) -> dict[str, Any]:
     """The headline sovereignty story. Lead the trust page with this."""
-    provider = _provider_status()
+    provider = _provider_status(user_id, workspace_id)
     return {
         "data_stays_local_by_default": True,
         "telemetry_default_off": True,
@@ -203,7 +193,7 @@ def _sovereignty() -> dict[str, Any]:
         "active_provider_summary": provider,
         "host_os": platform.system(),
         "deployment_model": (
-            "self-hosted, single-tenant, default config sends nothing off-box"
+            "Self-hosted. Outbound network activity has not been measured."
         ),
     }
 
@@ -217,12 +207,31 @@ def trust_posture() -> dict[str, Any]:
     `posture_version` if you break compatibility for compliance scrapers.
     """
     return {
-        "posture_version": "1.0",
+        "posture_version": "2.0",
         "as_of": datetime.now(timezone.utc).isoformat(),
         "sovereignty": _sovereignty(),
         "security_baseline": _security_baseline(),
         "supported_models": _SUPPORTED_MODELS,
     }
+
+
+@router.get("/diagnostics")
+def diagnostics(request: Request, user=Depends(require_auth)) -> dict[str, Any]:
+    result = {
+        "posture_version": "2.0",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "sovereignty": _sovereignty(user.id, current_workspace_id(request)),
+        "security_baseline": _security_baseline(),
+    }
+    result["scope"] = "current_user_and_workspace"
+    result["security_baseline"].append({
+        "key": "telemetry_consent", "label": "Telemetry consent setting",
+        "status": "verified" if result["sovereignty"]["telemetry_currently_enabled"] is not None else "failed",
+        "detail": "Consent setting read; this is not a network-egress audit.",
+        "checked_at": result["as_of"],
+        "evidence": "Persisted telemetry consent reader",
+    })
+    return result
 
 
 @router.get("/supported-models")

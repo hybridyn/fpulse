@@ -273,12 +273,26 @@ def _reset_bootstrap_admin_password(data_dir_path: str) -> bool:
 
 
 @pytest.fixture(scope="module")
-def admin_token(client: TestClient, data_dir: str) -> str:
+def admin_token(client: TestClient, app_v2, data_dir: str) -> str:
     """Dev-seed admin token. Fails if required login setup is unavailable.
 
     Resets the bootstrap admin password to DEV_ADMIN_PASSWORD first so
     the test-known credentials work even on a fresh boot where the
     admin was just bootstrapped with a random password.
+
+    The login runs through a DEDICATED throwaway client, never through
+    `client`. `client` is the fixture documented as *unauthenticated*, and a
+    successful login sets `fpulse_session` + `fpulse_csrf` on the cookie jar of
+    whichever client issued it. Logging in through `client` therefore left it
+    authenticated for the rest of the module, so any later test that used
+    `client` to assert anonymous access was silently asserting against an
+    authenticated request. That is exactly how
+    `test_anonymous_access_blocked.py`'s gateway cases passed or failed
+    depending on whether this fixture had been instantiated first -- a security
+    guard whose verdict depended on test ordering.
+
+    `client` stays a parameter so it keeps owning the single active app
+    lifespan; only the login moves off it.
     """
     from fpulse.main import app_state
     from fpulse.auth.models import User
@@ -289,7 +303,11 @@ def admin_token(client: TestClient, data_dir: str) -> str:
     admin.password_hash = User.hash_password(DEV_ADMIN_PASSWORD)
     admin.is_active = True
     users._save_user(admin)
-    tok = _login(client, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD)
+    login_client = TestClient(app_v2, base_url="http://localhost")
+    try:
+        tok = _login(login_client, DEV_ADMIN_EMAIL, DEV_ADMIN_PASSWORD)
+    finally:
+        login_client.close()
     if not tok:
         pytest.fail(
             f"Could not log in as {DEV_ADMIN_EMAIL} via any of {LOGIN_PATHS}. "
