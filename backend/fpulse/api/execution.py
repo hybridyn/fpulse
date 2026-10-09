@@ -1585,8 +1585,24 @@ async def get_step_input(
 
     store = get_step_output_store()
     from fpulse.engine.history_output import historical_output
-    if historical_output(exe, step_id, store) is None:
+
+    # Existence is a property of the RUN'S GRAPH, not of having produced a
+    # capture. A root step, a step whose sample was TTL-pruned, and a step that
+    # has not run yet all exist and all have a well-defined (possibly empty)
+    # input list -- gating this endpoint on historical_output() 404'd every one
+    # of them. A step id that appears nowhere in the run is still a 404, so an
+    # unknown id is never silently reported as a root step with no inputs.
+    known_step_ids = set()
+    for s in (snapshot.get("steps") or []):
+        if isinstance(s, dict):
+            known_step_ids.add(s.get("id") or s.get("step_id"))
+    for c in connections:
+        known_step_ids.add(c.get("from_step"))
+        known_step_ids.add(c.get("to_step"))
+    known_step_ids.discard(None)
+    if step_id not in known_step_ids and historical_output(exe, step_id, store) is None:
         raise HTTPException(status_code=404, detail="Step not found in execution")
+
     inputs = []
     for upstream_id in upstream_ids:
         if not upstream_id:
