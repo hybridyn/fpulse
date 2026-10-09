@@ -23,6 +23,7 @@ That positioning is the whole reason this module exists; see
 from __future__ import annotations
 
 import json
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -123,8 +124,26 @@ def _steward_dir() -> Path:
     return base
 
 
+_WORKSPACE_ID_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
+
+
 def _workspace_dir(workspace_id: str) -> Path:
-    ws_dir = _steward_dir() / workspace_id
+    """The per-workspace steward directory, for a workspace id that is NOT trusted.
+
+    `workspace_id` arrives from the request, so it must never be joined into a
+    filesystem path verbatim: an id of "../.." walks straight out of the
+    steward directory and every store built on this helper (suppressions,
+    memory, PII findings, null-rate samples) inherits the problem. Reduce the
+    id to one safe path segment, then confirm the result is still contained
+    before creating anything.
+    """
+    safe = _WORKSPACE_ID_UNSAFE.sub("_", (workspace_id or "").strip()) or "default"
+    if safe in {".", ".."}:
+        safe = "default"
+    base = _steward_dir().resolve()
+    ws_dir = (base / safe).resolve()
+    if ws_dir != base and base not in ws_dir.parents:
+        raise HTTPException(status_code=400, detail="Invalid workspace id")
     ws_dir.mkdir(parents=True, exist_ok=True)
     return ws_dir
 

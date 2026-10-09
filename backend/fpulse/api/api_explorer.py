@@ -48,6 +48,18 @@ class InspectRequest(BaseModel):
     confirm_write: bool = False
 
 
+def _tls_context() -> ssl.SSLContext:
+    """Verifying TLS context with TLS 1.0/1.1 refused.
+
+    `ssl.create_default_context()` verifies certificates and hostnames, but it
+    leaves TLS 1.0 and 1.1 permitted on builds whose OpenSSL still offers them.
+    The Explorer reaches arbitrary third-party hosts, so pin the floor
+    explicitly rather than inherit whatever the platform happens to allow.
+    """
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
 def _target(url):
     parsed = urlsplit(url)
     if parsed.scheme not in ('https', 'http') or not parsed.hostname or parsed.username is not None or parsed.password is not None or parsed.fragment:
@@ -136,7 +148,7 @@ def inspect_request(req: InspectRequest):
         sock.settimeout(15)
         sock.connect(sockaddr)
         if parsed.scheme == 'https':
-            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=parsed.hostname)
+            sock = _tls_context().wrap_socket(sock, server_hostname=parsed.hostname)
         conn.sock = sock
         conn.request(req.method, path, body=req.body.encode() if req.body else None, headers=headers)
         response = conn.getresponse()
@@ -242,7 +254,7 @@ def load_reference(reference: str):
         sock = socket.socket(family, kind, proto)
         sock.settimeout(30)
         sock.connect(sockaddr)
-        sock = ssl.create_default_context().wrap_socket(sock, server_hostname=parsed.hostname)
+        sock = _tls_context().wrap_socket(sock, server_hostname=parsed.hostname)
         conn.sock = sock
         conn.request('GET', parsed.path, headers={'Accept-Encoding': 'identity', 'User-Agent': 'F-Pulse-API-Explorer'})
         response = conn.getresponse()
