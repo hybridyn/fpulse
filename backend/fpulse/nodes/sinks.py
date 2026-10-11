@@ -807,7 +807,8 @@ class FtpSinkNode(BaseNode):
                 finally:
                     ssh.close()
             else:
-                import ftplib
+                # FTP/FTPS sink — user-selected protocol, not accidental.
+                import ftplib  # nosec B402
                 ftp_class = ftplib.FTP_TLS if protocol == "ftps" else ftplib.FTP
                 ftp = ftp_class()
                 ftp.connect(host, eff_port, timeout=30)

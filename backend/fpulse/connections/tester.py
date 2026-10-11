@@ -773,10 +773,11 @@ class ConnectionTester:
         if protocol == "sftp":
             return self._test_sftp(host, port, user, password, private_key)
 
-        import ftplib
+        # FTP/FTPS connection tester — user-selected protocol, not accidental.
+        import ftplib  # nosec B402
         start = time.time()
         try:
-            ftp = ftplib.FTP_TLS() if protocol == "ftps" else ftplib.FTP()
+            ftp = ftplib.FTP_TLS() if protocol == "ftps" else ftplib.FTP()  # nosec B321
             ftp.connect(host, port, timeout=DEFAULT_TIMEOUT)
             ftp.login(user, password)
             latency = _elapsed_ms(start)

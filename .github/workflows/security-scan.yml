@@ -27,8 +27,12 @@ jobs:
       - name: Run Bandit
         working-directory: backend
         run: |
+          # Full report (all levels) for the uploaded artifact — never fails.
           bandit -r fpulse -ll -f json -o bandit-report.json || true
-          bandit -r fpulse -ll --exit-zero --format screen
+          # GATE: fail the job on HIGH-severity / HIGH-confidence findings.
+          # Time-boxed exceptions belong in code as `# nosec <rule>  # expires YYYY-MM-DD`
+          # with a tracking issue — do NOT relax this line to silence a real one.
+          bandit -r fpulse --severity-level high --confidence-level high --format screen
       - uses: actions/upload-artifact@v4
         with:
           name: bandit-report
@@ -53,15 +57,26 @@ jobs:
         # a real CVE shows up in the human log AND the uploaded JSON.
         run: |
           pip install pip-audit
+          # Full report for the artifact — never fails.
           pip-audit -r backend/requirements.txt --format json -o pip-audit.json || true
-          pip-audit -r backend/requirements.txt --desc || echo "::warning::pip-audit found vulnerabilities — see pip-audit.json artifact"
+          # GATE: fail on any known-vulnerable dependency. pip-audit exposes no
+          # severity field, so exceptions are explicit + time-boxed: add
+          # `--ignore-vuln GHSA-xxxx  # expires YYYY-MM-DD (no fix yet)` below and
+          # track it for removal. A blocked release beats a silent CVE.
+          pip-audit -r backend/requirements.txt --desc
 
       - name: npm audit (Node deps)
         working-directory: frontend
         run: |
           npm install --package-lock-only --ignore-scripts
+          # Full report (prod + dev) for the artifact — never fails.
           npm audit --audit-level=high --json > npm-audit.json || true
-          npm audit --audit-level=high || echo "HIGH vulnerabilities present"
+          # GATE on PRODUCTION dependencies only (--omit=dev): those are what
+          # ships in the bundle. Build/test-tool advisories (vite, vitest,
+          # babel, browserslist) are build-time-only, stay visible in the full
+          # report above, and track the toolchain's cadence — they must not
+          # block a release. Time-boxed prod exceptions go in an `overrides` PR.
+          npm audit --omit=dev --audit-level=high
 
       - uses: actions/upload-artifact@v4
         with:

@@ -836,6 +836,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.error("Scheduler failed to start: %s", exc)
 
+    # 4b) Start the backup scheduler daemon (best-effort). No-op unless the
+    # operator enabled a schedule in Settings -> Backup; when enabled it fires
+    # the configured hourly/daily/weekly backup without an external cron.
+    try:
+        from fpulse.storage.backup_scheduler import BackupSchedulerDaemon
+        app_state["backup_daemon"] = BackupSchedulerDaemon()
+        app_state["backup_daemon"].start()
+    except Exception as exc:
+        logger.error("Backup scheduler daemon failed to start: %s", exc)
+
     # 5) Load plugins (only if plugin_manager was instantiated — flag-gated)
     if "plugin_manager" in app_state:
         try:
@@ -1041,6 +1051,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             scheduler.stop()
     except Exception as exc:
         logger.error("Scheduler shutdown error: %s", exc)
+
+    # 2b) Backup scheduler daemon — stop firing scheduled backups.
+    try:
+        backup_daemon = app_state.get("backup_daemon")
+        if backup_daemon:
+            backup_daemon.stop()
+    except Exception as exc:
+        logger.error("Backup daemon shutdown error: %s", exc)
 
     # 3) Event bus — drain pending publishes, close transport.
     # Before DB close so any final "shutdown" event lands first.
