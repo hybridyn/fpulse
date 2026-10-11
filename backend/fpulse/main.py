@@ -116,6 +116,7 @@ from fpulse.api import (
     expressions_router,
     steward_router,
     backup_router,
+    ops_health_router,
     ws_router,
     ws_info_router,
     logs_router,
@@ -1323,6 +1324,7 @@ app.include_router(expressions_router)
 # invariants — never inline mutate workflows or connections.
 app.include_router(steward_router)
 app.include_router(backup_router)
+app.include_router(ops_health_router)
 app.include_router(ai_web_router)
 app.include_router(publish_policy_router)
 app.include_router(ws_router)

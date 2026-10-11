@@ -50,10 +50,44 @@ on the approach before you spend hours on a PR. For small fixes, a PR is fine.
 
 ## Setting up the dev environment
 
+**Prerequisites:** Python 3.11 or 3.12, Node 20+, git.
+
 ```bash
-TODO: dev setup instructions land here in Phase 2 of the repo split
-# git clone, python venv, install deps, run tests
+# 1. Clone
+git clone https://github.com/hybridyn/fpulse.git
+cd fpulse
+
+# 2. Backend — editable install + dev/test deps
+python -m venv .venv
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
+pip install -e .
+pip install -r backend/requirements-dev.txt
+
+# 3. Frontend — the backend serves the built UI in prod; build it once
+cd frontend
+npm ci
+npm run build                        # tsc -b && vite build (+ CSS guard)
+cd ..
+
+# 4. Run it — backend serves the built UI on http://localhost:8001
+python -m fpulse open                # or: fpulse serve --no-open
 ```
+
+**Run the tests (this is what CI runs — see [.github/workflows/ci.yml](.github/workflows/ci.yml)):**
+
+```bash
+# Backend fast gate: unit + integration (excludes stress/external/e2e)
+cd backend
+python -m pytest -n auto -m "not stress and not external and not e2e"
+
+# Frontend: strict type-check + unit + build — all three gate CI
+cd frontend
+npx tsc -b            # must pass; type errors block the build
+npm test -- --run     # vitest
+npm run build
+```
+
+For UI work with hot-reload: `cd frontend && npm run dev` (Vite) against a running backend.
 
 ## Conventions
 
